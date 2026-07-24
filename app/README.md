@@ -26,3 +26,5 @@ supported SPL and dashboard dependencies, classify conservative health states,
 and persist findings in the application-owned KV Store. Every view reads the
 latest live snapshot. Usage timestamps remain unknown until measured telemetry
 is implemented; there is no production sample-data fallback.
+
+This project is licensed under the MIT License.

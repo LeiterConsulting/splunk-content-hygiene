@@ -1,7 +1,7 @@
 {
   "name": "@splunk/content-hygiene",
   "version": "0.1.0-beta",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "scripts": {
     "build": "node bin/build.js build && yarn types:build",
     "eslint": "eslint \"src/**/*.{ts,tsx,js,jsx}\"",

@@ -97,6 +97,4 @@ perform the complete validation and update `SHA256SUMS`.
 
 ## License
 
-Copyright © Leiter Consulting. Publication of this source code does not grant a
-license to use, copy, modify, or distribute it. Contact Leiter Consulting for
-licensing terms.
+Licensed under the [MIT License](LICENSE). Copyright © 2026 Leiter Consulting.

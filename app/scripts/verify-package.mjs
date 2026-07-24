@@ -53,6 +53,16 @@ if (entries.some((entry) => !entry.startsWith('content_hygiene/'))) {
     throw new Error('Release archive must have one content_hygiene top-level directory.');
 }
 
+const requiredEntries = [
+    'content_hygiene/LICENSE',
+    'content_hygiene/default/app.conf',
+];
+const missingEntry = requiredEntries.find((entry) => !entries.includes(entry));
+
+if (missingEntry) {
+    throw new Error(`Release archive is missing required entry: ${missingEntry}`);
+}
+
 const macMetadataEntry = entries.find((entry) =>
     entry
         .split('/')

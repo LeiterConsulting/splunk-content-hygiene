@@ -8,3 +8,4 @@
 * Added complete paginated inventory, dependency analysis, and conservative findings.
 * Added an app-local review library, dependency drill-through, cleanup-group
   filters, cross-view investigation links, and expanded CSV/JSON reporting.
+* Licensed the source and packaged application under the MIT License.
