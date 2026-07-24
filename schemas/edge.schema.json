@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/splunk-content-hygiene/edge.schema.json",
+  "title": "Content Hygiene Dependency Edge",
+  "type": "object",
+  "required": [
+    "edge_id",
+    "source_id",
+    "target_id",
+    "relation",
+    "confidence",
+    "evidence"
+  ],
+  "properties": {
+    "edge_id": {
+      "type": "string"
+    },
+    "source_id": {
+      "type": "string"
+    },
+    "target_id": {
+      "type": "string"
+    },
+    "relation": {
+      "enum": [
+        "references",
+        "uses",
+        "reads",
+        "writes",
+        "invokes",
+        "searches",
+        "filters",
+        "feeds",
+        "belongs_to",
+        "owned_by",
+        "unknown"
+      ]
+    },
+    "confidence": {
+      "enum": [
+        "high",
+        "medium",
+        "low",
+        "unknown"
+      ]
+    },
+    "evidence": {
+      "type": "string"
+    },
+    "source_location": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "resolved": {
+      "type": "boolean"
+    },
+    "scan_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "additionalProperties": true
+}

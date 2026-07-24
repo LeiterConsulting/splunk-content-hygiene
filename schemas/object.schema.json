@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/splunk-content-hygiene/object.schema.json",
+  "title": "Content Hygiene Object",
+  "type": "object",
+  "required": [
+    "object_id",
+    "name",
+    "object_type",
+    "app",
+    "health_status",
+    "protected",
+    "evidence"
+  ],
+  "properties": {
+    "object_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "name": {
+      "type": "string"
+    },
+    "object_type": {
+      "type": "string"
+    },
+    "app": {
+      "type": "string"
+    },
+    "owner": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sharing": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "enabled": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "scheduled": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "created": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "updated": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "last_used": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "inbound_references": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "outbound_references": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "health_status": {
+      "enum": [
+        "active",
+        "dormant",
+        "orphaned",
+        "broken",
+        "unowned",
+        "protected",
+        "unknown"
+      ]
+    },
+    "abandonment_confidence": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 100
+    },
+    "removal_impact": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 100
+    },
+    "protected": {
+      "type": "boolean"
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "scan_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "additionalProperties": true
+}

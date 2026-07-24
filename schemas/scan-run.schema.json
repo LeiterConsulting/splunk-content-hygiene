@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/splunk-content-hygiene/scan-run.schema.json",
+  "title": "Content Hygiene Scan Run",
+  "type": "object",
+  "required": [
+    "scan_id",
+    "scan_type",
+    "status",
+    "started_at"
+  ],
+  "properties": {
+    "scan_id": {
+      "type": "string"
+    },
+    "scan_type": {
+      "enum": [
+        "bounded",
+        "full",
+        "incremental",
+        "usage",
+        "ownership",
+        "rescore"
+      ]
+    },
+    "status": {
+      "enum": [
+        "queued",
+        "running",
+        "partial",
+        "succeeded",
+        "failed",
+        "cancelled"
+      ]
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completed_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "object_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "edge_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "finding_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "collector_versions": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}

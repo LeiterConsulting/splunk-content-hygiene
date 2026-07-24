@@ -1,0 +1,8 @@
+<nav search_view="search">
+    <view name="Overview" default="true" />
+    <view name="CleanupCandidates" />
+    <view name="DependencyExplorer" />
+    <view name="ReviewLibrary" />
+    <view name="Ownership" />
+    <view name="Settings" />
+</nav>

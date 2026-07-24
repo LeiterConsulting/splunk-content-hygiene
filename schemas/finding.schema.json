@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/splunk-content-hygiene/finding.schema.json",
+  "title": "Content Hygiene Finding",
+  "type": "object",
+  "required": [
+    "finding_id",
+    "object_id",
+    "finding_type",
+    "reasons",
+    "scan_id"
+  ],
+  "properties": {
+    "finding_id": {
+      "type": "string"
+    },
+    "object_id": {
+      "type": "string"
+    },
+    "finding_type": {
+      "enum": [
+        "cleanup_candidate",
+        "broken_reference",
+        "unowned",
+        "protected",
+        "needs_review",
+        "repair_required",
+        "insufficient_evidence"
+      ]
+    },
+    "abandonment_confidence": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 100
+    },
+    "removal_impact": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 100
+    },
+    "reasons": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "suggested_action": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "scan_id": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/splunk-content-hygiene/review.schema.json",
+  "title": "Content Hygiene Review Record",
+  "description": "A durable, app-local workflow record. It never represents a mutation of the referenced Splunk object.",
+  "type": "object",
+  "required": [
+    "_key",
+    "object_id",
+    "object_name",
+    "canonical_name",
+    "object_type",
+    "app",
+    "health_status_at_review",
+    "stage",
+    "note",
+    "scan_id",
+    "created_at",
+    "updated_at",
+    "updated_by"
+  ],
+  "properties": {
+    "_key": {
+      "type": "string",
+      "minLength": 1
+    },
+    "object_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "object_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "canonical_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "object_type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "app": {
+      "type": "string",
+      "minLength": 1
+    },
+    "owner": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "health_status_at_review": {
+      "enum": [
+        "active",
+        "dormant",
+        "orphaned",
+        "broken",
+        "unowned",
+        "protected",
+        "unknown"
+      ]
+    },
+    "stage": {
+      "enum": [
+        "triage",
+        "investigating",
+        "awaiting_owner",
+        "confirmed_eligible",
+        "retain",
+        "blocked"
+      ]
+    },
+    "note": {
+      "type": "string",
+      "maxLength": 4000
+    },
+    "assigned_to": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 256
+    },
+    "scan_id": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_by": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,28 @@
+{
+  "name": "splunk-content-hygiene",
+  "version": "0.1.0-beta",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "build": "yarn workspaces run build",
+    "format": "git ls-files | grep -E \"\\.(jsx?|css)$\" | xargs prettier --write",
+    "format:verify": "git ls-files | grep -E \"\\.(jsx?|css)$\" | xargs prettier --list-different",
+    "lint": "yarn workspaces run lint",
+    "package": "yarn build && node scripts/package.mjs",
+    "package:verify": "node scripts/verify-package.mjs",
+    "release:prepare": "yarn validate && node scripts/checksum.mjs",
+    "setup": "yarn && yarn build",
+    "test": "yarn workspace @splunk/overview run test",
+    "validate": "yarn test && yarn lint && yarn package && yarn package:verify",
+    "start": "yarn workspace @splunk/content-hygiene run start"
+  },
+  "devDependencies": {
+    "prettier": "^3.6.2"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  }
+}

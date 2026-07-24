@@ -1,0 +1,4 @@
+<?xml version="1.0"?>
+<view template="content_hygiene:/templates/pages/splunk_ui_app.html" type="html">
+    <label>Dependency Explorer</label>
+</view>

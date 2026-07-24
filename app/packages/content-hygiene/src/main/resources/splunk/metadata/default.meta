@@ -1,0 +1,15 @@
+[]
+access = read : [ * ], write : [ admin, sc_admin ]
+export = none
+
+[collections/ch_*]
+access = read : [ * ], write : [ admin, sc_admin ]
+export = none
+
+[collections/ch_reviews]
+access = read : [ * ], write : [ * ]
+export = none
+
+[views/*]
+access = read : [ * ], write : [ admin, sc_admin ]
+export = none
