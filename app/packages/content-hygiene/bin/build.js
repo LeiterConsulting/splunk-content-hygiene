@@ -16,6 +16,18 @@ const cleanStage = () => {
     fs.rmSync(stageDirectory, { recursive: true, force: true });
 };
 
+const buildApp = (command) => {
+    cleanStage();
+    const result = shell.exec(command);
+    if (result.code === 0) {
+        fs.copyFileSync(
+            path.resolve(__dirname, '../../../../LICENSE'),
+            path.join(__dirname, '..', 'stage', 'LICENSE')
+        );
+    }
+    return result;
+};
+
 if (!arg) {
     shell.echo(
         `No command received, please supply a command to run. \nCommands: ${commands.join(', ')}`
@@ -31,17 +43,11 @@ if (!commands.includes(arg)) {
 // prettier-ignore
 const runCommands = {
     win32: {
-        build: () => {
-            cleanStage();
-            return shell.exec('set NODE_ENV=production&&.\\node_modules\\.bin\\webpack --mode=production');
-        },
+        build: () => buildApp('set NODE_ENV=production&&.\\node_modules\\.bin\\webpack --mode=production'),
         link: () => shell.exec('mklink /D "%SPLUNK_HOME%\\etc\\apps\\content-hygiene" "%cd%\\stage"'),
     },
     nix: {
-        build: () => {
-            cleanStage();
-            return shell.exec('export NODE_ENV=production && ./node_modules/.bin/webpack --mode=production');
-        },
+        build: () => buildApp('export NODE_ENV=production && ./node_modules/.bin/webpack --mode=production'),
         link: () => shell.exec('ln -s $PWD/stage $SPLUNK_HOME/etc/apps/content_hygiene'),
     },
 };
@@ -49,7 +55,11 @@ const runCommands = {
 try {
     const isWindows = OS === 'win32' || OS === 'win64';
     const os = isWindows ? 'win32' : 'nix';
-    runCommands[os][arg]();
+    const result = runCommands[os][arg]();
+    if (result.code !== 0) {
+        shell.exit(result.code);
+    }
 } catch (error) {
     shell.echo(error);
+    shell.exit(1);
 }

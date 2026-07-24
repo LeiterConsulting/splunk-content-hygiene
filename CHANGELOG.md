@@ -40,6 +40,7 @@
 - Added GitHub Actions validation for the locked Node.js 22 toolchain
 - Changed the release artifact to `.tar.gz` and hardened packaging against
   `.DS_Store`, AppleDouble, and `__MACOSX` metadata
+- Licensed the source and release package under the MIT License
 
 ## 0.1.0-beta-planning — 2026-07-24
 

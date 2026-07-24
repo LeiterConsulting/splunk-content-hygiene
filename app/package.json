@@ -1,7 +1,7 @@
 {
   "name": "splunk-content-hygiene",
   "version": "0.1.0-beta",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "private": true,
   "scripts": {
     "build": "yarn workspaces run build",

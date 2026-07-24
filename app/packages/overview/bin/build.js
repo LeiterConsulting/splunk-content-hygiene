@@ -31,7 +31,11 @@ const runCommands = {
 try {
     const isWindows = OS === 'win32' || OS === 'win64';
     const os = isWindows ? 'win32' : 'nix';
-    runCommands[os][arg]();
+    const result = runCommands[os][arg]();
+    if (result.code !== 0) {
+        shell.exit(result.code);
+    }
 } catch (error) {
     shell.echo('Something went wrong');
+    shell.exit(1);
 }
