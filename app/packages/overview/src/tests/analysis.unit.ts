@@ -39,6 +39,7 @@ function object(
         evidence: ['Collected from Splunk REST'],
         suggestedAction: 'Collect evidence',
         ...overrides,
+        usageEvidence: overrides.usageEvidence ?? null,
     };
 }
 

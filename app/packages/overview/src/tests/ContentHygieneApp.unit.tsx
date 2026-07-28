@@ -40,6 +40,7 @@ const liveScan: ScanSummary = {
 
 const liveSnapshot: InventorySnapshot = {
     scan: liveScan,
+    usage: null,
     objects: [
         {
             objectId: 'saved_search::search::daily_error_review',
@@ -53,6 +54,7 @@ const liveSnapshot: InventorySnapshot = {
             scheduled: false,
             updated: '2026-07-24T15:00:00Z',
             lastUsed: '2026-07-24T16:00:00Z',
+            usageEvidence: null,
             healthStatus: 'active',
             abandonmentConfidence: 8,
             removalImpact: 78,
@@ -74,6 +76,7 @@ const liveSnapshot: InventorySnapshot = {
             scheduled: null,
             updated: '2025-01-01T00:00:00Z',
             lastUsed: '2025-12-05T14:20:00Z',
+            usageEvidence: null,
             healthStatus: 'dormant',
             abandonmentConfidence: 82,
             removalImpact: 22,
@@ -128,6 +131,90 @@ const liveSnapshot: InventorySnapshot = {
     ],
 };
 
+const usageSnapshot: InventorySnapshot = {
+    ...liveSnapshot,
+    usage: {
+        runId: 'scan-usage-live',
+        inventoryScanId: liveScan.scanId,
+        status: 'succeeded',
+        startedAt: '2026-04-25T17:00:00Z',
+        completedAt: '2026-07-24T17:10:00Z',
+        windowDays: 90,
+        windowStart: '2026-04-25T17:00:00Z',
+        windowEnd: '2026-07-24T17:00:00Z',
+        coverage: 'complete',
+        eligibleObjectCount: 2,
+        fullyCoveredObjectCount: 2,
+        observedObjectCount: 1,
+        warningCount: 0,
+        warnings: [],
+        sources: [
+            {
+                sourceId: 'search_audit',
+                label: 'Splunk search audit',
+                activityKind: 'saved_search_execution',
+                coverage: 'complete',
+                coverageStart: '2026-04-25T17:00:00Z',
+                coverageEnd: '2026-07-24T17:00:00Z',
+                sourceEventCount: 300,
+                activityRecordCount: 1,
+                matchedObjectCount: 1,
+                truncated: false,
+                warning: null,
+            },
+            {
+                sourceId: 'dashboard_access',
+                label: 'Splunk Web access log',
+                activityKind: 'dashboard_view',
+                coverage: 'complete',
+                coverageStart: '2026-04-25T17:00:00Z',
+                coverageEnd: '2026-07-24T17:00:00Z',
+                sourceEventCount: 500,
+                activityRecordCount: 0,
+                matchedObjectCount: 0,
+                truncated: false,
+                warning: null,
+            },
+        ],
+        matchesCurrentInventory: true,
+    },
+    objects: liveSnapshot.objects.map((contentObject) => {
+        const observed = contentObject.objectType === 'Saved Search';
+        return {
+            ...contentObject,
+            lastUsed: observed ? '2026-07-24T16:00:00Z' : null,
+            usageEvidence: {
+                usageRunId: 'scan-usage-live',
+                inventoryScanId: liveScan.scanId,
+                sourceId: observed ? 'search_audit' : 'dashboard_access',
+                sourceLabel: observed
+                    ? 'Splunk search audit'
+                    : 'Splunk Web access log',
+                activityKind: observed
+                    ? ('saved_search_execution' as const)
+                    : ('dashboard_view' as const),
+                windowDays: 90,
+                windowStart: '2026-04-25T17:00:00Z',
+                windowEnd: '2026-07-24T17:00:00Z',
+                coverage: 'complete' as const,
+                coverageStart: '2026-04-25T17:00:00Z',
+                coverageEnd: '2026-07-24T17:00:00Z',
+                sourceEventCount: observed ? 300 : 500,
+                observationCount: observed ? 12 : 0,
+                successfulCount: observed ? 11 : 0,
+                failedCount: observed ? 1 : 0,
+                skippedCount: 0,
+                lastObserved: observed ? '2026-07-24T16:00:00Z' : null,
+                evidence: [
+                    observed
+                        ? 'Observed 12 saved-search executions'
+                        : 'No dashboard access was observed during the complete 90-day source window',
+                ],
+            },
+        };
+    }),
+};
+
 function inventoryByAppSnapshot(): InventorySnapshot {
     const appNames = [
         'alpha_tools',
@@ -155,6 +242,7 @@ function inventoryByAppSnapshot(): InventorySnapshot {
         scheduled: null,
         updated: '2026-07-24T15:00:00Z',
         lastUsed: '2026-07-24T16:00:00Z',
+        usageEvidence: null,
         healthStatus: index === 0 ? ('dormant' as const) : ('active' as const),
         abandonmentConfidence: index === 0 ? 70 : 5,
         removalImpact: 10,
@@ -181,6 +269,7 @@ function inventoryByAppSnapshot(): InventorySnapshot {
             findingCount: 0,
             candidateCount: 0,
         },
+        usage: null,
         objects,
         edges: [],
         findings: [],
@@ -194,6 +283,7 @@ function clientWithSnapshot(snapshot = liveSnapshot): InventoryClient {
         getLatestSnapshot: async () => snapshot,
         runBoundedScan: async () => snapshot,
         runFullScan: async () => snapshot,
+        runUsageScan: async () => snapshot,
     };
 }
 
@@ -216,6 +306,14 @@ function mutableReviewClient(): {
                 app: input.object.app,
                 owner: input.object.owner,
                 healthStatusAtReview: input.object.healthStatus,
+                usageCoverageAtReview:
+                    input.object.usageEvidence?.coverage ?? null,
+                usageLastObservedAtReview:
+                    input.object.usageEvidence?.lastObserved ?? null,
+                usageObservationCountAtReview:
+                    input.object.usageEvidence?.observationCount ?? null,
+                usageRunIdAtReview:
+                    input.object.usageEvidence?.usageRunId ?? null,
                 stage: input.stage,
                 note: input.note,
                 assignedTo: input.assignedTo,
@@ -361,6 +459,7 @@ test('shows an honest empty state when no live snapshot exists', () => {
         getLatestSnapshot: async () => null,
         runBoundedScan: async () => liveSnapshot,
         runFullScan: async () => liveSnapshot,
+        runUsageScan: async () => liveSnapshot,
     };
     render(<ContentHygieneApp page="overview" inventoryClient={unavailableClient} />);
 
@@ -385,6 +484,7 @@ test('runs a bounded live inventory from Settings and exposes its provenance', a
             return liveSnapshot;
         },
         runFullScan: async () => liveSnapshot,
+        runUsageScan: async () => liveSnapshot,
     };
 
     render(<ContentHygieneApp page="settings" inventoryClient={inventoryClient} />);
@@ -396,6 +496,50 @@ test('runs a bounded live inventory from Settings and exposes its provenance', a
     expect(screen.getAllByText('Live Splunk data')).toHaveLength(2);
     expect(screen.getByText('Live inventory cache ready')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Run complete live scan' })).toBeEnabled();
+});
+
+test('collects a selected usage window and displays source provenance', async () => {
+    const user = userEvent.setup();
+    const runUsageScan = jest.fn(async () => usageSnapshot);
+    const inventoryClient: InventoryClient = {
+        ...clientWithSnapshot(),
+        runUsageScan,
+    };
+
+    render(<ContentHygieneApp page="settings" inventoryClient={inventoryClient} />);
+    await screen.findByText('scan-live-test');
+    await user.selectOptions(
+        screen.getByRole('combobox', { name: 'Usage observation window' }),
+        '180',
+    );
+    await user.click(screen.getByRole('button', { name: 'Collect usage evidence' }));
+
+    expect(runUsageScan).toHaveBeenCalledWith(180, expect.any(Function));
+    expect(await screen.findByText('scan-usage-live')).toBeInTheDocument();
+    expect(screen.getByText(/Splunk search audit: complete/)).toBeInTheDocument();
+    expect(screen.getByText(/Raw user SPL and actor lists are not persisted/)).toBeInTheDocument();
+});
+
+test('filters candidates by defensible usage-evidence state', async () => {
+    const user = userEvent.setup();
+    render(
+        <ContentHygieneApp
+            page="cleanup-candidates"
+            inventoryClient={clientWithSnapshot(usageSnapshot)}
+        />,
+    );
+
+    await screen.findByText('Live inventory cache ready');
+    await user.selectOptions(
+        screen.getByRole('combobox', { name: 'Usage evidence' }),
+        'no_observations_complete',
+    );
+
+    expect(screen.getAllByText('Retired Host Report')).toHaveLength(2);
+    expect(
+        screen.getByText(/No attributable activity was observed in the complete source window/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Daily Error Review')).not.toBeInTheDocument();
 });
 
 test('persists candidate confirmation workflow records in the app-local review library', async () => {
@@ -455,6 +599,10 @@ test('broadens center scope when drilling to a related object outside the review
         app: 'search',
         owner: null,
         healthStatusAtReview: 'dormant',
+        usageCoverageAtReview: null,
+        usageLastObservedAtReview: null,
+        usageObservationCountAtReview: null,
+        usageRunIdAtReview: null,
         stage: 'investigating',
         note: 'Dependency review',
         assignedTo: 'platform-team',

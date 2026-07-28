@@ -16,7 +16,7 @@ Please allow maintainers time to investigate before public disclosure.
 
 ## Supported versions
 
-`0.2.1-beta` is the current evaluation release and receives best-effort security
+`0.3.0-beta` is the current evaluation release and receives best-effort security
 updates. It is not yet certified for production use or Splunk Cloud.
 
 ## Security boundaries
@@ -26,6 +26,13 @@ Splunk REST resources available to the signed-in user and writes only to
 application-owned KV Store collections. Review records may contain notes and
 assignee names, so administrators should treat them as internal operational
 data.
+
+On-demand usage collection runs bounded searches against native Splunk
+telemetry visible to the signed-in user. It persists aggregate activity counts,
+timestamps, coverage, and provenance only; raw user SPL and actor lists are not
+written to KV Store. Usage evidence and exports can still reveal sensitive
+object names, applications, activity patterns, and ownership context and should
+be protected accordingly.
 
 Release packaging excludes credentials, local configuration, source maps,
 tests, dependency trees, repository metadata, and macOS metadata. Never attach

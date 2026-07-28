@@ -1,5 +1,11 @@
 # Change Log
 
+0.3.0-beta – 2026-07-28
+-------
+
+* Added the app-local usage-evidence collection and packaged the usage-enriched
+  investigation workflow.
+
 0.2.1-beta – 2026-07-28
 -------
 

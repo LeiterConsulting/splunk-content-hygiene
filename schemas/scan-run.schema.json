@@ -73,6 +73,31 @@
       "additionalProperties": {
         "type": "string"
       }
+    },
+    "inventory_scan_id": {
+      "type": "string"
+    },
+    "usage_window_days": {
+      "enum": [
+        30,
+        90,
+        180
+      ]
+    },
+    "usage_window_start": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "usage_window_end": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "usage_coverage": {
+      "enum": [
+        "complete",
+        "partial",
+        "unavailable"
+      ]
     }
   },
   "additionalProperties": true

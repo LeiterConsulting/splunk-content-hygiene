@@ -9,12 +9,15 @@ objects. Settings includes an explicit bounded metadata inventory that persists
 normalized records and scan status in application-owned KV Store collections.
 The complete scan paginates supported REST endpoints, extracts explicit SPL and
 dashboard dependencies, and stores conservative findings. Every view reads the
-latest live KV Store snapshot. Missing usage evidence is displayed as unknown;
-the production app does not fall back to sample data.
+latest live KV Store snapshot. On-demand usage scans can add attributable
+saved-search and dashboard observations plus explicit source coverage from
+native Splunk telemetry. Missing or partial evidence remains unknown; the
+production app does not fall back to sample data.
 
 Review stages, notes, and assignees are persisted only in the app-local
-`ch_reviews` collection. Review records do not change the referenced Splunk
-objects.
+`ch_reviews` collection. Derived usage evidence is persisted in
+`ch_usage_evidence`; raw SPL and actor lists are not stored. Review records and
+usage scans do not change the referenced Splunk objects.
 
 ## Requirements
 

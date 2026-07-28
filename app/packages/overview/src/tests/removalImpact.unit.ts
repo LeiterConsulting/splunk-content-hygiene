@@ -47,6 +47,7 @@ function contentObject(
         evidence: [],
         suggestedAction: 'Review',
         ...overrides,
+        usageEvidence: overrides.usageEvidence ?? null,
     };
 }
 
@@ -77,6 +78,12 @@ function confirmedReview(object: ContentObject): ReviewRecord {
         app: object.app,
         owner: object.owner,
         healthStatusAtReview: object.healthStatus,
+        usageCoverageAtReview: object.usageEvidence?.coverage ?? null,
+        usageLastObservedAtReview:
+            object.usageEvidence?.lastObserved ?? null,
+        usageObservationCountAtReview:
+            object.usageEvidence?.observationCount ?? null,
+        usageRunIdAtReview: object.usageEvidence?.usageRunId ?? null,
         stage: 'confirmed_eligible',
         note: 'Approved for controlled change planning.',
         assignedTo: 'platform-team',
@@ -218,6 +225,26 @@ test('requires a complete scan even when the captured graph has no dependents', 
 test('allows controlled change planning only after graph and review prerequisites', () => {
     const selected = contentObject('dashboard::search::a', 'Dashboard A', 'Dashboard', {
         removalImpact: 0,
+        usageEvidence: {
+            usageRunId: 'scan-usage-test',
+            inventoryScanId: completeScan.scanId,
+            sourceId: 'dashboard_access',
+            sourceLabel: 'Splunk Web access log',
+            activityKind: 'dashboard_view',
+            windowDays: 90,
+            windowStart: '2026-04-29T12:00:00Z',
+            windowEnd: '2026-07-28T12:00:00Z',
+            coverage: 'complete',
+            coverageStart: '2026-04-29T12:00:00Z',
+            coverageEnd: '2026-07-28T12:00:00Z',
+            sourceEventCount: 1000,
+            observationCount: 0,
+            successfulCount: 0,
+            failedCount: 0,
+            skippedCount: 0,
+            lastObserved: null,
+            evidence: ['No dashboard access observed in a complete window'],
+        },
     });
     const analysis = analyzeRemovalImpact(
         selected,

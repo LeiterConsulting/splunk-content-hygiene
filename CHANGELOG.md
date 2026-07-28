@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.3.0-beta — 2026-07-28
+
+- Added bounded, on-demand 30/90/180-day usage-evidence windows for directly
+  attributable saved-search executions and dashboard access
+- Added complete/partial/unavailable source coverage so missing telemetry is
+  never represented as inactivity
+- Integrated usage evidence into candidate classification, confidence, filters,
+  dependency exploration, removal readiness, review snapshots, reporting, and
+  exports
+- Added private-namespace attribution safeguards, stale-evidence protections,
+  outcome counts, provenance, and app-local `ch_usage_evidence` persistence
+- Kept all customer content read-only and excluded raw user SPL and actor lists
+  from persisted evidence
+
 ## 0.2.1-beta — 2026-07-28
 
 - Made the Overview live-inventory tile searchable and sortable by app name,

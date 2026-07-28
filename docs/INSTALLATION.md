@@ -2,9 +2,10 @@
 
 ## Compatibility
 
-The `0.2.1-beta` package has been built, AppInspect pre-certified, installed,
-and browser-smoke-tested on Splunk Enterprise 10.0.1. Broader Splunk Enterprise
-10.x and Splunk Cloud certification remains pending.
+The `0.3.0-beta` package targets Splunk Enterprise 10.0.1. The release artifact
+has passed the local release gate and AppInspect precert mode, and has been
+installed and browser-smoke-tested on Splunk Enterprise 10.0.1. Broader Splunk
+Enterprise 10.x and Splunk Cloud certification remains pending.
 
 Install the beta on a non-production search head first. KV Store must be
 available.
@@ -23,12 +24,16 @@ The check must report `OK` before installation.
 
 1. Sign in as a Splunk administrator.
 2. Open **Apps > Manage Apps > Install app from file**.
-3. Upload `content_hygiene-0.2.1-beta.tar.gz`.
+3. Upload `content_hygiene-0.3.0-beta.tar.gz`.
 4. Restart Splunk only if the installation workflow requests it.
 5. Open **Splunk Content Hygiene > Settings & Scan Status**.
 6. Confirm that the app reports no cached data rather than sample results.
 7. Run a bounded live scan.
 8. Review collector warnings, then run a complete live scan.
+9. Select a 30/90/180-day window and run **Collect usage evidence**. Access to
+   `_audit` and `_internal` determines which telemetry sources can establish
+   coverage; unavailable sources remain visible and do not produce inactivity
+   conclusions.
 
 ## Upgrade
 
@@ -55,5 +60,8 @@ objects it inventories.
 - A bounded scan completes or reports actionable permission warnings.
 - A complete scan persists objects, relationships, findings, owners, and scan
   metadata.
+- A usage scan persists only derived activity counts, timestamps, source
+  coverage, and provenance in app-local KV Store. It does not persist raw SPL
+  or actor lists.
 - A test review record can be saved, reloaded, exported, and removed.
 - Removing the review record does not change the referenced Splunk object.

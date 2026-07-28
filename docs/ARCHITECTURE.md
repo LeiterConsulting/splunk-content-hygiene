@@ -6,26 +6,21 @@ normalizes visible content, analyzes explicit dependencies, and persists the
 result in app-local KV Store collections.
 
 ```text
-Splunk REST resources
-        |
-        v
-bounded or paginated collectors
-        |
-        v
-normalization + namespace-aware identities
-        |
-        +----> SPL/dashboard reference extraction
-        |                 |
-        +-----------------+
-                |
-                v
-conservative classification and ownership correlation
-                |
-                v
-app-local KV Store snapshot
-                |
-                v
-Overview / Candidates / Dependencies / Reviews / Ownership / Settings
+Splunk REST resources                     Native Splunk telemetry
+        |                                          |
+        v                                          v
+bounded/paginated inventory collectors    bounded usage searches
+        |                                          |
+        v                                          v
+normalization + dependency analysis       coverage + attribution
+        |                                          |
+        +--------------------+---------------------+
+                             |
+                             v
+                  app-local KV Store evidence
+                             |
+                             v
+       Overview / Candidates / Dependencies / Reviews / Ownership / Settings
 ```
 
 ## Runtime boundaries
@@ -33,9 +28,13 @@ Overview / Candidates / Dependencies / Reviews / Ownership / Settings
 - Scans are explicit and run in the initiating browser session.
 - The app has no custom backend, custom REST endpoint, or external service.
 - Production views read only the latest persisted live snapshot.
-- The only end-user mutation is app-local `ch_reviews` workflow state.
+- End-user writes are limited to app-local inventory, usage-evidence, lifecycle,
+  and `ch_reviews` workflow state.
 - Customer knowledge objects are never deleted, disabled, reassigned, or
   rewritten.
+- Usage collection creates only bounded, on-demand search jobs and persists
+  derived evidence in app-local KV Store; it never dispatches the inventoried
+  saved search or dashboard itself.
 
 ## Inventory
 
@@ -60,6 +59,27 @@ Dynamic or wildcard names are not declared broken. Command-like text inside SPL
 string literals is ignored. An absent sourcetype is not treated as proof of a
 broken reference because the visible catalog may not be authoritative.
 
+## Usage evidence
+
+Usage runs are separate from inventory snapshots and reference the inventory
+scan used for attribution. The saved-search source aggregates distinct search
+IDs from `_audit`; the dashboard source aggregates attributable application
+view paths from `splunk_web_access`. Same-name private saved searches are
+matched only when the observed user namespace identifies one object uniquely.
+Ambiguous activity is disclosed and not assigned.
+
+Each source records the requested window, first and last visible source event,
+event count, activity-row cap, and warning state. A source is complete only when
+visible records span both ends of the requested window within a conservative
+tolerance. Empty, inaccessible, truncated, or retention-limited sources remain
+unavailable or partial.
+
+The overlay can lower abandonment confidence when current activity is observed.
+It can increase confidence or produce a dormant review finding only for a
+complete window associated with the current inventory and an object that was
+not modified after collection. Zero observations are always described as
+review evidence rather than proof of non-use.
+
 ### Removal-impact derivation
 
 Dependency Explorer performs a cycle-safe breadth-first traversal against the
@@ -81,8 +101,10 @@ content.
 Scan lifecycle state and a recoverable lock are written before collection.
 Objects, edges, findings, and owners are prepared under a new scan identifier;
 the latest successful or partial snapshot is then read consistently by every
-view. Review records remain independent from snapshot replacement and survive
-when an object is no longer visible.
+view. Usage evidence is persisted under its own run identifier and overlaid
+conservatively at read time. Review records remain independent from snapshot
+replacement, snapshot current usage provenance when saved, and survive when an
+object is no longer visible.
 
 JSON Schemas in [`schemas/`](../schemas/) document the normalized records.
 

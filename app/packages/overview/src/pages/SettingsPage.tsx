@@ -7,9 +7,11 @@ import {
     CardTitle,
     DefinitionList,
     EvidenceList,
+    FilterField,
     InlineNotice,
     ProgressBar,
     ProgressTrack,
+    Select,
     SpacedBlock,
     StyledButton,
     Table,
@@ -22,6 +24,8 @@ import {
     InventorySnapshot,
     ReviewRecord,
     ScanProgress,
+    UsageSummary,
+    UsageWindowDays,
 } from '../types';
 import { downloadCsv } from '../utils/downloadCsv';
 import { downloadJson } from '../utils/downloadJson';
@@ -31,6 +35,7 @@ const collections = [
     ['ch_edges', 'Directional dependency evidence', 'Defined'],
     ['ch_findings', 'Scan-specific review findings', 'Defined'],
     ['ch_owners', 'Ownership summaries', 'Defined'],
+    ['ch_usage_evidence', 'Bounded usage observations and source coverage', 'Defined'],
     ['ch_exemptions', 'Protected-content and review exemptions', 'Defined'],
     ['ch_scan_runs', 'Scan lifecycle and warnings', 'Defined'],
     ['ch_settings', 'Application settings', 'Defined'],
@@ -45,6 +50,28 @@ interface SettingsPageProps {
     onScanCompleted: (snapshot: InventorySnapshot) => void;
 }
 
+function startingStage(
+    mode: 'bounded' | 'full' | 'usage',
+    usageWindowDays: UsageWindowDays
+): string {
+    if (mode === 'bounded') {
+        return 'Starting bounded live inventory';
+    }
+    if (mode === 'full') {
+        return 'Starting complete live inventory';
+    }
+    return `Starting ${usageWindowDays}-day usage evidence scan`;
+}
+
+function inventoryMatchLabel(usage: UsageSummary | null | undefined): string {
+    if (!usage) {
+        return '—';
+    }
+    return usage.matchesCurrentInventory
+        ? 'Current inventory'
+        : 'Earlier inventory snapshot';
+}
+
 export function SettingsPage({
     inventoryClient,
     snapshot,
@@ -55,9 +82,11 @@ export function SettingsPage({
     const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null);
     const [scanError, setScanError] = useState<string | null>(null);
     const [isRunning, setIsRunning] = useState(false);
-    const [runningMode, setRunningMode] = useState<'bounded' | 'full' | null>(
-        null
-    );
+    const [runningMode, setRunningMode] = useState<
+        'bounded' | 'full' | 'usage' | null
+    >(null);
+    const [usageWindowDays, setUsageWindowDays] =
+        useState<UsageWindowDays>(90);
     const displayedScan = snapshot?.scan ?? null;
     const canRunScan = inventoryClient.isAvailable();
     const progressPercent = scanProgress
@@ -66,23 +95,31 @@ export function SettingsPage({
           )
         : 0;
 
-    const handleRunScan = async (mode: 'bounded' | 'full'): Promise<void> => {
+    const handleRunScan = async (
+        mode: 'bounded' | 'full' | 'usage'
+    ): Promise<void> => {
         setIsRunning(true);
         setRunningMode(mode);
         setScanError(null);
         setScanProgress({
             completedCollectors: 0,
             totalCollectors: 1,
-            stage:
-                mode === 'bounded'
-                    ? 'Starting bounded live inventory'
-                    : 'Starting complete live inventory',
+            stage: startingStage(mode, usageWindowDays),
         });
         try {
-            const completed =
-                mode === 'bounded'
-                    ? await inventoryClient.runBoundedScan(setScanProgress)
-                    : await inventoryClient.runFullScan(setScanProgress);
+            let completed: InventorySnapshot;
+            if (mode === 'bounded') {
+                completed = await inventoryClient.runBoundedScan(
+                    setScanProgress
+                );
+            } else if (mode === 'full') {
+                completed = await inventoryClient.runFullScan(setScanProgress);
+            } else {
+                completed = await inventoryClient.runUsageScan(
+                    usageWindowDays,
+                    setScanProgress
+                );
+            }
             onScanCompleted(completed);
         } catch (error) {
             setScanError(
@@ -122,6 +159,10 @@ export function SettingsPage({
                                         'Findings',
                                         'Warnings',
                                         'Review records',
+                                        'Usage run',
+                                        'Usage coverage',
+                                        'Usage window days',
+                                        'Usage observed objects',
                                     ],
                                     displayedScan
                                         ? [
@@ -137,6 +178,11 @@ export function SettingsPage({
                                                   displayedScan.findingCount,
                                                   displayedScan.warningCount,
                                                   reviews.length,
+                                                  snapshot?.usage?.runId ?? '',
+                                                  snapshot?.usage?.coverage ?? '',
+                                                  snapshot?.usage?.windowDays ?? '',
+                                                  snapshot?.usage
+                                                      ?.observedObjectCount ?? '',
                                               ],
                                           ]
                                         : []
@@ -154,6 +200,7 @@ export function SettingsPage({
                                     {
                                         exportedAt: new Date().toISOString(),
                                         scan: displayedScan,
+                                        usage: snapshot?.usage ?? null,
                                         reviewRecordCount: reviews.length,
                                     }
                                 )
@@ -167,7 +214,7 @@ export function SettingsPage({
 
             <InlineNotice>
                 {snapshot
-                    ? 'Every page is reading this live KV Store snapshot. A complete scan paginates supported REST endpoints and extracts dependency evidence; usage timestamps remain unknown until measured telemetry is available.'
+                    ? 'Every page is reading this live KV Store snapshot. Inventory scans collect configuration and dependencies; an on-demand usage scan runs bounded read-only searches against native Splunk telemetry and stores only derived evidence in app-local KV Store.'
                     : 'No fallback dataset is used. Run a bounded scan for a quick check or a complete scan for paginated inventory and dependency analysis. Neither scan changes customer content.'}
             </InlineNotice>
 
@@ -262,6 +309,117 @@ export function SettingsPage({
                                     <strong>Collector warnings</strong>
                                     <EvidenceList>
                                         {displayedScan.warnings.map((warning) => (
+                                            <li key={warning}>{warning}</li>
+                                        ))}
+                                    </EvidenceList>
+                                </SpacedBlock>
+                            ) : null}
+                        </CardBody>
+                    </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Usage evidence</CardTitle>
+                            <ButtonRow>
+                                <FilterField>
+                                    Observation window
+                                    <Select
+                                        aria-label="Usage observation window"
+                                        value={usageWindowDays}
+                                        disabled={isRunning}
+                                        onChange={(event) =>
+                                            setUsageWindowDays(
+                                                Number(
+                                                    event.currentTarget.value
+                                                ) as UsageWindowDays
+                                            )
+                                        }
+                                    >
+                                        <option value={30}>30 days</option>
+                                        <option value={90}>90 days</option>
+                                        <option value={180}>180 days</option>
+                                    </Select>
+                                </FilterField>
+                                <StyledButton
+                                    type="button"
+                                    $primary
+                                    disabled={
+                                        !canRunScan || isRunning || !snapshot
+                                    }
+                                    onClick={() => handleRunScan('usage')}
+                                >
+                                    {runningMode === 'usage'
+                                        ? 'Collecting usage…'
+                                        : 'Collect usage evidence'}
+                                </StyledButton>
+                            </ButtonRow>
+                        </CardHeader>
+                        <CardBody>
+                            <InlineNotice>
+                                This operation creates bounded, on-demand Splunk
+                                search jobs. It does not edit, disable, or delete
+                                customer content. Raw user SPL and actor lists are
+                                not persisted.
+                            </InlineNotice>
+                            <DefinitionList>
+                                <dt>Latest usage run</dt>
+                                <dd>{snapshot?.usage?.runId ?? 'Not run'}</dd>
+                                <dt>Status</dt>
+                                <dd>{snapshot?.usage?.status ?? 'Not run'}</dd>
+                                <dt>Coverage</dt>
+                                <dd>
+                                    {snapshot?.usage?.coverage ?? 'Not measured'}
+                                </dd>
+                                <dt>Window</dt>
+                                <dd>
+                                    {snapshot?.usage
+                                        ? `${snapshot.usage.windowDays} days`
+                                        : 'Not measured'}
+                                </dd>
+                                <dt>Eligible objects</dt>
+                                <dd>
+                                    {snapshot?.usage?.eligibleObjectCount.toLocaleString() ??
+                                        '—'}
+                                </dd>
+                                <dt>Complete-window objects</dt>
+                                <dd>
+                                    {snapshot?.usage?.fullyCoveredObjectCount.toLocaleString() ??
+                                        '—'}
+                                </dd>
+                                <dt>Objects with activity</dt>
+                                <dd>
+                                    {snapshot?.usage?.observedObjectCount.toLocaleString() ??
+                                        '—'}
+                                </dd>
+                                <dt>Inventory match</dt>
+                                <dd>
+                                    {inventoryMatchLabel(snapshot?.usage)}
+                                </dd>
+                            </DefinitionList>
+                            {snapshot?.usage?.sources.length ? (
+                                <SpacedBlock>
+                                    <strong>Telemetry sources</strong>
+                                    <EvidenceList>
+                                        {snapshot.usage.sources.map((source) => (
+                                            <li key={source.sourceId}>
+                                                {source.label}: {source.coverage};{' '}
+                                                {source.sourceEventCount.toLocaleString()}{' '}
+                                                source events and{' '}
+                                                {source.matchedObjectCount.toLocaleString()}{' '}
+                                                matched objects
+                                                {source.warning
+                                                    ? ` — ${source.warning}`
+                                                    : ''}
+                                            </li>
+                                        ))}
+                                    </EvidenceList>
+                                </SpacedBlock>
+                            ) : null}
+                            {snapshot?.usage?.warnings.length ? (
+                                <SpacedBlock>
+                                    <strong>Usage warnings</strong>
+                                    <EvidenceList>
+                                        {snapshot.usage.warnings.map((warning) => (
                                             <li key={warning}>{warning}</li>
                                         ))}
                                     </EvidenceList>

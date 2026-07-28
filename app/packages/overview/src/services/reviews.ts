@@ -8,6 +8,7 @@ import {
     ReviewInput,
     ReviewRecord,
     ReviewStage,
+    UsageCoverage,
 } from '../types';
 import { stableRecordKey } from './inventory';
 
@@ -26,6 +27,10 @@ interface KvReviewRecord extends JsonRecord {
     app: string;
     owner: string | null;
     health_status_at_review: string;
+    usage_coverage_at_review?: string | null;
+    usage_last_observed_at_review?: string | null;
+    usage_observation_count_at_review?: number | null;
+    usage_run_id_at_review?: string | null;
     stage: string;
     note: string;
     assigned_to: string | null;
@@ -98,6 +103,22 @@ const healthStatuses = new Set<HealthStatus>([
 
 function stringValue(value: unknown, fallback = ''): string {
     return typeof value === 'string' ? value : fallback;
+}
+
+function nullableNumber(value: unknown): number | null {
+    const parsed = Number(value);
+    return value === null || value === undefined || value === '' ||
+        !Number.isFinite(parsed)
+        ? null
+        : parsed;
+}
+
+function usageCoverageValue(value: unknown): UsageCoverage | null {
+    return value === 'complete' ||
+        value === 'partial' ||
+        value === 'unavailable'
+        ? value
+        : null;
 }
 
 function collectionUrl(suffix = ''): string {
@@ -180,6 +201,16 @@ export function reviewRecordFromKv(record: KvReviewRecord): ReviewRecord {
         healthStatusAtReview: isHealthStatus(healthStatus)
             ? healthStatus
             : 'unknown',
+        usageCoverageAtReview: usageCoverageValue(
+            record.usage_coverage_at_review
+        ),
+        usageLastObservedAtReview:
+            stringValue(record.usage_last_observed_at_review) || null,
+        usageObservationCountAtReview: nullableNumber(
+            record.usage_observation_count_at_review
+        ),
+        usageRunIdAtReview:
+            stringValue(record.usage_run_id_at_review) || null,
         stage: isReviewStage(stage) ? stage : 'triage',
         note: stringValue(record.note),
         assignedTo: stringValue(record.assigned_to) || null,
@@ -245,6 +276,14 @@ async function upsertReview(input: ReviewInput): Promise<ReviewRecord> {
         app: input.object.app,
         owner: input.object.owner,
         health_status_at_review: input.object.healthStatus,
+        usage_coverage_at_review:
+            input.object.usageEvidence?.coverage ?? null,
+        usage_last_observed_at_review:
+            input.object.usageEvidence?.lastObserved ?? null,
+        usage_observation_count_at_review:
+            input.object.usageEvidence?.observationCount ?? null,
+        usage_run_id_at_review:
+            input.object.usageEvidence?.usageRunId ?? null,
         stage: input.stage,
         note: input.note.trim().slice(0, 4000),
         assigned_to: input.assignedTo?.trim().slice(0, 256) || null,

@@ -8,6 +8,15 @@ import {
     analyzeInventory,
 } from './analysis';
 import {
+    CollectedUsageSource,
+    DASHBOARD_ACCESS_SOURCE_ID,
+    SEARCH_AUDIT_SOURCE_ID,
+    UsageActivityAggregate,
+    applyUsageEvidence,
+    buildUsageEvidence,
+    sourceCoverageForWindow,
+} from './usage';
+import {
     ConfidenceLevel,
     ContentFinding,
     ContentObject,
@@ -20,6 +29,12 @@ import {
     ScanProgress,
     ScanStatus,
     ScanSummary,
+    UsageActivityKind,
+    UsageCoverage,
+    UsageEvidence,
+    UsageSourceSummary,
+    UsageSummary,
+    UsageWindowDays,
 } from '../types';
 
 const APP_ID = 'content_hygiene';
@@ -29,6 +44,7 @@ const FULL_SCAN_MAX_PER_COLLECTOR = 10000;
 const LOCK_KEY = 'inventory_scan_lock';
 const LOCK_TTL_MS = 30 * 60 * 1000;
 const BATCH_SIZE = 100;
+const BATCH_CONCURRENCY = 4;
 const SNAPSHOT_PAGE_SIZE = 1000;
 
 type JsonRecord = Record<string, unknown>;
@@ -51,6 +67,11 @@ interface SplunkRestResponse {
     paging?: {
         total?: number;
     };
+}
+
+interface SplunkSearchResponse {
+    results?: JsonRecord[];
+    messages?: Array<{ type?: string; text?: string }>;
 }
 
 interface CollectedEntries {
@@ -88,6 +109,15 @@ interface KvScanRecord extends JsonRecord {
     collector_counts: Record<string, number>;
     collector_totals: Record<string, number>;
     analysis_status?: string;
+    inventory_scan_id?: string;
+    usage_window_days?: number;
+    usage_window_start?: string;
+    usage_window_end?: string;
+    usage_coverage?: string;
+    eligible_object_count?: number;
+    fully_covered_object_count?: number;
+    observed_object_count?: number;
+    usage_sources?: JsonRecord[];
 }
 
 interface ScanLockRecord extends JsonRecord {
@@ -159,6 +189,37 @@ interface KvFindingRecord extends JsonRecord {
     suggested_action: string;
     created_at: string | null;
     scan_id: string;
+}
+
+interface KvUsageEvidenceRecord extends JsonRecord {
+    _key: string;
+    scan_id: string;
+    usage_run_id: string;
+    inventory_scan_id: string;
+    object_id: string;
+    source_id: string;
+    source_label: string;
+    activity_kind: string;
+    window_days: number;
+    window_start: string;
+    window_end: string;
+    coverage: string;
+    coverage_start: string | null;
+    coverage_end: string | null;
+    source_event_count: number;
+    observation_count: number;
+    successful_count: number;
+    failed_count: number;
+    skipped_count: number;
+    last_observed: string | null;
+    evidence: string[];
+}
+
+interface UsageSourceDefinition {
+    sourceId: string;
+    label: string;
+    activityKind: UsageActivityKind;
+    search: (windowDays: UsageWindowDays) => string;
 }
 
 class RestRequestError extends Error {
@@ -236,6 +297,44 @@ const objectCollectors: ObjectCollectorDefinition[] = [
     },
 ];
 
+const usageSourceDefinitions: UsageSourceDefinition[] = [
+    {
+        sourceId: SEARCH_AUDIT_SOURCE_ID,
+        label: 'Splunk search audit',
+        activityKind: 'saved_search_execution',
+        search: (windowDays) => `search index=_audit action=search savedsearch_name=* earliest=-${windowDays}d latest=now
+| eval activity_name=savedsearch_name, activity_app=coalesce(app, search_app, "unknown"), activity_user=coalesce(user, "")
+| eval normalized_info=lower(coalesce(info, status, "unknown"))
+| where isnotnull(activity_name) AND len(activity_name)>0
+| eval activity_sid=coalesce(search_id, sid, md5(_raw))
+| stats max(_time) as execution_time values(normalized_info) as execution_info by activity_app activity_name activity_user activity_sid
+| eval successful=if(mvfind(execution_info, "^(completed|success)$")>=0, 1, 0), failed=if(mvfind(execution_info, "^failed$")>=0, 1, 0), skipped=if(mvfind(execution_info, "^skipped$")>=0, 1, 0)
+| stats count as observation_count sum(successful) as successful_count sum(failed) as failed_count sum(skipped) as skipped_count max(execution_time) as last_observed by activity_app activity_name activity_user
+| sort 0 - last_observed
+| head 10000
+| eval record_kind="activity"
+| append [ | metadata type=sources index=_audit | stats sum(totalCount) as source_event_count min(firstTime) as coverage_start max(recentTime) as coverage_end | eval record_kind="coverage" ]
+| fields record_kind activity_app activity_name activity_user observation_count successful_count failed_count skipped_count last_observed source_event_count coverage_start coverage_end`,
+    },
+    {
+        sourceId: DASHBOARD_ACCESS_SOURCE_ID,
+        label: 'Splunk Web access log',
+        activityKind: 'dashboard_view',
+        search: (windowDays) => `search index=_internal sourcetype=splunk_web_access earliest=-${windowDays}d latest=now
+| eval request_path=coalesce(uri_path, uri, path)
+| rex field=request_path "(?i)(?:/[a-z]{2}-[A-Z]{2})?/app/(?<activity_app>[^/?]+)/(?<activity_name>[^/?#]+)"
+| eval activity_name=urldecode(activity_name), activity_user=coalesce(user, "")
+| where isnotnull(activity_app) AND isnotnull(activity_name)
+| stats count as observation_count max(_time) as last_observed by activity_app activity_name activity_user
+| eval successful_count=observation_count, failed_count=0, skipped_count=0
+| sort 0 - last_observed
+| head 10000
+| eval record_kind="activity"
+| append [ | metadata type=sourcetypes index=_internal | search sourcetype=splunk_web_access | stats sum(totalCount) as source_event_count min(firstTime) as coverage_start max(recentTime) as coverage_end | eval record_kind="coverage" ]
+| fields record_kind activity_app activity_name activity_user observation_count successful_count failed_count skipped_count last_observed source_event_count coverage_start coverage_end`,
+    },
+];
+
 function asRecord(value: unknown): JsonRecord {
     return value && typeof value === 'object' && !Array.isArray(value)
         ? (value as JsonRecord)
@@ -291,6 +390,33 @@ function normalizeTimestamp(value: unknown): string | null {
         return null;
     }
     return date.toISOString();
+}
+
+function normalizeSearchTimestamp(value: unknown): string | null {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        return normalizeTimestamp(new Date(value * 1000).toISOString());
+    }
+    if (typeof value === 'string' && value.trim().length > 0) {
+        const numeric = Number(value);
+        if (Number.isFinite(numeric)) {
+            return normalizeTimestamp(new Date(numeric * 1000).toISOString());
+        }
+    }
+    return normalizeTimestamp(value);
+}
+
+function usageCoverage(value: unknown): UsageCoverage {
+    return value === 'complete' ||
+        value === 'partial' ||
+        value === 'unavailable'
+        ? value
+        : 'unavailable';
+}
+
+function usageWindowDays(value: unknown): UsageWindowDays {
+    return value === 30 || value === 90 || value === 180
+        ? value
+        : 90;
 }
 
 function objectTypeKey(objectType: string): string {
@@ -586,6 +712,134 @@ async function requestJson<T>(
     return (await response.json()) as T;
 }
 
+async function runOneshotSearch(search: string): Promise<SplunkSearchResponse> {
+    const body = new URLSearchParams();
+    body.set('search', search);
+    body.set('exec_mode', 'oneshot');
+    body.set('output_mode', 'json');
+    body.set('count', '0');
+    body.set('max_time', '120');
+    body.set('timeout', '130');
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 140000);
+    try {
+        return await requestJson<SplunkSearchResponse>(
+            createRESTURL('search/jobs', {
+                owner: username || '-',
+                app: APP_ID,
+            }),
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: body.toString(),
+                signal: controller.signal,
+            },
+            [200, 201]
+        );
+    } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+            throw new Error(
+                'The telemetry search exceeded the 140-second interactive safety limit.'
+            );
+        }
+        throw error;
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+async function collectUsageSource(
+    definition: UsageSourceDefinition,
+    windowDays: UsageWindowDays,
+    windowStart: string,
+    windowEnd: string
+): Promise<CollectedUsageSource> {
+    const response = await runOneshotSearch(definition.search(windowDays));
+    const rows = response.results ?? [];
+    const coverageRow = rows.find(
+        (row) => stringValue(row.record_kind) === 'coverage'
+    );
+    const activityRows = rows.filter(
+        (row) => stringValue(row.record_kind) === 'activity'
+    );
+    const sourceEventCount = numberValue(coverageRow?.source_event_count);
+    const coverageStart = normalizeSearchTimestamp(
+        coverageRow?.coverage_start
+    );
+    const coverageEnd = normalizeSearchTimestamp(coverageRow?.coverage_end);
+    const sourceWindowCoverage = sourceCoverageForWindow(
+        sourceEventCount,
+        coverageStart,
+        coverageEnd,
+        windowStart,
+        windowEnd
+    );
+    const activities: UsageActivityAggregate[] = activityRows
+        .map((row) => ({
+            app: stringValue(row.activity_app),
+            name: stringValue(row.activity_name),
+            user: stringValue(row.activity_user) || null,
+            observationCount: numberValue(row.observation_count),
+            successfulCount: numberValue(row.successful_count),
+            failedCount: numberValue(row.failed_count),
+            skippedCount: numberValue(row.skipped_count),
+            lastObserved: normalizeSearchTimestamp(row.last_observed),
+        }))
+        .filter(
+            (activity) =>
+                activity.app.length > 0 &&
+                activity.name.length > 0 &&
+                activity.observationCount > 0
+        );
+    const truncated = activities.length >= 10000;
+    const responseWarnings = (response.messages ?? [])
+        .filter(
+            (message) =>
+                message.type === 'WARN' || message.type === 'ERROR'
+        )
+        .map((message) => message.text ?? 'Splunk returned a search warning.');
+    const coverage: UsageCoverage =
+        sourceWindowCoverage === 'complete' &&
+        (truncated || responseWarnings.length > 0)
+            ? 'partial'
+            : sourceWindowCoverage;
+    const warnings = [
+        coverage === 'unavailable'
+            ? 'No source events were visible, so absence of object activity cannot be interpreted.'
+            : null,
+        coverage === 'partial'
+            ? `Visible source data spans ${
+                  coverageStart ?? 'an unknown start'
+              } through ${
+                  coverageEnd ?? 'an unknown end'
+              }, which does not establish the complete requested window.`
+            : null,
+        truncated
+            ? 'Activity aggregation reached the 10,000-row safety cap.'
+            : null,
+        ...responseWarnings,
+    ].filter((value): value is string => Boolean(value));
+
+    return {
+        activities,
+        summary: {
+            sourceId: definition.sourceId,
+            label: definition.label,
+            activityKind: definition.activityKind,
+            coverage,
+            coverageStart,
+            coverageEnd,
+            sourceEventCount,
+            activityRecordCount: activities.length,
+            matchedObjectCount: 0,
+            truncated,
+            warning: warnings.length > 0 ? warnings.join(' ') : null,
+        },
+    };
+}
+
 async function collectEntries(
     collector: ObjectCollectorDefinition,
     mode: ScanMode
@@ -646,19 +900,28 @@ async function batchSave(collection: string, records: JsonRecord[]): Promise<voi
     const batches = Array.from({ length: batchCount }, (_, index) =>
         records.slice(index * BATCH_SIZE, (index + 1) * BATCH_SIZE)
     );
-    await Promise.all(
-        batches.map((batch) =>
-            requestJson<unknown>(
-                collectionUrl(collection, '/batch_save'),
-                {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(batch),
-                },
-                [200, 201]
+    /* eslint-disable no-await-in-loop -- batch groups cap concurrent KV writes to protect the search head. */
+    for (
+        let offset = 0;
+        offset < batches.length;
+        offset += BATCH_CONCURRENCY
+    ) {
+        const group = batches.slice(offset, offset + BATCH_CONCURRENCY);
+        await Promise.all(
+            group.map((batch) =>
+                requestJson<unknown>(
+                    collectionUrl(collection, '/batch_save'),
+                    {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(batch),
+                    },
+                    [200, 201]
+                )
             )
-        )
-    );
+        );
+    }
+    /* eslint-enable no-await-in-loop */
 }
 
 async function createRecord(
@@ -867,6 +1130,7 @@ function objectRecordToContentObject(record: KvObjectRecord): ContentObject {
         scheduled: booleanValue(record.scheduled),
         updated: normalizeTimestamp(record.updated),
         lastUsed: normalizeTimestamp(record.last_used),
+        usageEvidence: null,
         healthStatus: isHealthStatus(healthStatus) ? healthStatus : 'unknown',
         abandonmentConfidence: nullableScore(record.abandonment_confidence),
         removalImpact: nullableScore(record.removal_impact),
@@ -911,6 +1175,125 @@ function findingRecordToContentFinding(record: KvFindingRecord): ContentFinding 
             'Review the recorded evidence'
         ),
         createdAt: normalizeTimestamp(record.created_at),
+    };
+}
+
+function isUsageActivityKind(value: string): value is UsageActivityKind {
+    return (
+        value === 'saved_search_execution' || value === 'dashboard_view'
+    );
+}
+
+function usageEvidenceToRecord(
+    objectId: string,
+    usage: UsageEvidence
+): KvUsageEvidenceRecord {
+    return {
+        _key: stableRecordKey(`${usage.usageRunId}::${objectId}`, 'usage'),
+        scan_id: usage.usageRunId,
+        usage_run_id: usage.usageRunId,
+        inventory_scan_id: usage.inventoryScanId,
+        object_id: objectId,
+        source_id: usage.sourceId,
+        source_label: usage.sourceLabel,
+        activity_kind: usage.activityKind,
+        window_days: usage.windowDays,
+        window_start: usage.windowStart,
+        window_end: usage.windowEnd,
+        coverage: usage.coverage,
+        coverage_start: usage.coverageStart,
+        coverage_end: usage.coverageEnd,
+        source_event_count: usage.sourceEventCount,
+        observation_count: usage.observationCount,
+        successful_count: usage.successfulCount,
+        failed_count: usage.failedCount,
+        skipped_count: usage.skippedCount,
+        last_observed: usage.lastObserved,
+        evidence: usage.evidence,
+    };
+}
+
+function usageRecordToEvidence(record: KvUsageEvidenceRecord): UsageEvidence {
+    const activityKind = stringValue(record.activity_kind);
+    return {
+        usageRunId: stringValue(record.usage_run_id),
+        inventoryScanId: stringValue(record.inventory_scan_id),
+        sourceId: stringValue(record.source_id),
+        sourceLabel: stringValue(record.source_label, 'Splunk telemetry'),
+        activityKind: isUsageActivityKind(activityKind)
+            ? activityKind
+            : 'saved_search_execution',
+        windowDays: usageWindowDays(numberValue(record.window_days)),
+        windowStart:
+            normalizeTimestamp(record.window_start) ??
+            new Date(0).toISOString(),
+        windowEnd:
+            normalizeTimestamp(record.window_end) ?? new Date(0).toISOString(),
+        coverage: usageCoverage(record.coverage),
+        coverageStart: normalizeTimestamp(record.coverage_start),
+        coverageEnd: normalizeTimestamp(record.coverage_end),
+        sourceEventCount: numberValue(record.source_event_count),
+        observationCount: numberValue(record.observation_count),
+        successfulCount: numberValue(record.successful_count),
+        failedCount: numberValue(record.failed_count),
+        skippedCount: numberValue(record.skipped_count),
+        lastObserved: normalizeTimestamp(record.last_observed),
+        evidence: stringArray(record.evidence),
+    };
+}
+
+function usageSourceSummaryFromRecord(value: unknown): UsageSourceSummary {
+    const record = asRecord(value);
+    const activityKind = stringValue(record.activityKind);
+    return {
+        sourceId: stringValue(record.sourceId),
+        label: stringValue(record.label, 'Splunk telemetry'),
+        activityKind: isUsageActivityKind(activityKind)
+            ? activityKind
+            : 'saved_search_execution',
+        coverage: usageCoverage(record.coverage),
+        coverageStart: normalizeTimestamp(record.coverageStart),
+        coverageEnd: normalizeTimestamp(record.coverageEnd),
+        sourceEventCount: numberValue(record.sourceEventCount),
+        activityRecordCount: numberValue(record.activityRecordCount),
+        matchedObjectCount: numberValue(record.matchedObjectCount),
+        truncated: booleanValue(record.truncated) === true,
+        warning: stringValue(record.warning) || null,
+    };
+}
+
+function usageSummaryFromScanRecord(
+    record: KvScanRecord,
+    currentInventoryScanId: string
+): UsageSummary {
+    const warnings = stringArray(record.warnings);
+    return {
+        runId: record.scan_id,
+        inventoryScanId: stringValue(record.inventory_scan_id),
+        status: record.status,
+        startedAt: record.started_at,
+        completedAt: record.completed_at,
+        windowDays: usageWindowDays(numberValue(record.usage_window_days)),
+        windowStart:
+            normalizeTimestamp(record.usage_window_start) ??
+            record.started_at,
+        windowEnd:
+            normalizeTimestamp(record.usage_window_end) ??
+            record.completed_at ??
+            record.started_at,
+        coverage: usageCoverage(record.usage_coverage),
+        eligibleObjectCount: numberValue(record.eligible_object_count),
+        fullyCoveredObjectCount: numberValue(
+            record.fully_covered_object_count
+        ),
+        observedObjectCount: numberValue(record.observed_object_count),
+        warningCount: warnings.length,
+        warnings,
+        sources: Array.isArray(record.usage_sources)
+            ? record.usage_sources.map(usageSourceSummaryFromRecord)
+            : [],
+        matchesCurrentInventory:
+            record.inventory_scan_id === currentInventoryScanId,
     };
 }
 
@@ -990,6 +1373,32 @@ async function getCollectionRecords<T>(
     /* eslint-enable no-await-in-loop */
 
     return records;
+}
+
+async function getLatestInventoryScanRecord(): Promise<KvScanRecord | null> {
+    const url = withQuery(collectionUrl('ch_scan_runs'), {
+        query: JSON.stringify({
+            scan_type: { $in: ['bounded', 'full'] },
+            status: { $in: ['succeeded', 'partial'] },
+        }),
+        sort: 'started_at:-1',
+        limit: 1,
+    });
+    const records = await requestJson<KvScanRecord[]>(url);
+    return records[0] ?? null;
+}
+
+async function getLatestUsageScanRecord(): Promise<KvScanRecord | null> {
+    const url = withQuery(collectionUrl('ch_scan_runs'), {
+        query: JSON.stringify({
+            scan_type: 'usage',
+            status: { $in: ['succeeded', 'partial', 'failed'] },
+        }),
+        sort: 'started_at:-1',
+        limit: 1,
+    });
+    const records = await requestJson<KvScanRecord[]>(url);
+    return records[0] ?? null;
 }
 
 function summarizeOwners(
@@ -1078,18 +1487,38 @@ function summarizeOwners(
     );
 }
 
-async function loadSnapshot(record: KvScanRecord): Promise<InventorySnapshot> {
-    const [objectRecords, edgeRecords, findingRecords, ownerRecords] =
+async function loadSnapshot(
+    record: KvScanRecord,
+    usageRecordOverride?: KvScanRecord
+): Promise<InventorySnapshot> {
+    const usageRecord =
+        usageRecordOverride ?? (await getLatestUsageScanRecord());
+    const [objectRecords, edgeRecords, findingRecords, ownerRecords, usageRecords] =
         await Promise.all([
             getCollectionRecords<KvObjectRecord>('ch_objects', record.scan_id),
             getCollectionRecords<KvEdgeRecord>('ch_edges', record.scan_id),
             getCollectionRecords<KvFindingRecord>('ch_findings', record.scan_id),
             getCollectionRecords<KvOwnerRecord>('ch_owners', record.scan_id),
+            usageRecord
+                ? getCollectionRecords<KvUsageEvidenceRecord>(
+                      'ch_usage_evidence',
+                      usageRecord.scan_id
+                  )
+                : Promise.resolve([]),
         ]);
-    const objects = objectRecords.map(objectRecordToContentObject);
-    const findings = findingRecords.map(findingRecordToContentFinding);
+    const baseObjects = objectRecords.map(objectRecordToContentObject);
+    const baseFindings = findingRecords.map(findingRecordToContentFinding);
+    const applied = applyUsageEvidence(
+        baseObjects,
+        baseFindings,
+        usageRecords.map((storedUsage) => ({
+            objectId: stringValue(storedUsage.object_id),
+            usage: usageRecordToEvidence(storedUsage),
+        })),
+        record.scan_id
+    );
     const scan = scanRecordToSummary(record);
-    scan.candidateCount = findings.filter((finding) =>
+    scan.candidateCount = applied.findings.filter((finding) =>
         [
             'cleanup_candidate',
             'broken_reference',
@@ -1101,20 +1530,19 @@ async function loadSnapshot(record: KvScanRecord): Promise<InventorySnapshot> {
 
     return {
         scan,
-        objects,
+        usage: usageRecord
+            ? usageSummaryFromScanRecord(usageRecord, record.scan_id)
+            : null,
+        objects: applied.objects,
         edges: edgeRecords.map(edgeRecordToDependencyEdge),
-        findings,
-        owners: summarizeOwners(ownerRecords, objects),
+        findings: applied.findings,
+        owners: summarizeOwners(ownerRecords, applied.objects),
     };
 }
 
 async function getLatestSnapshot(): Promise<InventorySnapshot | null> {
-    const url = withQuery(collectionUrl('ch_scan_runs'), {
-        sort: 'started_at:-1',
-        limit: 1,
-    });
-    const records = await requestJson<KvScanRecord[]>(url);
-    return records.length > 0 ? loadSnapshot(records[0]) : null;
+    const record = await getLatestInventoryScanRecord();
+    return record ? loadSnapshot(record) : null;
 }
 
 async function runInventoryScan(
@@ -1388,6 +1816,235 @@ async function runInventoryScan(
     }
 }
 
+function unavailableUsageSource(
+    definition: UsageSourceDefinition,
+    message: string
+): CollectedUsageSource {
+    return {
+        activities: [],
+        summary: {
+            sourceId: definition.sourceId,
+            label: definition.label,
+            activityKind: definition.activityKind,
+            coverage: 'unavailable',
+            coverageStart: null,
+            coverageEnd: null,
+            sourceEventCount: 0,
+            activityRecordCount: 0,
+            matchedObjectCount: 0,
+            truncated: false,
+            warning: message,
+        },
+    };
+}
+
+function combinedUsageCoverage(
+    sources: UsageSourceSummary[]
+): UsageCoverage {
+    const coverages = sources.map(({ coverage }) => coverage);
+    if (coverages.every((coverage) => coverage === 'complete')) {
+        return 'complete';
+    }
+    if (coverages.every((coverage) => coverage === 'unavailable')) {
+        return 'unavailable';
+    }
+    return 'partial';
+}
+
+function usageScanStatus(coverage: UsageCoverage): ScanStatus {
+    if (coverage === 'complete') {
+        return 'succeeded';
+    }
+    return coverage === 'unavailable' ? 'failed' : 'partial';
+}
+
+function usageAnalysisStatus(
+    coverage: UsageCoverage
+): ScanSummary['analysisStatus'] {
+    if (coverage === 'complete') {
+        return 'complete';
+    }
+    return coverage === 'unavailable' ? 'failed' : 'partial';
+}
+
+async function runUsageScan(
+    windowDays: UsageWindowDays,
+    onProgress?: (progress: ScanProgress) => void
+): Promise<InventorySnapshot> {
+    if (!splunkdPath) {
+        throw new Error('A Splunk Web session is required to collect usage evidence.');
+    }
+    const inventoryRecord = await getLatestInventoryScanRecord();
+    if (!inventoryRecord) {
+        throw new Error(
+            'Run a bounded or complete live inventory scan before collecting usage evidence.'
+        );
+    }
+
+    const inventorySnapshot = await loadSnapshot(inventoryRecord);
+    const scanId = createScanId();
+    const startedAt = new Date().toISOString();
+    const windowEnd = startedAt;
+    const windowStart = new Date(
+        new Date(windowEnd).getTime() - windowDays * 86400000
+    ).toISOString();
+    const totalCollectors = usageSourceDefinitions.length + 1;
+    const collectorCounts: Record<string, number> = {};
+    const collectorTotals: Record<string, number> = {};
+    const collectedSources: CollectedUsageSource[] = [];
+    let completedCollectors = 0;
+    let scanRecordCreated = false;
+
+    await acquireScanLock(scanId);
+
+    const runningRecord: KvScanRecord = {
+        _key: scanId,
+        scan_id: scanId,
+        scan_type: 'usage',
+        status: 'running',
+        started_at: startedAt,
+        completed_at: null,
+        object_count: 0,
+        edge_count: 0,
+        finding_count: 0,
+        warnings: [],
+        errors: [],
+        collector_counts: {},
+        collector_totals: {},
+        analysis_status: 'pending',
+        inventory_scan_id: inventoryRecord.scan_id,
+        usage_window_days: windowDays,
+        usage_window_start: windowStart,
+        usage_window_end: windowEnd,
+        usage_coverage: 'unavailable',
+        collector_versions: {
+            usage_evidence: '0.1.0',
+            usage_classification: '0.1.0',
+        },
+        initiated_by: username || 'unknown',
+    };
+
+    try {
+        await createRecord('ch_scan_runs', runningRecord);
+        scanRecordCreated = true;
+
+        /* eslint-disable no-restricted-syntax, no-await-in-loop -- usage searches run serially to keep search-head load bounded. */
+        for (const definition of usageSourceDefinitions) {
+            onProgress?.({
+                completedCollectors,
+                totalCollectors,
+                stage: `Collecting ${definition.label.toLowerCase()}`,
+            });
+            let collected: CollectedUsageSource;
+            try {
+                collected = await collectUsageSource(
+                    definition,
+                    windowDays,
+                    windowStart,
+                    windowEnd
+                );
+            } catch (error) {
+                collected = unavailableUsageSource(
+                    definition,
+                    error instanceof Error
+                        ? error.message
+                        : 'The telemetry search failed.'
+                );
+            }
+            collectedSources.push(collected);
+            collectorCounts[definition.sourceId] =
+                collected.summary.activityRecordCount;
+            collectorTotals[definition.sourceId] =
+                collected.summary.sourceEventCount;
+            completedCollectors += 1;
+            await updateRecord('ch_scan_runs', scanId, {
+                collector_counts: collectorCounts,
+                collector_totals: collectorTotals,
+                completed_collectors: completedCollectors,
+                total_collectors: totalCollectors,
+            });
+        }
+        /* eslint-enable no-restricted-syntax, no-await-in-loop */
+
+        onProgress?.({
+            completedCollectors,
+            totalCollectors,
+            stage: 'Matching usage evidence to inventory objects',
+        });
+        const built = buildUsageEvidence(
+            inventorySnapshot.objects,
+            scanId,
+            inventoryRecord.scan_id,
+            windowDays,
+            windowStart,
+            windowEnd,
+            collectedSources
+        );
+        const usageRecords = built.records.map(({ objectId, usage }) =>
+            usageEvidenceToRecord(objectId, usage)
+        );
+        await batchSave('ch_usage_evidence', usageRecords);
+        completedCollectors += 1;
+
+        const coverage = combinedUsageCoverage(built.sources);
+        const status = usageScanStatus(coverage);
+        const completedAt = new Date().toISOString();
+        const completedRecord: KvScanRecord = {
+            ...runningRecord,
+            status,
+            completed_at: completedAt,
+            object_count: usageRecords.length,
+            warnings: built.warnings,
+            errors:
+                coverage === 'unavailable'
+                    ? [
+                          'No configured telemetry source established a usable observation window.',
+                      ]
+                    : [],
+            collector_counts: collectorCounts,
+            collector_totals: collectorTotals,
+            analysis_status: usageAnalysisStatus(coverage),
+            completed_collectors: completedCollectors,
+            total_collectors: totalCollectors,
+            duration_ms: Date.now() - new Date(startedAt).getTime(),
+            usage_coverage: coverage,
+            eligible_object_count: usageRecords.length,
+            fully_covered_object_count: usageRecords.filter(
+                (record) => record.coverage === 'complete'
+            ).length,
+            observed_object_count: usageRecords.filter(
+                (record) => record.observation_count > 0
+            ).length,
+            usage_sources: built.sources.map((source) => ({ ...source })),
+        };
+        await updateRecord('ch_scan_runs', scanId, completedRecord);
+        onProgress?.({
+            completedCollectors,
+            totalCollectors,
+            stage: 'Loading usage-enriched inventory',
+        });
+        return loadSnapshot(inventoryRecord, completedRecord);
+    } catch (error) {
+        if (scanRecordCreated) {
+            const message =
+                error instanceof Error
+                    ? error.message
+                    : 'Unknown usage collection failure';
+            await updateRecord('ch_scan_runs', scanId, {
+                status: 'failed',
+                completed_at: new Date().toISOString(),
+                errors: [message],
+                collector_counts: collectorCounts,
+                collector_totals: collectorTotals,
+                analysis_status: 'failed',
+            }).catch(() => undefined);
+        }
+        throw error;
+    } finally {
+        await releaseScanLock(scanId).catch(() => undefined);
+    }
+}
+
 async function runBoundedScan(
     onProgress?: (progress: ScanProgress) => void
 ): Promise<InventorySnapshot> {
@@ -1405,4 +2062,5 @@ export const splunkInventoryClient: InventoryClient = {
     getLatestSnapshot,
     runBoundedScan,
     runFullScan,
+    runUsageScan,
 };

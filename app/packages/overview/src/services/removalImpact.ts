@@ -366,6 +366,15 @@ export function analyzeRemovalImpact(
     const referenceCountMismatch = selected.inboundReferences > directDependents.length;
     const reviewBlocksRemoval =
         selectedReview?.stage === 'retain' || selectedReview?.stage === 'blocked';
+    const selectedUsage = selected.usageEvidence;
+    const usageMatchesInventory =
+        selectedUsage?.inventoryScanId === scan.scanId;
+    const completeUsageWindow =
+        usageMatchesInventory && selectedUsage?.coverage === 'complete';
+    const observedUsage =
+        usageMatchesInventory && (selectedUsage?.observationCount ?? 0) > 0;
+    const usageSupportsPlanning =
+        completeUsageWindow && !observedUsage;
     const unresolvedDependencyCount = dependencyFollowUps.filter(({ objectId }) =>
         objectId.startsWith('missing::'),
     ).length;
@@ -403,12 +412,22 @@ export function analyzeRemovalImpact(
     } else if (
         selectedReview?.stage !== 'confirmed_eligible' ||
         referenceCountMismatch ||
-        selected.removalImpact === null
+        selected.removalImpact === null ||
+        !usageSupportsPlanning
     ) {
         readiness = 'confirmation_required';
         readinessLabel = 'Confirmation still required';
-        summary =
-            'No direct dependents were found in this graph, but owner, usage, review-stage, and rollback evidence still require confirmation.';
+        if (observedUsage) {
+            summary = `${selectedUsage?.observationCount.toLocaleString()} attributable usage observation${
+                selectedUsage?.observationCount === 1 ? '' : 's'
+            } occurred in the current evidence window; confirm intent and replacement plans before considering removal.`;
+        } else if (!completeUsageWindow) {
+            summary =
+                'No direct dependents were found, but a complete usage-evidence window has not been established for the current inventory.';
+        } else {
+            summary =
+                'No direct dependents were found in this graph, but owner, review-stage, and rollback evidence still require confirmation.';
+        }
     } else {
         readiness = 'eligible_for_change_planning';
         readinessLabel = 'Eligible for controlled change planning';
@@ -446,6 +465,13 @@ export function analyzeRemovalImpact(
     if (selected.protected) {
         potentialConsequences.push(
             'The selected object is protected and is not eligible for routine removal planning.',
+        );
+    }
+    if (observedUsage) {
+        potentialConsequences.push(
+            `The selected object has ${selectedUsage?.observationCount.toLocaleString()} attributable usage observation${
+                selectedUsage?.observationCount === 1 ? '' : 's'
+            } in the current ${selectedUsage?.windowDays}-day window.`,
         );
     }
     const potentiallyOrphanedCount = dependencyFollowUps.filter(
@@ -493,6 +519,23 @@ export function analyzeRemovalImpact(
             `The blast-radius traversal reached its ${maxDepth}-hop or ${MAX_AFFECTED_OBJECTS}-object limit.`,
         );
     }
+    if (!selectedUsage) {
+        caveats.push(
+            'No usage-evidence window has been measured for the selected object.',
+        );
+    } else if (!usageMatchesInventory) {
+        caveats.push(
+            'The available usage evidence was collected against an earlier inventory snapshot and cannot satisfy current removal-readiness prerequisites.',
+        );
+    } else if (selectedUsage.coverage !== 'complete') {
+        caveats.push(
+            `Usage telemetry coverage is ${selectedUsage.coverage}; zero observations cannot be interpreted as inactivity.`,
+        );
+    } else if (observedUsage) {
+        caveats.push(
+            `Usage was observed as recently as ${selectedUsage.lastObserved ?? 'an unknown time'} and must be reconciled with the intended disposition.`,
+        );
+    }
 
     const removalPlan: RemovalPlanStep[] = [
         {
@@ -507,9 +550,13 @@ export function analyzeRemovalImpact(
             sequence: 2,
             phase: 'confirm',
             title: 'Obtain owner and eligibility confirmation',
-            detail: 'Record the accountable owner, intended disposition, business context, usage evidence, and confirmed-eligible review stage in the app-local Review Library.',
+            detail: usageSupportsPlanning
+                ? 'The current complete usage window contains no attributable activity. Record the accountable owner, intended disposition, business context, and confirmed-eligible review stage in the app-local Review Library.'
+                : 'Establish a complete current usage window, reconcile any observed activity, and record the accountable owner, intended disposition, business context, and review stage in the app-local Review Library.',
             objectIds: [selected.objectId],
-            blocking: selectedReview?.stage !== 'confirmed_eligible',
+            blocking:
+                selectedReview?.stage !== 'confirmed_eligible' ||
+                !usageSupportsPlanning,
         },
         {
             sequence: 3,

@@ -29,6 +29,9 @@ The beta is deliberately safe:
 - Ownership reporting and cross-view navigation
 - Bounded and complete live scans with progress, warnings, collector counts, and
   scan-report export
+- On-demand 30/90/180-day usage-evidence windows for directly attributable
+  saved-search executions and dashboard access, with explicit complete,
+  partial, and unavailable source coverage
 
 The complete scan inventories installed apps, saved searches, dashboards,
 macros, lookup definitions and files, data models, indexes, sourcetypes, and
@@ -36,7 +39,7 @@ users visible to the initiating Splunk user.
 
 ## Install the beta
 
-1. Download `content_hygiene-0.2.1-beta.tar.gz` and `SHA256SUMS` from the
+1. Download `content_hygiene-0.3.0-beta.tar.gz` and `SHA256SUMS` from the
    corresponding GitHub prerelease.
 2. Verify the SHA-256 digest.
 3. In Splunk Web, open **Apps > Manage Apps > Install app from file** and upload
@@ -52,11 +55,14 @@ The beta is verified on Splunk Enterprise 10.0.1. Broader Splunk Enterprise
 ## Investigation workflow
 
 1. Start with a complete scan and review any partial-result warnings.
-2. Filter **Cleanup Candidates** by health group, app, type, or review stage.
-3. Inspect inbound and outbound relationships in **Dependency Explorer**.
-4. Add an object to **Review Library**, record evidence, assign it, and move it
+2. Collect a bounded usage-evidence window and resolve any source-coverage
+   warnings.
+3. Filter **Cleanup Candidates** by health group, usage evidence, app, type, or
+   review stage.
+4. Inspect inbound and outbound relationships in **Dependency Explorer**.
+5. Add an object to **Review Library**, record evidence, assign it, and move it
    through the appropriate confirmation stage.
-5. Export the filtered evidence for external review or reporting.
+6. Export the filtered evidence for external review or reporting.
 
 “Confirmed eligible” is an investigation conclusion, not an action. Removal or
 remediation remains outside this app.
@@ -84,7 +90,7 @@ yarn validate
 ```
 
 The verified installable archive is written to
-`app/dist/content_hygiene-0.2.1-beta.tar.gz`. Run `yarn release:prepare` to
+`app/dist/content_hygiene-0.3.0-beta.tar.gz`. Run `yarn release:prepare` to
 perform the complete validation and update `SHA256SUMS`.
 
 ## Current limitations
@@ -92,8 +98,10 @@ perform the complete validation and update `SHA256SUMS`.
 - Scans run in the initiating browser session and are not scheduled.
 - Each complete-scan collector is capped at 10,000 visible records and reports
   truncation.
-- Usage-history and dashboard-view telemetry are not collected, so “last used”
-  remains unknown and abandonment conclusions stay conservative.
+- Usage evidence is limited to saved-search and dashboard activity directly
+  attributable through `_audit` and `splunk_web_access` records visible to the
+  initiating user. Retention, permissions, and unmappable private namespaces
+  are reported rather than treated as inactivity.
 - Dynamic SPL and token references are disclosed but not resolved as broken.
 - Inline dashboard panels are analyzed through their parent dashboard.
 

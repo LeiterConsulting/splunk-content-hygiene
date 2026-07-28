@@ -29,8 +29,10 @@ import { RemovalImpactPanel } from '../components/RemovalImpactPanel';
 import { ReviewEditor } from '../components/ReviewEditor';
 import { ReviewStageBadge } from '../components/ReviewStageBadge';
 import { StatusBadge } from '../components/StatusBadge';
+import { UsageEvidencePanel } from '../components/UsageEvidencePanel';
 import { RemovalImpactAnalysis, analyzeRemovalImpact } from '../services/removalImpact';
 import { reviewStageOptions } from '../services/reviews';
+import { usageEvidenceState } from '../services/usage';
 import {
     ContentObject,
     DependencyEdge,
@@ -132,6 +134,20 @@ function matchesGroup(
     if (group === 'in_library') {
         return reviewByObject.has(contentObject.objectId);
     }
+    if (group === 'usage_observed') {
+        return usageEvidenceState(contentObject) === 'observed';
+    }
+    if (group === 'usage_no_observations_complete') {
+        return (
+            usageEvidenceState(contentObject) ===
+            'no_observations_complete'
+        );
+    }
+    if (group === 'usage_incomplete') {
+        return ['partial', 'unavailable', 'not_measured'].includes(
+            usageEvidenceState(contentObject)
+        );
+    }
     const review = reviewByObject.get(contentObject.objectId);
     if (review?.stage === group) {
         return true;
@@ -155,6 +171,9 @@ function exportRelationships(
             'Related type',
             'Related health',
             'Related review stage',
+            'Related usage coverage',
+            'Related usage observations',
+            'Related last observed',
             'Relation',
             'Confidence',
             'Resolved',
@@ -170,6 +189,9 @@ function exportRelationships(
             row.objectType,
             row.healthStatus,
             reviewByObject.get(row.objectId)?.stage ?? '',
+            row.contentObject?.usageEvidence?.coverage ?? 'not measured',
+            row.contentObject?.usageEvidence?.observationCount ?? '',
+            row.contentObject?.lastUsed ?? '',
             row.edge.relation,
             row.edge.confidence,
             row.edge.resolved,
@@ -190,6 +212,9 @@ function exportRemovalImpact(selected: ContentObject, analysis: RemovalImpactAna
             'Impact score',
             'Readiness',
             'Summary',
+            'Selected usage coverage',
+            'Selected usage observations',
+            'Selected last observed',
             'Affected object ID',
             'Affected object',
             'Affected type',
@@ -209,6 +234,9 @@ function exportRemovalImpact(selected: ContentObject, analysis: RemovalImpactAna
             analysis.impactScore,
             analysis.readiness,
             analysis.summary,
+            selected.usageEvidence?.coverage ?? 'not measured',
+            selected.usageEvidence?.observationCount ?? '',
+            selected.lastUsed ?? '',
             affected?.objectId ?? '',
             affected?.name ?? '',
             affected?.objectType ?? '',
@@ -486,6 +514,13 @@ export function DependencyPage({
                                     </option>
                                 ))}
                                 <option value="in_library">Any review-library record</option>
+                                <option value="usage_observed">Usage: activity observed</option>
+                                <option value="usage_no_observations_complete">
+                                    Usage: no activity, complete window
+                                </option>
+                                <option value="usage_incomplete">
+                                    Usage: incomplete or not measured
+                                </option>
                                 {reviewStageOptions.map((option) => (
                                     <option key={option.value} value={option.value}>
                                         Review stage: {option.label}
@@ -546,6 +581,13 @@ export function DependencyPage({
                                     </option>
                                 ))}
                                 <option value="in_library">Review library only</option>
+                                <option value="usage_observed">Usage: activity observed</option>
+                                <option value="usage_no_observations_complete">
+                                    Usage: no activity, complete window
+                                </option>
+                                <option value="usage_incomplete">
+                                    Usage: incomplete or not measured
+                                </option>
                                 {reviewStageOptions.map((option) => (
                                     <option key={option.value} value={option.value}>
                                         Review stage: {option.label}
@@ -836,6 +878,9 @@ export function DependencyPage({
                                         <dt>Visible after filters</dt>
                                         <dd>{relatedRows.length}</dd>
                                     </DefinitionList>
+                                </DetailSection>
+                                <DetailSection>
+                                    <UsageEvidencePanel contentObject={selected} />
                                 </DetailSection>
                                 <DetailSection>
                                     <strong>Impact context</strong>
