@@ -19,14 +19,17 @@ import {
     Input,
     RowButton,
     Select,
+    SpacedBlock,
     StyledButton,
     Table,
     TableScroller,
 } from '../AppStyles';
 import { PageHeader } from '../components/PageHeader';
+import { RemovalImpactPanel } from '../components/RemovalImpactPanel';
 import { ReviewEditor } from '../components/ReviewEditor';
 import { ReviewStageBadge } from '../components/ReviewStageBadge';
 import { StatusBadge } from '../components/StatusBadge';
+import { RemovalImpactAnalysis, analyzeRemovalImpact } from '../services/removalImpact';
 import { reviewStageOptions } from '../services/reviews';
 import {
     ContentObject,
@@ -57,12 +60,7 @@ const candidateFindingTypes = new Set([
     'needs_review',
     'repair_required',
 ]);
-const candidateStatuses: HealthStatus[] = [
-    'dormant',
-    'orphaned',
-    'broken',
-    'unowned',
-];
+const candidateStatuses: HealthStatus[] = ['dormant', 'orphaned', 'broken', 'unowned'];
 
 interface DependencyPageProps {
     snapshot: InventorySnapshot | null;
@@ -95,21 +93,16 @@ function ownerLabel(contentObject: ContentObject): string {
     if (contentObject.owner) {
         return contentObject.owner;
     }
-    if (
-        contentObject.sharing === 'app' ||
-        contentObject.sharing === 'global'
-    ) {
+    if (contentObject.sharing === 'app' || contentObject.sharing === 'global') {
         return `${contentObject.sharing} scope`;
     }
-    return contentObject.sharing === 'user'
-        ? 'Ownership gap'
-        : 'Owner metadata unavailable';
+    return contentObject.sharing === 'user' ? 'Ownership gap' : 'Owner metadata unavailable';
 }
 
 function unresolvedNode(
     edge: DependencyEdge,
     objectId: string,
-    direction: RelatedNode['direction']
+    direction: RelatedNode['direction'],
 ): RelatedNode {
     const parts = objectId.split('::');
     const targetType = parts[1]?.replace(/_/g, ' ') ?? 'target';
@@ -128,7 +121,7 @@ function matchesGroup(
     contentObject: ContentObject,
     group: string,
     candidateIds: Set<string>,
-    reviewByObject: Map<string, ReviewRecord>
+    reviewByObject: Map<string, ReviewRecord>,
 ): boolean {
     if (group === 'all') {
         return true;
@@ -149,7 +142,7 @@ function matchesGroup(
 function exportRelationships(
     selected: ContentObject,
     rows: RelatedNode[],
-    reviewByObject: Map<string, ReviewRecord>
+    reviewByObject: Map<string, ReviewRecord>,
 ): void {
     downloadCsv(
         `content-hygiene-dependencies-${selected.name}.csv`,
@@ -182,7 +175,52 @@ function exportRelationships(
             row.edge.resolved,
             row.edge.evidence,
             row.edge.sourceLocation,
-        ])
+        ]),
+    );
+}
+
+function exportRemovalImpact(selected: ContentObject, analysis: RemovalImpactAnalysis): void {
+    const rows = analysis.affectedObjects.length > 0 ? analysis.affectedObjects : [null];
+    downloadCsv(
+        `content-hygiene-removal-impact-${selected.name}.csv`,
+        [
+            'Selected object ID',
+            'Selected object',
+            'Impact level',
+            'Impact score',
+            'Readiness',
+            'Summary',
+            'Affected object ID',
+            'Affected object',
+            'Affected type',
+            'Affected app',
+            'Depth',
+            'Direct',
+            'Path',
+            'Relation',
+            'Confidence',
+            'Likely outcome',
+            'Evidence',
+        ],
+        rows.map((affected) => [
+            selected.objectId,
+            selected.name,
+            analysis.impactLevel,
+            analysis.impactScore,
+            analysis.readiness,
+            analysis.summary,
+            affected?.objectId ?? '',
+            affected?.name ?? '',
+            affected?.objectType ?? '',
+            affected?.app ?? '',
+            affected?.depth ?? '',
+            affected?.direct ?? '',
+            affected?.pathNames.join(' -> ') ?? '',
+            affected?.relation ?? '',
+            affected?.confidence ?? '',
+            affected?.likelyOutcome ?? '',
+            affected?.evidence ?? '',
+        ]),
     );
 }
 
@@ -196,25 +234,18 @@ export function DependencyPage({
 }: DependencyPageProps): React.ReactElement {
     const [selectedId, setSelectedId] = useState(readQueryParam('object'));
     const [query, setQuery] = useState(readQueryParam('query'));
-    const [direction, setDirection] = useState(
-        readQueryParam('direction') || 'all'
-    );
-    const [centerGroup, setCenterGroup] = useState(
-        readQueryParam('group') || 'all'
-    );
+    const [direction, setDirection] = useState(readQueryParam('direction') || 'all');
+    const [centerGroup, setCenterGroup] = useState(readQueryParam('group') || 'all');
     const [relatedGroup, setRelatedGroup] = useState('all');
+    const [impactDepth, setImpactDepth] = useState(3);
     const [trail, setTrail] = useState<string[]>([]);
     const objects = snapshot?.objects ?? [];
     const edges = snapshot?.edges ?? [];
-    const reviewByObject = new Map(
-        reviews.map((review) => [review.objectId, review])
-    );
+    const reviewByObject = new Map(reviews.map((review) => [review.objectId, review]));
     const candidateIds = new Set(
         (snapshot?.findings ?? [])
-            .filter((finding) =>
-                candidateFindingTypes.has(finding.findingType)
-            )
-            .map((finding) => finding.objectId)
+            .filter((finding) => candidateFindingTypes.has(finding.findingType))
+            .map((finding) => finding.objectId),
     );
     objects.forEach((contentObject) => {
         if (candidateStatuses.includes(contentObject.healthStatus)) {
@@ -222,36 +253,22 @@ export function DependencyPage({
         }
     });
     const objectById = new Map(
-        objects.map((contentObject) => [
-            contentObject.objectId,
-            contentObject,
-        ])
+        objects.map((contentObject) => [contentObject.objectId, contentObject]),
     );
     const eligibleCenterObjects = objects.filter((contentObject) =>
-        matchesGroup(
-            contentObject,
-            centerGroup,
-            candidateIds,
-            reviewByObject
-        )
+        matchesGroup(contentObject, centerGroup, candidateIds, reviewByObject),
     );
     const defaultObject =
         eligibleCenterObjects.find((contentObject) =>
             edges.some(
                 (edge) =>
                     edge.sourceId === contentObject.objectId ||
-                    edge.targetId === contentObject.objectId
-            )
+                    edge.targetId === contentObject.objectId,
+            ),
         ) ?? eligibleCenterObjects[0];
     const selectedFromId = objectById.get(selectedId);
     const selected =
-        selectedFromId &&
-        matchesGroup(
-            selectedFromId,
-            centerGroup,
-            candidateIds,
-            reviewByObject
-        )
+        selectedFromId && matchesGroup(selectedFromId, centerGroup, candidateIds, reviewByObject)
             ? selectedFromId
             : defaultObject;
     const normalizedQuery = query.trim().toLowerCase();
@@ -270,9 +287,7 @@ export function DependencyPage({
         .slice(0, 200);
     const objectOptions =
         selected &&
-        !matchingObjects.some(
-            (contentObject) => contentObject.objectId === selected.objectId
-        )
+        !matchingObjects.some((contentObject) => contentObject.objectId === selected.objectId)
             ? [selected, ...matchingObjects]
             : matchingObjects;
     const directionalEdges = selected
@@ -281,19 +296,15 @@ export function DependencyPage({
                   (direction === 'all' &&
                       (edge.sourceId === selected.objectId ||
                           edge.targetId === selected.objectId)) ||
-                  (direction === 'outbound' &&
-                      edge.sourceId === selected.objectId) ||
-                  (direction === 'inbound' &&
-                      edge.targetId === selected.objectId)
+                  (direction === 'outbound' && edge.sourceId === selected.objectId) ||
+                  (direction === 'inbound' && edge.targetId === selected.objectId),
           )
         : [];
     const relatedRows: RelatedNode[] = selected
         ? directionalEdges
               .map((edge) => {
                   const selectedIsSource = edge.sourceId === selected.objectId;
-                  const relatedId = selectedIsSource
-                      ? edge.targetId
-                      : edge.sourceId;
+                  const relatedId = selectedIsSource ? edge.targetId : edge.sourceId;
                   const relatedObject = objectById.get(relatedId);
                   const rowDirection: RelatedNode['direction'] = selectedIsSource
                       ? 'outbound'
@@ -318,15 +329,17 @@ export function DependencyPage({
                                 row.contentObject,
                                 relatedGroup,
                                 candidateIds,
-                                reviewByObject
+                                reviewByObject,
                             )
-                          : relatedGroup === 'broken')
+                          : relatedGroup === 'broken'),
               )
         : [];
     const graphRows = relatedRows.slice(0, GRAPH_EDGE_LIMIT);
-    const selectedReview = selected
-        ? reviewByObject.get(selected.objectId) ?? null
-        : null;
+    const selectedReview = selected ? (reviewByObject.get(selected.objectId) ?? null) : null;
+    const removalImpact =
+        selected && snapshot
+            ? analyzeRemovalImpact(selected, objects, edges, reviews, snapshot.scan, impactDepth)
+            : null;
     let emptyTitle = 'No live inventory is cached';
     if (isLoading) {
         emptyTitle = 'Loading live inventory…';
@@ -339,14 +352,7 @@ export function DependencyPage({
         if (!selected || !nextObject) {
             return;
         }
-        if (
-            !matchesGroup(
-                nextObject,
-                centerGroup,
-                candidateIds,
-                reviewByObject
-            )
-        ) {
+        if (!matchesGroup(nextObject, centerGroup, candidateIds, reviewByObject)) {
             setCenterGroup('all');
         }
         setTrail((current) => [...current, selected.objectId]);
@@ -364,18 +370,14 @@ export function DependencyPage({
         <>
             <PageHeader
                 title="Dependency Explorer"
-                subtitle="Drill through live relationship evidence and restrict either side of the graph to a cleanup or review-library group."
+                subtitle="Trace live relationships, simulate removal impact, and build an evidence-backed remediation plan without changing Splunk content."
                 actions={
-                    selected ? (
+                    selected && removalImpact ? (
                         <ButtonRow>
                             <StyledButton
                                 type="button"
                                 onClick={() =>
-                                    exportRelationships(
-                                        selected,
-                                        relatedRows,
-                                        reviewByObject
-                                    )
+                                    exportRelationships(selected, relatedRows, reviewByObject)
                                 }
                                 disabled={relatedRows.length === 0}
                             >
@@ -388,32 +390,49 @@ export function DependencyPage({
                                         `content-hygiene-dependencies-${selected.name}.json`,
                                         {
                                             exportedAt: new Date().toISOString(),
-                                            scanId:
-                                                snapshot?.scan.scanId ?? null,
+                                            scanId: snapshot?.scan.scanId ?? null,
                                             centerObject: selected,
                                             centerReview: selectedReview,
-                                            relationships: relatedRows.map(
-                                                (row) => ({
-                                                    edge: row.edge,
-                                                    direction: row.direction,
-                                                    relatedObject:
-                                                        row.contentObject,
-                                                    unresolvedObjectId:
-                                                        row.contentObject
-                                                            ? null
-                                                            : row.objectId,
-                                                    relatedReview:
-                                                        reviewByObject.get(
-                                                            row.objectId
-                                                        ) ?? null,
-                                                })
-                                            ),
-                                        }
+                                            removalImpact,
+                                            relationships: relatedRows.map((row) => ({
+                                                edge: row.edge,
+                                                direction: row.direction,
+                                                relatedObject: row.contentObject,
+                                                unresolvedObjectId: row.contentObject
+                                                    ? null
+                                                    : row.objectId,
+                                                relatedReview:
+                                                    reviewByObject.get(row.objectId) ?? null,
+                                            })),
+                                        },
                                     )
                                 }
                                 disabled={relatedRows.length === 0}
                             >
                                 Export relationships JSON
+                            </StyledButton>
+                            <StyledButton
+                                type="button"
+                                onClick={() => exportRemovalImpact(selected, removalImpact)}
+                            >
+                                Export impact CSV
+                            </StyledButton>
+                            <StyledButton
+                                type="button"
+                                onClick={() =>
+                                    downloadJson(
+                                        `content-hygiene-removal-impact-${selected.name}.json`,
+                                        {
+                                            exportedAt: new Date().toISOString(),
+                                            scanId: snapshot?.scan.scanId ?? null,
+                                            selectedObject: selected,
+                                            selectedReview,
+                                            analysis: removalImpact,
+                                        },
+                                    )
+                                }
+                            >
+                                Export impact JSON
                             </StyledButton>
                         </ButtonRow>
                     ) : undefined
@@ -425,15 +444,9 @@ export function DependencyPage({
                     {trail.length > 0 ? (
                         <Breadcrumbs aria-label="Dependency drill path">
                             {trail.map((objectId, index) => (
-                                <React.Fragment
-                                    key={`${objectId}-${index.toString()}`}
-                                >
-                                    <RowButton
-                                        type="button"
-                                        onClick={() => drillBack(index)}
-                                    >
-                                        {objectById.get(objectId)?.name ??
-                                            objectId}
+                                <React.Fragment key={`${objectId}-${index.toString()}`}>
+                                    <RowButton type="button" onClick={() => drillBack(index)}>
+                                        {objectById.get(objectId)?.name ?? objectId}
                                     </RowButton>
                                     <span aria-hidden="true">›</span>
                                 </React.Fragment>
@@ -466,22 +479,15 @@ export function DependencyPage({
                                 }}
                             >
                                 <option value="all">All inventory objects</option>
-                                <option value="candidates">
-                                    All cleanup candidates
-                                </option>
+                                <option value="candidates">All cleanup candidates</option>
                                 {candidateStatuses.map((status) => (
                                     <option key={status} value={status}>
                                         Candidate group: {status}
                                     </option>
                                 ))}
-                                <option value="in_library">
-                                    Any review-library record
-                                </option>
+                                <option value="in_library">Any review-library record</option>
                                 {reviewStageOptions.map((option) => (
-                                    <option
-                                        key={option.value}
-                                        value={option.value}
-                                    >
+                                    <option key={option.value} value={option.value}>
                                         Review stage: {option.label}
                                     </option>
                                 ))}
@@ -493,9 +499,7 @@ export function DependencyPage({
                                 type="search"
                                 value={query}
                                 placeholder="Name, app, or type"
-                                onChange={(event) =>
-                                    setQuery(event.currentTarget.value)
-                                }
+                                onChange={(event) => setQuery(event.currentTarget.value)}
                             />
                         </FilterField>
                         <FilterField>
@@ -512,8 +516,7 @@ export function DependencyPage({
                                         value={contentObject.objectId}
                                         key={contentObject.objectId}
                                     >
-                                        {contentObject.name} —{' '}
-                                        {contentObject.objectType}
+                                        {contentObject.name} — {contentObject.objectType}
                                     </option>
                                 ))}
                             </Select>
@@ -522,9 +525,7 @@ export function DependencyPage({
                             Direction
                             <Select
                                 value={direction}
-                                onChange={(event) =>
-                                    setDirection(event.currentTarget.value)
-                                }
+                                onChange={(event) => setDirection(event.currentTarget.value)}
                             >
                                 <option value="all">Inbound and outbound</option>
                                 <option value="inbound">Inbound only</option>
@@ -535,27 +536,18 @@ export function DependencyPage({
                             Related-object group
                             <Select
                                 value={relatedGroup}
-                                onChange={(event) =>
-                                    setRelatedGroup(event.currentTarget.value)
-                                }
+                                onChange={(event) => setRelatedGroup(event.currentTarget.value)}
                             >
                                 <option value="all">All related results</option>
-                                <option value="candidates">
-                                    Cleanup candidates only
-                                </option>
+                                <option value="candidates">Cleanup candidates only</option>
                                 {candidateStatuses.map((status) => (
                                     <option key={status} value={status}>
                                         Candidate group: {status}
                                     </option>
                                 ))}
-                                <option value="in_library">
-                                    Review library only
-                                </option>
+                                <option value="in_library">Review library only</option>
                                 {reviewStageOptions.map((option) => (
-                                    <option
-                                        key={option.value}
-                                        value={option.value}
-                                    >
+                                    <option key={option.value} value={option.value}>
                                         Review stage: {option.label}
                                     </option>
                                 ))}
@@ -564,421 +556,346 @@ export function DependencyPage({
                     </FilterBar>
 
                     <InlineNotice>
-                        The graph shows up to {GRAPH_EDGE_LIMIT} matching
-                        relationships. The table and exports include all{' '}
-                        {relatedRows.length}. Unresolved references remain visible
-                        as evidence but cannot be drilled into.
+                        The graph shows up to {GRAPH_EDGE_LIMIT} matching relationships. The table
+                        and exports include all {relatedRows.length}. Unresolved references remain
+                        visible as evidence but cannot be drilled into.
                     </InlineNotice>
 
-                    <DetailLayout>
-                        <div>
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>
-                                        {relatedRows.length} matching
-                                        relationship
-                                        {relatedRows.length === 1 ? '' : 's'}
-                                    </CardTitle>
-                                </CardHeader>
-                                {relatedRows.length === 0 ? (
-                                    <EmptyState>
-                                        <div>
-                                            <strong>
-                                                No relationships match this scope
-                                            </strong>
-                                            <p>
-                                                Clear the related-object group or
-                                                direction filter to broaden the
-                                                graph.
-                                            </p>
-                                        </div>
-                                    </EmptyState>
-                                ) : (
-                                    <GraphCanvas>
-                                        <GraphSvg
-                                            viewBox="0 0 760 440"
-                                            role="img"
-                                            aria-label={`Dependency graph centered on ${selected.name}`}
-                                        >
-                                            <defs>
-                                                <marker
-                                                    id="arrow"
-                                                    markerWidth="8"
-                                                    markerHeight="8"
-                                                    refX="7"
-                                                    refY="4"
-                                                    orient="auto"
-                                                >
-                                                    <path
-                                                        d="M0,0 L8,4 L0,8 z"
-                                                        fill="currentColor"
-                                                    />
-                                                </marker>
-                                            </defs>
+                    {removalImpact ? (
+                        <SpacedBlock>
+                            <RemovalImpactPanel
+                                selected={selected}
+                                analysis={removalImpact}
+                                depth={impactDepth}
+                                onDepthChange={setImpactDepth}
+                                onDrillTo={drillTo}
+                            />
+                        </SpacedBlock>
+                    ) : null}
 
-                                            {graphRows.map((row, index) => {
-                                                const angle =
-                                                    (Math.PI * 2 * index) /
-                                                        Math.max(
-                                                            graphRows.length,
-                                                            1
-                                                        ) -
-                                                    Math.PI / 2;
-                                                const relatedX =
-                                                    380 +
-                                                    Math.cos(angle) * 265;
-                                                const relatedY =
-                                                    210 +
-                                                    Math.sin(angle) * 155;
-                                                const outbound =
-                                                    row.direction === 'outbound';
-                                                return (
-                                                    <g key={row.edge.edgeId}>
-                                                        <line
-                                                            className={
-                                                                row.edge
-                                                                    .confidence ===
-                                                                'low'
-                                                                    ? 'edge edge-warning'
-                                                                    : 'edge'
-                                                            }
-                                                            x1={
-                                                                outbound
-                                                                    ? 380
-                                                                    : relatedX
-                                                            }
-                                                            y1={
-                                                                outbound
-                                                                    ? 210
-                                                                    : relatedY
-                                                            }
-                                                            x2={
-                                                                outbound
-                                                                    ? relatedX
-                                                                    : 380
-                                                            }
-                                                            y2={
-                                                                outbound
-                                                                    ? relatedY
-                                                                    : 210
-                                                            }
-                                                            markerEnd="url(#arrow)"
-                                                        />
-                                                        <text
-                                                            x={
-                                                                (380 +
-                                                                    relatedX) /
-                                                                2
-                                                            }
-                                                            y={
-                                                                (210 +
-                                                                    relatedY) /
-                                                                    2 -
-                                                                8
-                                                            }
-                                                            fontSize="12"
-                                                            textAnchor="middle"
-                                                        >
-                                                            {row.edge.relation}
-                                                        </text>
-                                                    </g>
-                                                );
-                                            })}
-
-                                            {graphRows.map((row, index) => {
-                                                const angle =
-                                                    (Math.PI * 2 * index) /
-                                                        Math.max(
-                                                            graphRows.length,
-                                                            1
-                                                        ) -
-                                                    Math.PI / 2;
-                                                const x =
-                                                    380 +
-                                                    Math.cos(angle) * 265;
-                                                const y =
-                                                    210 +
-                                                    Math.sin(angle) * 155;
-                                                return (
-                                                    <g
-                                                        key={row.edge.edgeId}
-                                                        transform={`translate(${x - 80} ${y - 32})`}
-                                                    >
-                                                        <rect
-                                                            className="node"
-                                                            width="160"
-                                                            height="64"
-                                                            rx="5"
-                                                        />
-                                                        <circle
-                                                            cx="14"
-                                                            cy="17"
-                                                            r="5"
-                                                            fill={
-                                                                nodeStatusColors[
-                                                                    row
-                                                                        .healthStatus
-                                                                ]
-                                                            }
-                                                        />
-                                                        <text
-                                                            x="26"
-                                                            y="21"
-                                                            fontSize="13"
-                                                        >
-                                                            {truncate(row.name)}
-                                                        </text>
-                                                        <text
-                                                            x="14"
-                                                            y="45"
-                                                            fontSize="11"
-                                                        >
-                                                            {row.objectType}
-                                                        </text>
-                                                    </g>
-                                                );
-                                            })}
-
-                                            <g transform="translate(280 166)">
-                                                <rect
-                                                    className="node node-selected"
-                                                    width="200"
-                                                    height="88"
-                                                    rx="6"
-                                                />
-                                                <circle
-                                                    cx="18"
-                                                    cy="22"
-                                                    r="6"
-                                                    fill={
-                                                        nodeStatusColors[
-                                                            selected.healthStatus
-                                                        ]
-                                                    }
-                                                />
-                                                <text
-                                                    x="32"
-                                                    y="27"
-                                                    fontSize="16"
-                                                    fontWeight="600"
-                                                >
-                                                    {truncate(selected.name, 27)}
-                                                </text>
-                                                <text
-                                                    x="18"
-                                                    y="52"
-                                                    fontSize="12"
-                                                >
-                                                    {selected.objectType}
-                                                </text>
-                                                <text
-                                                    x="18"
-                                                    y="72"
-                                                    fontSize="11"
-                                                >
-                                                    {selected.app}
-                                                </text>
-                                            </g>
-                                        </GraphSvg>
-                                    </GraphCanvas>
-                                )}
-                            </Card>
-
-                            {relatedRows.length > 0 ? (
+                    <SpacedBlock>
+                        <DetailLayout>
+                            <div>
                                 <Card>
                                     <CardHeader>
                                         <CardTitle>
-                                            Relationship evidence and drill-down
+                                            {relatedRows.length} matching relationship
+                                            {relatedRows.length === 1 ? '' : 's'}
                                         </CardTitle>
                                     </CardHeader>
-                                    <TableScroller>
-                                        <Table>
-                                            <thead>
-                                                <tr>
-                                                    <th scope="col">Related object</th>
-                                                    <th scope="col">Direction</th>
-                                                    <th scope="col">Relation</th>
-                                                    <th scope="col">Confidence</th>
-                                                    <th scope="col">Status</th>
-                                                    <th scope="col">Review</th>
-                                                    <th scope="col">Evidence</th>
-                                                    <th scope="col">Action</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {relatedRows.map((row) => (
-                                                    <tr key={row.edge.edgeId}>
-                                                        <td>
-                                                            {row.contentObject ? (
-                                                                <RowButton
-                                                                    type="button"
-                                                                    onClick={() =>
-                                                                        drillTo(
-                                                                            row.objectId
-                                                                        )
-                                                                    }
-                                                                >
-                                                                    {row.name}
-                                                                </RowButton>
-                                                            ) : (
-                                                                row.name
-                                                            )}
-                                                            <div>
-                                                                {row.objectType}
-                                                            </div>
-                                                        </td>
-                                                        <td>{row.direction}</td>
-                                                        <td>{row.edge.relation}</td>
-                                                        <td>
-                                                            {row.edge.confidence}
-                                                        </td>
-                                                        <td>
-                                                            <StatusBadge
-                                                                status={
-                                                                    row.healthStatus
+                                    {relatedRows.length === 0 ? (
+                                        <EmptyState>
+                                            <div>
+                                                <strong>No relationships match this scope</strong>
+                                                <p>
+                                                    Clear the related-object group or direction
+                                                    filter to broaden the graph.
+                                                </p>
+                                            </div>
+                                        </EmptyState>
+                                    ) : (
+                                        <GraphCanvas>
+                                            <GraphSvg
+                                                viewBox="0 0 760 440"
+                                                role="img"
+                                                aria-label={`Dependency graph centered on ${selected.name}`}
+                                            >
+                                                <defs>
+                                                    <marker
+                                                        id="arrow"
+                                                        markerWidth="8"
+                                                        markerHeight="8"
+                                                        refX="7"
+                                                        refY="4"
+                                                        orient="auto"
+                                                    >
+                                                        <path
+                                                            d="M0,0 L8,4 L0,8 z"
+                                                            fill="currentColor"
+                                                        />
+                                                    </marker>
+                                                </defs>
+
+                                                {graphRows.map((row, index) => {
+                                                    const angle =
+                                                        (Math.PI * 2 * index) /
+                                                            Math.max(graphRows.length, 1) -
+                                                        Math.PI / 2;
+                                                    const relatedX = 380 + Math.cos(angle) * 265;
+                                                    const relatedY = 210 + Math.sin(angle) * 155;
+                                                    const outbound = row.direction === 'outbound';
+                                                    return (
+                                                        <g key={row.edge.edgeId}>
+                                                            <line
+                                                                className={
+                                                                    row.edge.confidence === 'low'
+                                                                        ? 'edge edge-warning'
+                                                                        : 'edge'
+                                                                }
+                                                                x1={outbound ? 380 : relatedX}
+                                                                y1={outbound ? 210 : relatedY}
+                                                                x2={outbound ? relatedX : 380}
+                                                                y2={outbound ? relatedY : 210}
+                                                                markerEnd="url(#arrow)"
+                                                            />
+                                                            <text
+                                                                x={(380 + relatedX) / 2}
+                                                                y={(210 + relatedY) / 2 - 8}
+                                                                fontSize="12"
+                                                                textAnchor="middle"
+                                                            >
+                                                                {row.edge.relation}
+                                                            </text>
+                                                        </g>
+                                                    );
+                                                })}
+
+                                                {graphRows.map((row, index) => {
+                                                    const angle =
+                                                        (Math.PI * 2 * index) /
+                                                            Math.max(graphRows.length, 1) -
+                                                        Math.PI / 2;
+                                                    const x = 380 + Math.cos(angle) * 265;
+                                                    const y = 210 + Math.sin(angle) * 155;
+                                                    return (
+                                                        <g
+                                                            key={row.edge.edgeId}
+                                                            transform={`translate(${x - 80} ${y - 32})`}
+                                                        >
+                                                            <rect
+                                                                className="node"
+                                                                width="160"
+                                                                height="64"
+                                                                rx="5"
+                                                            />
+                                                            <circle
+                                                                cx="14"
+                                                                cy="17"
+                                                                r="5"
+                                                                fill={
+                                                                    nodeStatusColors[
+                                                                        row.healthStatus
+                                                                    ]
                                                                 }
                                                             />
-                                                        </td>
-                                                        <td>
-                                                            {reviewByObject.has(
-                                                                row.objectId
-                                                            ) ? (
-                                                                <ReviewStageBadge
-                                                                    stage={
-                                                                        reviewByObject.get(
-                                                                            row.objectId
-                                                                        )!.stage
-                                                                    }
-                                                                />
-                                                            ) : (
-                                                                '—'
-                                                            )}
-                                                        </td>
-                                                        <td>
-                                                            {row.edge.evidence}
-                                                            {row.edge
-                                                                .sourceLocation
-                                                                ? ` [${row.edge.sourceLocation}]`
-                                                                : ''}
-                                                        </td>
-                                                        <td>
-                                                            <StyledButton
-                                                                type="button"
-                                                                disabled={
-                                                                    !row.contentObject
-                                                                }
-                                                                onClick={() =>
-                                                                    drillTo(
-                                                                        row.objectId
-                                                                    )
-                                                                }
-                                                            >
-                                                                Drill in
-                                                            </StyledButton>
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </Table>
-                                    </TableScroller>
-                                </Card>
-                            ) : null}
-                        </div>
+                                                            <text x="26" y="21" fontSize="13">
+                                                                {truncate(row.name)}
+                                                            </text>
+                                                            <text x="14" y="45" fontSize="11">
+                                                                {row.objectType}
+                                                            </text>
+                                                        </g>
+                                                    );
+                                                })}
 
-                        <DetailPanel aria-label={`Details for ${selected.name}`}>
-                            <DetailSection>
-                                <DetailTitle>{selected.name}</DetailTitle>
-                                <ButtonRow>
-                                    <StatusBadge
-                                        status={selected.healthStatus}
-                                    />
-                                    {selectedReview ? (
-                                        <ReviewStageBadge
-                                            stage={selectedReview.stage}
-                                        />
-                                    ) : null}
-                                </ButtonRow>
-                            </DetailSection>
-                            <DetailSection>
-                                <DefinitionList>
-                                    <dt>Type</dt>
-                                    <dd>{selected.objectType}</dd>
-                                    <dt>App</dt>
-                                    <dd>{selected.app}</dd>
-                                    <dt>Owner</dt>
-                                    <dd>{ownerLabel(selected)}</dd>
-                                    <dt>All inbound refs</dt>
-                                    <dd>{selected.inboundReferences}</dd>
-                                    <dt>All outbound refs</dt>
-                                    <dd>{selected.outboundReferences}</dd>
-                                    <dt>Visible after filters</dt>
-                                    <dd>{relatedRows.length}</dd>
-                                </DefinitionList>
-                            </DetailSection>
-                            <DetailSection>
-                                <strong>Impact context</strong>
-                                <DefinitionList>
-                                    <dt>Abandonment confidence</dt>
-                                    <dd>
-                                        {formatScore(
-                                            selected.abandonmentConfidence
-                                        )}
-                                    </dd>
-                                    <dt>Removal impact</dt>
-                                    <dd>
-                                        {formatScore(selected.removalImpact)}
-                                    </dd>
-                                </DefinitionList>
-                            </DetailSection>
-                            <DetailSection>
-                                <ButtonRow>
-                                    <StyledButton
-                                        type="button"
-                                        onClick={() =>
-                                            navigateToView('candidates', {
-                                                object: selected.objectId,
-                                            })
-                                        }
-                                        disabled={
-                                            !candidateIds.has(selected.objectId)
-                                        }
-                                    >
-                                        View candidate evidence
-                                    </StyledButton>
-                                    {selectedReview ? (
+                                                <g transform="translate(280 166)">
+                                                    <rect
+                                                        className="node node-selected"
+                                                        width="200"
+                                                        height="88"
+                                                        rx="6"
+                                                    />
+                                                    <circle
+                                                        cx="18"
+                                                        cy="22"
+                                                        r="6"
+                                                        fill={
+                                                            nodeStatusColors[selected.healthStatus]
+                                                        }
+                                                    />
+                                                    <text
+                                                        x="32"
+                                                        y="27"
+                                                        fontSize="16"
+                                                        fontWeight="600"
+                                                    >
+                                                        {truncate(selected.name, 27)}
+                                                    </text>
+                                                    <text x="18" y="52" fontSize="12">
+                                                        {selected.objectType}
+                                                    </text>
+                                                    <text x="18" y="72" fontSize="11">
+                                                        {selected.app}
+                                                    </text>
+                                                </g>
+                                            </GraphSvg>
+                                        </GraphCanvas>
+                                    )}
+                                </Card>
+
+                                {relatedRows.length > 0 ? (
+                                    <Card>
+                                        <CardHeader>
+                                            <CardTitle>
+                                                Relationship evidence and drill-down
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <TableScroller>
+                                            <Table>
+                                                <thead>
+                                                    <tr>
+                                                        <th scope="col">Related object</th>
+                                                        <th scope="col">Direction</th>
+                                                        <th scope="col">Relation</th>
+                                                        <th scope="col">Confidence</th>
+                                                        <th scope="col">Status</th>
+                                                        <th scope="col">Review</th>
+                                                        <th scope="col">Evidence</th>
+                                                        <th scope="col">Action</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {relatedRows.map((row) => (
+                                                        <tr key={row.edge.edgeId}>
+                                                            <td>
+                                                                {row.contentObject ? (
+                                                                    <RowButton
+                                                                        type="button"
+                                                                        onClick={() =>
+                                                                            drillTo(row.objectId)
+                                                                        }
+                                                                    >
+                                                                        {row.name}
+                                                                    </RowButton>
+                                                                ) : (
+                                                                    row.name
+                                                                )}
+                                                                <div>{row.objectType}</div>
+                                                            </td>
+                                                            <td>{row.direction}</td>
+                                                            <td>{row.edge.relation}</td>
+                                                            <td>{row.edge.confidence}</td>
+                                                            <td>
+                                                                <StatusBadge
+                                                                    status={row.healthStatus}
+                                                                />
+                                                            </td>
+                                                            <td>
+                                                                {reviewByObject.has(
+                                                                    row.objectId,
+                                                                ) ? (
+                                                                    <ReviewStageBadge
+                                                                        stage={
+                                                                            reviewByObject.get(
+                                                                                row.objectId,
+                                                                            )!.stage
+                                                                        }
+                                                                    />
+                                                                ) : (
+                                                                    '—'
+                                                                )}
+                                                            </td>
+                                                            <td>
+                                                                {row.edge.evidence}
+                                                                {row.edge.sourceLocation
+                                                                    ? ` [${row.edge.sourceLocation}]`
+                                                                    : ''}
+                                                            </td>
+                                                            <td>
+                                                                <StyledButton
+                                                                    type="button"
+                                                                    disabled={!row.contentObject}
+                                                                    onClick={() =>
+                                                                        drillTo(row.objectId)
+                                                                    }
+                                                                >
+                                                                    Drill in
+                                                                </StyledButton>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </Table>
+                                        </TableScroller>
+                                    </Card>
+                                ) : null}
+                            </div>
+
+                            <DetailPanel aria-label={`Details for ${selected.name}`}>
+                                <DetailSection>
+                                    <DetailTitle>{selected.name}</DetailTitle>
+                                    <ButtonRow>
+                                        <StatusBadge status={selected.healthStatus} />
+                                        {selectedReview ? (
+                                            <ReviewStageBadge stage={selectedReview.stage} />
+                                        ) : null}
+                                    </ButtonRow>
+                                </DetailSection>
+                                <DetailSection>
+                                    <DefinitionList>
+                                        <dt>Type</dt>
+                                        <dd>{selected.objectType}</dd>
+                                        <dt>App</dt>
+                                        <dd>{selected.app}</dd>
+                                        <dt>Owner</dt>
+                                        <dd>{ownerLabel(selected)}</dd>
+                                        <dt>All inbound refs</dt>
+                                        <dd>{selected.inboundReferences}</dd>
+                                        <dt>All outbound refs</dt>
+                                        <dd>{selected.outboundReferences}</dd>
+                                        <dt>Visible after filters</dt>
+                                        <dd>{relatedRows.length}</dd>
+                                    </DefinitionList>
+                                </DetailSection>
+                                <DetailSection>
+                                    <strong>Impact context</strong>
+                                    <DefinitionList>
+                                        <dt>Abandonment confidence</dt>
+                                        <dd>{formatScore(selected.abandonmentConfidence)}</dd>
+                                        <dt>Removal impact</dt>
+                                        <dd>{formatScore(selected.removalImpact)}</dd>
+                                        <dt>Impact readiness</dt>
+                                        <dd>{removalImpact?.readinessLabel ?? 'Unknown'}</dd>
+                                        <dt>Known affected</dt>
+                                        <dd>{removalImpact?.affectedObjects.length ?? 0}</dd>
+                                    </DefinitionList>
+                                </DetailSection>
+                                <DetailSection>
+                                    <ButtonRow>
                                         <StyledButton
                                             type="button"
                                             onClick={() =>
-                                                navigateToView('reviews', {
+                                                navigateToView('candidates', {
                                                     object: selected.objectId,
                                                 })
                                             }
+                                            disabled={!candidateIds.has(selected.objectId)}
                                         >
-                                            Open in review library
+                                            View candidate evidence
                                         </StyledButton>
-                                    ) : null}
-                                </ButtonRow>
-                            </DetailSection>
-                            <DetailSection>
-                                <ReviewEditor
-                                    contentObject={selected}
-                                    review={selectedReview}
-                                    scanId={snapshot?.scan.scanId ?? ''}
-                                    canWrite={canWriteReviews}
-                                    onSave={onSaveReview}
-                                    onDelete={onDeleteReview}
-                                />
-                            </DetailSection>
-                        </DetailPanel>
-                    </DetailLayout>
+                                        {selectedReview ? (
+                                            <StyledButton
+                                                type="button"
+                                                onClick={() =>
+                                                    navigateToView('reviews', {
+                                                        object: selected.objectId,
+                                                    })
+                                                }
+                                            >
+                                                Open in review library
+                                            </StyledButton>
+                                        ) : null}
+                                    </ButtonRow>
+                                </DetailSection>
+                                <DetailSection>
+                                    <ReviewEditor
+                                        contentObject={selected}
+                                        review={selectedReview}
+                                        scanId={snapshot?.scan.scanId ?? ''}
+                                        canWrite={canWriteReviews}
+                                        onSave={onSaveReview}
+                                        onDelete={onDeleteReview}
+                                    />
+                                </DetailSection>
+                            </DetailPanel>
+                        </DetailLayout>
+                    </SpacedBlock>
                 </>
             ) : (
                 <Card>
                     <EmptyState>
                         <div>
-                            <strong>
-                                {emptyTitle}
-                            </strong>
+                            <strong>{emptyTitle}</strong>
                             <p>
                                 {centerGroup === 'all'
                                     ? 'Run a bounded live scan from Settings before exploring dependencies.'

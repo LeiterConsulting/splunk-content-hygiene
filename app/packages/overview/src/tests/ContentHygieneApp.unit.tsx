@@ -147,9 +147,7 @@ function mutableReviewClient(): {
         listReviews: async () => [...records],
         upsertReview: async (input) => {
             const now = '2026-07-24T18:00:00Z';
-            const existing = records.find(
-                (record) => record.objectId === input.object.objectId
-            );
+            const existing = records.find((record) => record.objectId === input.object.objectId);
             const saved: ReviewRecord = {
                 objectId: input.object.objectId,
                 objectName: input.object.name,
@@ -169,17 +167,13 @@ function mutableReviewClient(): {
             records.splice(
                 0,
                 records.length,
-                ...records.filter(
-                    (record) => record.objectId !== saved.objectId
-                ),
-                saved
+                ...records.filter((record) => record.objectId !== saved.objectId),
+                saved,
             );
             return saved;
         },
         deleteReview: async (objectId) => {
-            const index = records.findIndex(
-                (record) => record.objectId === objectId
-            );
+            const index = records.findIndex((record) => record.objectId === objectId);
             if (index >= 0) {
                 records.splice(index, 1);
             }
@@ -189,60 +183,61 @@ function mutableReviewClient(): {
 }
 
 test('renders an evidence-backed live overview without unsafe claims', async () => {
-    render(
-        <ContentHygieneApp
-            page="overview"
-            inventoryClient={clientWithSnapshot()}
-        />
-    );
+    render(<ContentHygieneApp page="overview" inventoryClient={clientWithSnapshot()} />);
 
-    expect(
-        screen.getByRole('heading', { name: 'Environment Overview' })
-    ).toBeInTheDocument();
-    expect(
-        await screen.findByText('Live inventory cache ready')
-    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Environment Overview' })).toBeInTheDocument();
+    expect(await screen.findByText('Live inventory cache ready')).toBeInTheDocument();
     expect(screen.getByText('Retired Host Report')).toBeInTheDocument();
     expect(screen.queryByText(/safe to delete/i)).not.toBeInTheDocument();
 });
 
 test('filters live candidates and shows recorded finding evidence', async () => {
     const user = userEvent.setup();
-    render(
-        <ContentHygieneApp
-            page="cleanup-candidates"
-            inventoryClient={clientWithSnapshot()}
-        />
-    );
+    render(<ContentHygieneApp page="cleanup-candidates" inventoryClient={clientWithSnapshot()} />);
 
     await screen.findByText('Live inventory cache ready');
     const search = screen.getByRole('searchbox', { name: 'Search' });
     await user.type(search, 'retired host');
 
+    expect(screen.getByRole('button', { name: 'Retired Host Report' })).toBeInTheDocument();
     expect(
-        screen.getByRole('button', { name: 'Retired Host Report' })
-    ).toBeInTheDocument();
-    expect(
-        screen.getByText('No observed views in the configured evidence window')
+        screen.getByText('No observed views in the configured evidence window'),
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /delete/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /disable/i })).not.toBeInTheDocument();
 });
 
 test('keeps abandonment confidence and removal impact separate', async () => {
-    render(
-        <ContentHygieneApp
-            page="dependency-explorer"
-            inventoryClient={clientWithSnapshot()}
-        />
-    );
+    render(<ContentHygieneApp page="dependency-explorer" inventoryClient={clientWithSnapshot()} />);
 
-    expect(
-        await screen.findByText('Live inventory cache ready')
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Live inventory cache ready')).toBeInTheDocument();
     expect(screen.getByText('Abandonment confidence')).toBeInTheDocument();
     expect(screen.getByText('Removal impact')).toBeInTheDocument();
     expect(screen.queryByText(/^Risk score$/i)).not.toBeInTheDocument();
+});
+
+test('explains removal blast radius and recommends a non-destructive sequence', async () => {
+    render(<ContentHygieneApp page="dependency-explorer" inventoryClient={clientWithSnapshot()} />);
+
+    await screen.findByText('Live inventory cache ready');
+    expect(screen.getByRole('heading', { name: 'Impact of removal' })).toBeInTheDocument();
+    expect(
+        screen.getByText('Address 1 known direct dependent before considering removal.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Direct dependents')).toBeInTheDocument();
+    expect(screen.getByText('Known dependencies require remediation.')).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Likely outcome' })).toBeInTheDocument();
+    expect(
+        screen.getByRole('heading', { name: 'Recommended removal sequence' }),
+    ).toBeInTheDocument();
+    expect(
+        screen.getByText(/supported Splunk administration or deployment process/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Export impact CSV' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Export impact JSON' })).toBeEnabled();
+    expect(
+        screen.queryByRole('button', { name: /remove selected|delete selected/i }),
+    ).not.toBeInTheDocument();
 });
 
 test('shows an honest empty state when no live snapshot exists', () => {
@@ -252,12 +247,7 @@ test('shows an honest empty state when no live snapshot exists', () => {
         runBoundedScan: async () => liveSnapshot,
         runFullScan: async () => liveSnapshot,
     };
-    render(
-        <ContentHygieneApp
-            page="overview"
-            inventoryClient={unavailableClient}
-        />
-    );
+    render(<ContentHygieneApp page="overview" inventoryClient={unavailableClient} />);
 
     expect(screen.getByText('No live inventory cached')).toBeInTheDocument();
     expect(screen.getByText('No live inventory is cached')).toBeInTheDocument();
@@ -282,26 +272,15 @@ test('runs a bounded live inventory from Settings and exposes its provenance', a
         runFullScan: async () => liveSnapshot,
     };
 
-    render(
-        <ContentHygieneApp
-            page="settings"
-            inventoryClient={inventoryClient}
-        />
-    );
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-        'Initial snapshot failed'
-    );
-    await user.click(
-        screen.getByRole('button', { name: 'Run bounded live scan' })
-    );
+    render(<ContentHygieneApp page="settings" inventoryClient={inventoryClient} />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Initial snapshot failed');
+    await user.click(screen.getByRole('button', { name: 'Run bounded live scan' }));
 
     expect(await screen.findByText('scan-live-test')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.getAllByText('Live Splunk data')).toHaveLength(2);
     expect(screen.getByText('Live inventory cache ready')).toBeInTheDocument();
-    expect(
-        screen.getByRole('button', { name: 'Run complete live scan' })
-    ).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Run complete live scan' })).toBeEnabled();
 });
 
 test('persists candidate confirmation workflow records in the app-local review library', async () => {
@@ -312,30 +291,20 @@ test('persists candidate confirmation workflow records in the app-local review l
             page="cleanup-candidates"
             inventoryClient={clientWithSnapshot()}
             reviewClient={reviews.client}
-        />
+        />,
     );
 
     await screen.findByText('Live inventory cache ready');
-    await user.selectOptions(
-        screen.getByLabelText('Confirmation stage'),
-        'investigating'
-    );
-    await user.type(
-        screen.getByRole('textbox', { name: 'Assigned reviewer' }),
-        'platform-team'
-    );
+    await user.selectOptions(screen.getByLabelText('Confirmation stage'), 'investigating');
+    await user.type(screen.getByRole('textbox', { name: 'Assigned reviewer' }), 'platform-team');
     await user.type(
         screen.getByRole('textbox', { name: 'Investigation note' }),
-        'Confirm the dashboard reference with its owner.'
+        'Confirm the dashboard reference with its owner.',
     );
-    await user.click(
-        screen.getByRole('button', { name: 'Add to review library' })
-    );
+    await user.click(screen.getByRole('button', { name: 'Add to review library' }));
 
     expect(
-        await screen.findByText(
-            'Review record saved to the app-local library.'
-        )
+        await screen.findByText('Review record saved to the app-local library.'),
     ).toBeInTheDocument();
     expect(reviews.records).toHaveLength(1);
     expect(reviews.records[0]).toMatchObject({
@@ -350,17 +319,13 @@ test('persists candidate confirmation workflow records in the app-local review l
             page="review-library"
             inventoryClient={clientWithSnapshot()}
             reviewClient={reviews.client}
-        />
+        />,
     );
 
-    expect(
-        await screen.findByRole('heading', { name: 'Review Library' })
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Review Library' })).toBeInTheDocument();
     expect(await screen.findByText('platform-team')).toBeInTheDocument();
     expect(
-        screen.getByDisplayValue(
-            'Confirm the dashboard reference with its owner.'
-        )
+        screen.getByDisplayValue('Confirm the dashboard reference with its owner.'),
     ).toBeInTheDocument();
 });
 
@@ -389,7 +354,7 @@ test('broadens center scope when drilling to a related object outside the review
             page="dependency-explorer"
             inventoryClient={clientWithSnapshot()}
             reviewClient={reviews.client}
-        />
+        />,
     );
 
     await screen.findByText('Live inventory cache ready');
@@ -401,9 +366,9 @@ test('broadens center scope when drilling to a related object outside the review
 
     expect(centerGroup).toHaveValue('all');
     expect(
-        screen.getByRole('heading', { name: 'Daily Error Review', level: 2 })
+        screen.getByRole('heading', { name: 'Daily Error Review', level: 2 }),
     ).toBeInTheDocument();
-    expect(
-        screen.getByRole('navigation', { name: 'Dependency drill path' })
-    ).toHaveTextContent('Retired Host Report');
+    expect(screen.getByRole('navigation', { name: 'Dependency drill path' })).toHaveTextContent(
+        'Retired Host Report',
+    );
 });

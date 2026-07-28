@@ -1,5 +1,11 @@
 # Change Log
 
+0.2.0-beta – 2026-07-28
+-------
+
+* Added graph-derived removal impact, cascading dependency paths, remediation
+  guidance, and impact-report exports to Dependency Explorer.
+
 0.1.0-beta – 2026-07-24
 -------
 

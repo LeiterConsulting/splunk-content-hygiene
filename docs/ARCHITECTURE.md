@@ -60,6 +60,22 @@ Dynamic or wildcard names are not declared broken. Command-like text inside SPL
 string literals is ignored. An absent sourcetype is not treated as proof of a
 broken reference because the visible catalog may not be authoritative.
 
+### Removal-impact derivation
+
+Dependency Explorer performs a cycle-safe breadth-first traversal against the
+persisted, unfiltered edge set. Starting from the selected object, it follows
+inbound edges to direct consumers and then continues through their consumers up
+to the selected one-to-five-hop depth. Each affected object retains its
+shortest known path, relation, confidence, source evidence, and likely outcome.
+Traversal is capped at 500 affected objects and reports truncation rather than
+silently presenting a complete result.
+
+The analysis combines the persisted removal-impact indicator with captured
+blast-radius evidence, cross-app scope, protected objects, unresolved targets,
+scan completeness, and Review Library state. It derives recommendations at
+render/export time and does not persist a new decision or change customer
+content.
+
 ## Persistence
 
 Scan lifecycle state and a recoverable lock are written before collection.
