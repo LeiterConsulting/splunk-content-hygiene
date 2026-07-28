@@ -15,7 +15,7 @@ resources for the `content_hygiene` Splunk app.
 - `yarn test` — run component tests.
 - `yarn lint` — run TypeScript/React and styled-component linting.
 - `yarn build` — compile the React pages into the app staging directory.
-- `yarn package` — build `dist/content_hygiene-0.2.1-beta.tar.gz`.
+- `yarn package` — build `dist/content_hygiene-0.3.0-beta.tar.gz`.
 - `yarn package:verify` — verify the release archive layout and exclusions.
 - `yarn validate` — run tests, lint, build, package, and package verification.
 - `yarn release:prepare` — validate and update the repository SHA-256 manifest.

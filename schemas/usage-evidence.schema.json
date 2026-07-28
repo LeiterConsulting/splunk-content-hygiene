@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/splunk-content-hygiene/usage-evidence.schema.json",
+  "title": "Content Hygiene Usage Evidence",
+  "description": "Derived, app-local usage observations. Absence of observations is not proof that an object is unused.",
+  "type": "object",
+  "required": [
+    "_key",
+    "scan_id",
+    "usage_run_id",
+    "inventory_scan_id",
+    "object_id",
+    "source_id",
+    "activity_kind",
+    "window_days",
+    "window_start",
+    "window_end",
+    "coverage",
+    "observation_count"
+  ],
+  "properties": {
+    "_key": {
+      "type": "string",
+      "minLength": 1
+    },
+    "scan_id": {
+      "type": "string"
+    },
+    "usage_run_id": {
+      "type": "string"
+    },
+    "inventory_scan_id": {
+      "type": "string"
+    },
+    "object_id": {
+      "type": "string"
+    },
+    "source_id": {
+      "enum": [
+        "search_audit",
+        "dashboard_access"
+      ]
+    },
+    "source_label": {
+      "type": "string"
+    },
+    "activity_kind": {
+      "enum": [
+        "saved_search_execution",
+        "dashboard_view"
+      ]
+    },
+    "window_days": {
+      "enum": [
+        30,
+        90,
+        180
+      ]
+    },
+    "window_start": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "window_end": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "coverage": {
+      "enum": [
+        "complete",
+        "partial",
+        "unavailable"
+      ]
+    },
+    "coverage_start": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "coverage_end": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "source_event_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "observation_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "successful_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "failed_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "skipped_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "last_observed": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}

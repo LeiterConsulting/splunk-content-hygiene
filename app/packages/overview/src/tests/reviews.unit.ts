@@ -10,6 +10,10 @@ test('normalizes app-local review records and rejects unknown stages', () => {
         app: 'search',
         owner: null,
         health_status_at_review: 'dormant',
+        usage_coverage_at_review: 'complete',
+        usage_last_observed_at_review: null,
+        usage_observation_count_at_review: 0,
+        usage_run_id_at_review: 'scan-usage-live',
         stage: 'unsupported-stage',
         note: 'Owner confirmation required',
         assigned_to: 'platform-team',
@@ -22,4 +26,7 @@ test('normalizes app-local review records and rejects unknown stages', () => {
     expect(review.stage).toBe('triage');
     expect(review.healthStatusAtReview).toBe('dormant');
     expect(review.assignedTo).toBe('platform-team');
+    expect(review.usageCoverageAtReview).toBe('complete');
+    expect(review.usageObservationCountAtReview).toBe(0);
+    expect(review.usageRunIdAtReview).toBe('scan-usage-live');
 });

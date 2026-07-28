@@ -26,6 +26,7 @@ import { ReviewEditor } from '../components/ReviewEditor';
 import { ReviewStageBadge } from '../components/ReviewStageBadge';
 import { StatusBadge } from '../components/StatusBadge';
 import { SummaryMetric } from '../components/SummaryMetric';
+import { UsageEvidencePanel } from '../components/UsageEvidencePanel';
 import { reviewStageOptions } from '../services/reviews';
 import {
     ContentObject,
@@ -62,6 +63,7 @@ function lastObservedObject(review: ReviewRecord): ContentObject {
         scheduled: null,
         updated: null,
         lastUsed: null,
+        usageEvidence: null,
         healthStatus: review.healthStatusAtReview,
         abandonmentConfidence: null,
         removalImpact: null,
@@ -105,6 +107,13 @@ function exportReviews(
             'Note',
             'Current inventory status',
             'Health at review',
+            'Current usage coverage',
+            'Current usage observations',
+            'Current last observed',
+            'Usage coverage at review',
+            'Usage observations at review',
+            'Usage last observed at review',
+            'Usage run at review',
             'Scan ID',
             'Created at',
             'Updated at',
@@ -121,6 +130,15 @@ function exportReviews(
             review.note,
             objectById.has(review.objectId) ? 'present' : 'not present',
             review.healthStatusAtReview,
+            objectById.get(review.objectId)?.usageEvidence?.coverage ??
+                'not measured',
+            objectById.get(review.objectId)?.usageEvidence?.observationCount ??
+                '',
+            objectById.get(review.objectId)?.lastUsed ?? '',
+            review.usageCoverageAtReview ?? 'not measured',
+            review.usageObservationCountAtReview ?? '',
+            review.usageLastObservedAtReview ?? '',
+            review.usageRunIdAtReview ?? '',
             review.scanId,
             review.createdAt,
             review.updatedAt,
@@ -546,6 +564,24 @@ export function ReviewLibraryPage({
                                 <dd>{selectedObject.inboundReferences}</dd>
                                 <dt>Outbound refs</dt>
                                 <dd>{selectedObject.outboundReferences}</dd>
+                                <dt>Usage coverage at review</dt>
+                                <dd>
+                                    {selectedReview.usageCoverageAtReview ??
+                                        'Not measured'}
+                                </dd>
+                                <dt>Observations at review</dt>
+                                <dd>
+                                    {selectedReview.usageObservationCountAtReview ??
+                                        'Not measured'}
+                                </dd>
+                                <dt>Last observed at review</dt>
+                                <dd>
+                                    {selectedReview.usageLastObservedAtReview
+                                        ? formatDateTime(
+                                              selectedReview.usageLastObservedAtReview
+                                          )
+                                        : 'Not observed'}
+                                </dd>
                                 <dt>Last updated by</dt>
                                 <dd>{selectedReview.updatedBy}</dd>
                                 <dt>Last updated</dt>
@@ -563,6 +599,11 @@ export function ReviewLibraryPage({
                                 </InlineNotice>
                             </DetailSection>
                         ) : null}
+                        <DetailSection>
+                            <UsageEvidencePanel
+                                contentObject={selectedObject}
+                            />
+                        </DetailSection>
                         <DetailSection>
                             <ButtonRow>
                                 <StyledButton

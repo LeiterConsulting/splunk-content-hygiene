@@ -47,6 +47,26 @@ function impactLabel(level: RemovalImpactLevel): string {
     return level === 'unknown' ? 'Unknown' : `${level.charAt(0).toUpperCase()}${level.slice(1)}`;
 }
 
+function usageMetricValue(selected: ContentObject): string {
+    if (!selected.usageEvidence) {
+        return 'Not measured';
+    }
+    return selected.usageEvidence.observationCount > 0
+        ? `${selected.usageEvidence.observationCount.toLocaleString()} observed`
+        : 'None observed';
+}
+
+function usageMetricAccent(
+    selected: ContentObject,
+): 'warning' | 'positive' | 'neutral' {
+    if ((selected.usageEvidence?.observationCount ?? 0) > 0) {
+        return 'warning';
+    }
+    return selected.usageEvidence?.coverage === 'complete'
+        ? 'positive'
+        : 'neutral';
+}
+
 export function RemovalImpactPanel({
     selected,
     analysis,
@@ -114,6 +134,16 @@ export function RemovalImpactPanel({
                             value={analysis.affectedAppCount.toLocaleString()}
                             hint="App namespaces represented in the known blast radius"
                             accent={analysis.affectedAppCount > 1 ? 'warning' : 'neutral'}
+                        />
+                        <SummaryMetric
+                            label="Usage evidence"
+                            value={usageMetricValue(selected)}
+                            hint={
+                                selected.usageEvidence
+                                    ? `${selected.usageEvidence.coverage} ${selected.usageEvidence.windowDays}-day window`
+                                    : 'Required before change-planning readiness'
+                            }
+                            accent={usageMetricAccent(selected)}
                         />
                     </MetricGrid>
                     <DefinitionList>

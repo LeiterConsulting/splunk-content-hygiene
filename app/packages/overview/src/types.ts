@@ -11,6 +11,67 @@ export type HealthStatus =
 
 export type ConfidenceLevel = 'high' | 'medium' | 'low' | 'unknown';
 
+export type UsageCoverage = 'complete' | 'partial' | 'unavailable';
+
+export type UsageWindowDays = 30 | 90 | 180;
+
+export type UsageActivityKind =
+    'saved_search_execution' | 'dashboard_view';
+
+export interface UsageEvidence {
+    usageRunId: string;
+    inventoryScanId: string;
+    sourceId: string;
+    sourceLabel: string;
+    activityKind: UsageActivityKind;
+    windowDays: UsageWindowDays;
+    windowStart: string;
+    windowEnd: string;
+    coverage: UsageCoverage;
+    coverageStart: string | null;
+    coverageEnd: string | null;
+    sourceEventCount: number;
+    observationCount: number;
+    successfulCount: number;
+    failedCount: number;
+    skippedCount: number;
+    lastObserved: string | null;
+    evidence: string[];
+}
+
+export interface UsageSourceSummary {
+    sourceId: string;
+    label: string;
+    activityKind: UsageActivityKind;
+    coverage: UsageCoverage;
+    coverageStart: string | null;
+    coverageEnd: string | null;
+    sourceEventCount: number;
+    activityRecordCount: number;
+    matchedObjectCount: number;
+    truncated: boolean;
+    warning: string | null;
+}
+
+export interface UsageSummary {
+    runId: string;
+    inventoryScanId: string;
+    status: ScanStatus;
+    startedAt: string;
+    completedAt: string | null;
+    windowDays: UsageWindowDays;
+    windowStart: string;
+    windowEnd: string;
+    coverage: UsageCoverage;
+    eligibleObjectCount: number;
+    fullyCoveredObjectCount: number;
+    observedObjectCount: number;
+    warningCount: number;
+    warnings: string[];
+    sources: UsageSourceSummary[];
+    matchesCurrentInventory: boolean;
+}
+
 export interface ContentObject {
     objectId: string;
     canonicalName: string;
@@ -23,6 +84,7 @@ export interface ContentObject {
     scheduled: boolean | null;
     updated: string | null;
     lastUsed: string | null;
+    usageEvidence: UsageEvidence | null;
     healthStatus: HealthStatus;
     abandonmentConfidence: number | null;
     removalImpact: number | null;
@@ -111,6 +173,7 @@ export interface ScanSummary {
 
 export interface InventorySnapshot {
     scan: ScanSummary;
+    usage: UsageSummary | null;
     objects: ContentObject[];
     edges: DependencyEdge[];
     findings: ContentFinding[];
@@ -128,6 +191,10 @@ export interface ReviewRecord {
     app: string;
     owner: string | null;
     healthStatusAtReview: HealthStatus;
+    usageCoverageAtReview: UsageCoverage | null;
+    usageLastObservedAtReview: string | null;
+    usageObservationCountAtReview: number | null;
+    usageRunIdAtReview: string | null;
     stage: ReviewStage;
     note: string;
     assignedTo: string | null;
@@ -163,4 +230,8 @@ export interface InventoryClient {
     getLatestSnapshot: () => Promise<InventorySnapshot | null>;
     runBoundedScan: (onProgress?: (progress: ScanProgress) => void) => Promise<InventorySnapshot>;
     runFullScan: (onProgress?: (progress: ScanProgress) => void) => Promise<InventorySnapshot>;
+    runUsageScan: (
+        windowDays: UsageWindowDays,
+        onProgress?: (progress: ScanProgress) => void
+    ) => Promise<InventorySnapshot>;
 }

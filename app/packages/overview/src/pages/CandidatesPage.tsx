@@ -25,7 +25,9 @@ import { PageHeader } from '../components/PageHeader';
 import { ReviewEditor } from '../components/ReviewEditor';
 import { ReviewStageBadge } from '../components/ReviewStageBadge';
 import { StatusBadge } from '../components/StatusBadge';
+import { UsageEvidencePanel } from '../components/UsageEvidencePanel';
 import { reviewStageOptions } from '../services/reviews';
+import { usageEvidenceState } from '../services/usage';
 import {
     ContentFinding,
     ContentObject,
@@ -153,6 +155,13 @@ function exportCandidates(
         'Abandonment confidence',
         'Removal impact',
         'Last used',
+        'Usage coverage',
+        'Usage source',
+        'Usage window days',
+        'Usage observations',
+        'Successful executions',
+        'Failed executions',
+        'Skipped executions',
         'Evidence',
         'Review stage',
         'Assigned to',
@@ -185,6 +194,13 @@ function exportCandidates(
                     contentObject.abandonmentConfidence,
                 primaryFinding?.removalImpact ?? contentObject.removalImpact,
                 contentObject.lastUsed,
+                contentObject.usageEvidence?.coverage ?? 'not measured',
+                contentObject.usageEvidence?.sourceLabel ?? '',
+                contentObject.usageEvidence?.windowDays ?? '',
+                contentObject.usageEvidence?.observationCount ?? '',
+                contentObject.usageEvidence?.successfulCount ?? '',
+                contentObject.usageEvidence?.failedCount ?? '',
+                contentObject.usageEvidence?.skippedCount ?? '',
                 reasons.join(' | '),
                 review?.stage ?? '',
                 review?.assignedTo ?? '',
@@ -233,6 +249,7 @@ export function CandidatesPage({
     const [reviewFilter, setReviewFilter] = useState(
         readQueryParam('review') || 'all'
     );
+    const [usageFilter, setUsageFilter] = useState('all');
     const [sortOrder, setSortOrder] = useState('confidence');
     const [query, setQuery] = useState(readQueryParam('query'));
     const [selectedId, setSelectedId] = useState(readQueryParam('object'));
@@ -281,6 +298,9 @@ export function CandidatesPage({
                 (reviewFilter === 'in_library' && Boolean(review)) ||
                 (reviewFilter === 'not_in_library' && !review) ||
                 review?.stage === reviewFilter;
+            const usageState = usageEvidenceState(contentObject);
+            const matchesUsage =
+                usageFilter === 'all' || usageState === usageFilter;
             const matchesQuery =
                 normalizedQuery.length === 0 ||
                 [
@@ -299,6 +319,7 @@ export function CandidatesPage({
                 matchesType &&
                 matchesApp &&
                 matchesReview &&
+                matchesUsage &&
                 matchesQuery
             );
         })
@@ -321,6 +342,11 @@ export function CandidatesPage({
             }
             if (sortOrder === 'name') {
                 return left.name.localeCompare(right.name);
+            }
+            if (sortOrder === 'last_used') {
+                return (right.lastUsed ?? '').localeCompare(
+                    left.lastUsed ?? ''
+                );
             }
             return (
                 (rightFinding?.abandonmentConfidence ??
@@ -491,6 +517,25 @@ export function CandidatesPage({
                     </Select>
                 </FilterField>
                 <FilterField>
+                    Usage evidence
+                    <Select
+                        value={usageFilter}
+                        onChange={(event) => {
+                            setUsageFilter(event.currentTarget.value);
+                            setPage(0);
+                        }}
+                    >
+                        <option value="all">All usage states</option>
+                        <option value="observed">Activity observed</option>
+                        <option value="no_observations_complete">
+                            No activity, complete window
+                        </option>
+                        <option value="partial">Partial window</option>
+                        <option value="unavailable">Source unavailable</option>
+                        <option value="not_measured">Not measured</option>
+                    </Select>
+                </FilterField>
+                <FilterField>
                     Sort
                     <Select
                         value={sortOrder}
@@ -501,6 +546,7 @@ export function CandidatesPage({
                     >
                         <option value="confidence">Confidence, high first</option>
                         <option value="impact">Impact, high first</option>
+                        <option value="last_used">Last observed, newest first</option>
                         <option value="name">Name</option>
                     </Select>
                 </FilterField>
@@ -511,6 +557,7 @@ export function CandidatesPage({
                         setTypeFilter('all');
                         setAppFilter('all');
                         setReviewFilter('all');
+                        setUsageFilter('all');
                         setSortOrder('confidence');
                         setQuery('');
                         setPage(0);
@@ -698,6 +745,9 @@ export function CandidatesPage({
                                 <dt>Outbound refs</dt>
                                 <dd>{selected.outboundReferences}</dd>
                             </DefinitionList>
+                        </DetailSection>
+                        <DetailSection>
+                            <UsageEvidencePanel contentObject={selected} />
                         </DetailSection>
                         <DetailSection>
                             <strong>Recorded evidence</strong>

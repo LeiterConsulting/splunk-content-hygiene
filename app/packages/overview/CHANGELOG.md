@@ -1,5 +1,11 @@
 # Change Log
 
+0.3.0-beta – 2026-07-28
+-------
+
+* Added bounded usage-evidence collection, source-coverage semantics,
+  conservative rescoring, cross-view filters, review snapshots, and exports.
+
 0.2.1-beta – 2026-07-28
 -------
 

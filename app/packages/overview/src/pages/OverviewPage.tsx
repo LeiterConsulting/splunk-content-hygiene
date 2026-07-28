@@ -256,6 +256,7 @@ export function OverviewPage({
                                 downloadJson('content-hygiene-environment-summary.json', {
                                     exportedAt: new Date().toISOString(),
                                     scan: snapshot?.scan ?? null,
+                                    usage: snapshot?.usage ?? null,
                                     summary: {
                                         objectCount: objects.length,
                                         relationshipCount: snapshot?.edges.length ?? 0,
@@ -316,6 +317,24 @@ export function OverviewPage({
                     value={numberFormatter.format(reviews.length)}
                     hint="App-local investigation and confirmation records"
                     accent="info"
+                />
+                <SummaryMetric
+                    label="Usage evidence"
+                    value={
+                        snapshot?.usage
+                            ? `${numberFormatter.format(
+                                  snapshot.usage.observedObjectCount,
+                              )}/${numberFormatter.format(
+                                  snapshot.usage.eligibleObjectCount,
+                              )}`
+                            : 'Not measured'
+                    }
+                    hint={
+                        snapshot?.usage
+                            ? `${snapshot.usage.coverage} ${snapshot.usage.windowDays}-day source window; observed/eligible objects`
+                            : 'Collect a bounded usage window from Settings'
+                    }
+                    accent={snapshot?.usage?.coverage === 'complete' ? 'positive' : 'warning'}
                 />
                 <SummaryMetric
                     label="Awaiting analysis"

@@ -11,6 +11,38 @@ Keep the browser tab open while a scan runs. If any collector is incomplete,
 the scan and every page retain a visible warning. The app does not substitute
 sample data for missing results.
 
+## Collect usage evidence
+
+After an inventory scan, choose a 30, 90, or 180-day window in **Settings &
+Scan Status** and select **Collect usage evidence**. The app runs bounded,
+on-demand searches against the saved-search audit trail and Splunk Web access
+log visible to the signed-in user.
+
+Usage collection records only derived counts, last-observed timestamps, source
+coverage, and provenance in `ch_usage_evidence`. Raw user SPL and actor lists
+are not persisted. The customer object is never executed, changed, disabled, or
+deleted by this workflow.
+
+Each telemetry source is capped at 10,000 attributable rows and a 140-second
+interactive request budget. Reaching either guardrail produces incomplete
+coverage rather than a silent conclusion.
+
+Every supported object receives one of these evidence states:
+
+- **Activity observed** — attributable executions or dashboard accesses were
+  found.
+- **No activity, complete window** — source records span the requested window
+  and no attributable activity was found. This supports investigation but is
+  not proof that the object is unused.
+- **Partial window** — visible telemetry does not span the requested period.
+- **Unavailable** — the source was empty, inaccessible, or the search failed.
+- **Not measured** — no applicable usage run exists for the object.
+
+Only a complete current window with zero observations can increase abandonment
+confidence. Observed activity can lower abandonment confidence. Partial,
+unavailable, stale, or post-modification evidence never produces an inactivity
+classification.
+
 ## Understand the status groups
 
 - **Active**: current evidence does not identify a hygiene concern.
@@ -42,7 +74,8 @@ presentation; exports continue to include the complete live app summary.
 
 ## Cleanup Candidates
 
-Filter by health group, app, object type, free text, or Review Library stage.
+Filter by health group, usage-evidence state, app, object type, free text, or
+Review Library stage.
 Open an object to inspect identity, ownership, reference counts, reasons, and
 suggested next steps. Exports include the full filtered result set, not just the
 current page.
@@ -81,8 +114,9 @@ The simulation reports:
 
 Impact readiness is intentionally conservative. Protected content,
 retain/blocked review decisions, partial scans, collector warnings, unresolved
-targets, traversal limits, and known direct dependents prevent an eligible
-result. Even an eligible result means only that captured graph prerequisites
+targets, traversal limits, known direct dependents, observed recent activity,
+and absent or incomplete current usage windows prevent an eligible result. Even
+an eligible result means only that captured graph and observation prerequisites
 are satisfied; it is not authorization or proof of safety.
 
 Use the impact CSV for an affected-object register and the JSON report for the
@@ -102,8 +136,10 @@ The Review Library is durable app-local workflow state:
 - **Blocked** — missing evidence, policy, or a dependency prevents a decision.
 
 Review records retain an object identity snapshot and scan provenance even if
-the object is not visible in the latest scan. Removing a review record removes
-only the app-local workflow entry.
+the object is not visible in the latest scan. Saving a review also snapshots the
+current usage coverage, observation count, last-observed time, and usage-run
+identifier so later evidence changes remain visible. Removing a review record
+removes only the app-local workflow entry.
 
 ## Ownership
 
@@ -116,6 +152,7 @@ defect.
 
 Overview, candidates, dependency relationships, review records, ownership, and
 scan status expose CSV and/or JSON export controls. Exports are generated in
-the browser from the current live snapshot and active filters. Review exported
-files before sharing because object names, apps, owners, notes, and evidence may
-be sensitive.
+the browser from the current live snapshot and active filters. Candidate,
+dependency, review, environment, and scan exports include applicable usage
+coverage and observations. Review exported files before sharing because object
+names, apps, owners, notes, and evidence may be sensitive.

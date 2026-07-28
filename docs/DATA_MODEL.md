@@ -42,11 +42,34 @@ status, object/edge/finding counts, per-collector cached and visible totals,
 warnings, and errors. Status may be queued, running, partial, succeeded, failed,
 or cancelled.
 
+Usage runs use scan type `usage` and additionally record the inventory scan
+used for attribution, requested window, overall coverage, eligible and observed
+object counts, and per-source coverage summaries.
+
+## Usage evidence
+
+A usage-evidence record is keyed by usage run and object identity. It contains:
+
+- the source and attributable activity kind;
+- inventory and usage-run provenance;
+- requested window and visible source coverage;
+- source-event and object-observation counts;
+- successful, failed, and skipped outcomes when reported;
+- the last observed activity time; and
+- plain-language evidence and caveats.
+
+Coverage is `complete`, `partial`, or `unavailable`. A zero observation count
+has no inactivity meaning unless coverage is complete, the evidence belongs to
+the current inventory, and the object was not modified after the evidence
+window.
+
 ## Reviews
 
 A review is a durable, app-local record keyed by object identity. It contains
 an identity snapshot, health status at review, workflow stage, note, optional
 assignee, scan provenance, timestamps, and updater identity.
+The record also snapshots usage coverage, observation count, last-observed
+time, and usage-run provenance at the time of review.
 
 Review stages are `triage`, `investigating`, `awaiting_owner`,
 `confirmed_eligible`, `retain`, and `blocked`. A review record does not

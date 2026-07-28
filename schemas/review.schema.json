@@ -61,6 +61,38 @@
         "unknown"
       ]
     },
+    "usage_coverage_at_review": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "complete",
+        "partial",
+        "unavailable",
+        null
+      ]
+    },
+    "usage_last_observed_at_review": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "usage_observation_count_at_review": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "usage_run_id_at_review": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "stage": {
       "enum": [
         "triage",
