@@ -49,6 +49,34 @@ Review Library stage. Select a resolved related object to continue the
 investigation as a multi-step drill-through. Cross-view links preserve the
 selected object context.
 
+### Impact of removal
+
+For the selected center object, **Impact of removal** analyzes the complete
+unfiltered relationship snapshot even when the visible graph is filtered. Its
+depth control follows known dependents for one, two, three, or five hops.
+
+The simulation reports:
+
+- direct consumers whose captured reference would be broken;
+- indirect consumers reachable through a cascading dependency path;
+- affected app namespaces and protected or unresolved blockers;
+- the exact path, relation, confidence, evidence, and likely outcome for every
+  affected object;
+- dependencies that may have no other known consumer after the selected object
+  is retired; and
+- an ordered validation, owner-confirmation, remediation, rollback, controlled
+  change, and post-change verification plan.
+
+Impact readiness is intentionally conservative. Protected content,
+retain/blocked review decisions, partial scans, collector warnings, unresolved
+targets, traversal limits, and known direct dependents prevent an eligible
+result. Even an eligible result means only that captured graph prerequisites
+are satisfied; it is not authorization or proof of safety.
+
+Use the impact CSV for an affected-object register and the JSON report for the
+complete analysis, consequences, caveats, follow-ups, and recommended sequence.
+The application never performs the removal.
+
 ## Review Library
 
 The Review Library is durable app-local workflow state:

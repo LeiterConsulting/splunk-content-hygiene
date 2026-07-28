@@ -29,8 +29,8 @@ sets `COPYFILE_DISABLE=1`, removes `.DS_Store`, AppleDouble `._*`, and
 Inspect the archive before signing off:
 
 ```bash
-tar -tzf app/dist/content_hygiene-0.1.0-beta.tar.gz
-shasum -a 256 app/dist/content_hygiene-0.1.0-beta.tar.gz
+tar -tzf app/dist/content_hygiene-0.2.0-beta.tar.gz
+shasum -a 256 app/dist/content_hygiene-0.2.0-beta.tar.gz
 ```
 
 It must have exactly one top-level `content_hygiene/` directory and must not

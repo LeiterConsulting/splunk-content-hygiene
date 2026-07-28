@@ -2,7 +2,7 @@
 
 ## Compatibility
 
-The `0.1.0-beta` package has been built, AppInspect pre-certified, installed,
+The `0.2.0-beta` package has been built, AppInspect pre-certified, installed,
 and browser-smoke-tested on Splunk Enterprise 10.0.1. Broader Splunk Enterprise
 10.x and Splunk Cloud certification remains pending.
 
@@ -23,7 +23,7 @@ The check must report `OK` before installation.
 
 1. Sign in as a Splunk administrator.
 2. Open **Apps > Manage Apps > Install app from file**.
-3. Upload `content_hygiene-0.1.0-beta.tar.gz`.
+3. Upload `content_hygiene-0.2.0-beta.tar.gz`.
 4. Restart Splunk only if the installation workflow requests it.
 5. Open **Splunk Content Hygiene > Settings & Scan Status**.
 6. Confirm that the app reports no cached data rather than sample results.

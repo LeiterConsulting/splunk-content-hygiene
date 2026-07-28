@@ -16,7 +16,7 @@ Please allow maintainers time to investigate before public disclosure.
 
 ## Supported versions
 
-`0.1.0-beta` is the current evaluation release and receives best-effort security
+`0.2.0-beta` is the current evaluation release and receives best-effort security
 updates. It is not yet certified for production use or Splunk Cloud.
 
 ## Security boundaries

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.0-beta — 2026-07-28
+
+- Added a read-only removal-impact simulation with configurable transitive
+  depth, direct and cascading blast-radius paths, protected/unresolved blockers,
+  cross-app consequences, orphan follow-ups, and type-specific removal guidance
+- Added CSV/JSON impact reports and drill-through actions for affected objects
+- Required the packaged app license and hardened build wrappers to propagate
+  failed production builds
+- Verified build 17 against a complete live Splunk snapshot with no collector
+  warnings or browser-console errors
+
 ## 0.1.0-beta — 2026-07-24
 
 - Added the installable `content_hygiene` Splunk application
@@ -41,7 +52,6 @@
 - Changed the release artifact to `.tar.gz` and hardened packaging against
   `.DS_Store`, AppleDouble, and `__MACOSX` metadata
 - Licensed the source and release package under the MIT License
-
 ## 0.1.0-beta-planning — 2026-07-24
 
 - Initial product brief and beta requirements

@@ -167,8 +167,7 @@ export const MetricCard = styled.article<MetricCardProps>`
     border-radius: ${variables.borderRadius};
     background: ${variables.backgroundColorSection};
     box-shadow: ${variables.overlayShadow};
-    border-top: 3px solid
-        ${({ $accent = 'neutral' }) => metricAccent[$accent]};
+    border-top: 3px solid ${({ $accent = 'neutral' }) => metricAccent[$accent]};
 `;
 
 export const MetricLabel = styled.div`
@@ -205,6 +204,11 @@ export const TwoColumnGrid = styled.section`
 
 export const SpacedBlock = styled.div`
     margin-top: ${variables.spacingLarge};
+`;
+
+export const StackedContent = styled.div`
+    display: grid;
+    gap: ${variables.spacingLarge};
 `;
 
 export const Card = styled.section`
@@ -562,7 +566,11 @@ export const GraphCanvas = styled.div`
     overflow: auto;
     padding: ${variables.spacingLarge};
     background:
-        radial-gradient(circle at center, ${variables.interactiveColorOverlaySelected}, transparent 58%),
+        radial-gradient(
+            circle at center,
+            ${variables.interactiveColorOverlaySelected},
+            transparent 58%
+        ),
         ${variables.backgroundColorSection};
 `;
 

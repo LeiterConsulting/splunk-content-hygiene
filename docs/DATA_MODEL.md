@@ -51,3 +51,12 @@ assignee, scan provenance, timestamps, and updater identity.
 Review stages are `triage`, `investigating`, `awaiting_owner`,
 `confirmed_eligible`, `retain`, and `blocked`. A review record does not
 represent or perform a mutation of its referenced Splunk object.
+
+## Derived removal-impact reports
+
+Removal-impact reports are derived from the selected object, current edge set,
+scan status, and Review Library state. They contain direct and indirect
+affected objects, shortest known paths, likely outcomes, cross-app scope,
+dependency follow-ups, evidence caveats, readiness, and an ordered
+change-control plan. They are exportable but are not persisted as authority to
+remove content.
