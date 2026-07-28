@@ -1,6 +1,6 @@
 {
   "name": "@splunk/content-hygiene",
-  "version": "0.2.0-beta",
+  "version": "0.2.1-beta",
   "license": "MIT",
   "scripts": {
     "build": "node bin/build.js build && yarn types:build",
@@ -20,7 +20,7 @@
     "@splunk/themes": "^1.8.0",
     "react": "^18.2.0",
     "styled-components": "^5.3.10",
-    "@splunk/overview": "0.2.0-beta"
+    "@splunk/overview": "0.2.1-beta"
   },
   "devDependencies": {
     "@babel/core": "^7.28.0",

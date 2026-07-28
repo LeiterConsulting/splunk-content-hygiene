@@ -1,5 +1,11 @@
 # Change Log
 
+0.2.1-beta – 2026-07-28
+-------
+
+* Added searchable, sortable, paginated live app composition with expandable
+  exact health counts to Environment Overview.
+
 0.2.0-beta – 2026-07-28
 -------
 
