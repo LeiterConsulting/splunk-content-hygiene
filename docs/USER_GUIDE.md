@@ -28,6 +28,18 @@ sample data for missing results.
 
 These are investigation aids, not deletion instructions.
 
+## Environment Overview
+
+The **Live inventory by app** tile includes every app in the latest live
+snapshot. Search by app name, sort by app name, object count, or any displayed
+health percentage, reverse the sort direction, and choose 5, 10, or 25 rows per
+page.
+
+Select a health-composition bar to see exact counts and percentages for that
+app. Select the app name or **View app candidates** to open Cleanup Candidates
+with the app filter applied. Pagination and sorting change only the Overview
+presentation; exports continue to include the complete live app summary.
+
 ## Cleanup Candidates
 
 Filter by health group, app, object type, free text, or Review Library stage.

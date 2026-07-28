@@ -1,5 +1,5 @@
 import React from 'react';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { ContentHygieneApp } from '../ContentHygieneApp';
@@ -128,6 +128,66 @@ const liveSnapshot: InventorySnapshot = {
     ],
 };
 
+function inventoryByAppSnapshot(): InventorySnapshot {
+    const appNames = [
+        'alpha_tools',
+        'bravo',
+        'charlie',
+        'delta',
+        'echo',
+        'foxtrot',
+        'golf',
+        'hotel',
+        'india',
+        'juliet',
+        'kilo',
+        'zeta',
+    ];
+    const objects = appNames.map((app, index) => ({
+        objectId: `dashboard::${app}::overview`,
+        canonicalName: 'overview',
+        name: `${app} overview`,
+        objectType: 'Dashboard',
+        app,
+        owner: 'analyst',
+        sharing: 'app',
+        enabled: true,
+        scheduled: null,
+        updated: '2026-07-24T15:00:00Z',
+        lastUsed: '2026-07-24T16:00:00Z',
+        healthStatus: index === 0 ? ('dormant' as const) : ('active' as const),
+        abandonmentConfidence: index === 0 ? 70 : 5,
+        removalImpact: 10,
+        inboundReferences: 0,
+        outboundReferences: 0,
+        protected: false,
+        evidence: ['Live inventory test evidence'],
+        suggestedAction: index === 0 ? 'Review' : 'Keep',
+    }));
+    objects.push({
+        ...objects[objects.length - 1],
+        objectId: 'saved_search::zeta::daily_review',
+        canonicalName: 'daily_review',
+        name: 'zeta daily review',
+        objectType: 'Saved Search',
+    });
+
+    return {
+        scan: {
+            ...liveScan,
+            scanId: 'scan-live-apps',
+            objectCount: objects.length,
+            edgeCount: 0,
+            findingCount: 0,
+            candidateCount: 0,
+        },
+        objects,
+        edges: [],
+        findings: [],
+        owners: [],
+    };
+}
+
 function clientWithSnapshot(snapshot = liveSnapshot): InventoryClient {
     return {
         isAvailable: () => true,
@@ -189,6 +249,61 @@ test('renders an evidence-backed live overview without unsafe claims', async () 
     expect(await screen.findByText('Live inventory cache ready')).toBeInTheDocument();
     expect(screen.getByText('Retired Host Report')).toBeInTheDocument();
     expect(screen.queryByText(/safe to delete/i)).not.toBeInTheDocument();
+});
+
+test('sorts, paginates, searches, and expands live inventory by app', async () => {
+    const user = userEvent.setup();
+    render(
+        <ContentHygieneApp
+            page="overview"
+            inventoryClient={clientWithSnapshot(inventoryByAppSnapshot())}
+        />,
+    );
+
+    await screen.findByText('Live inventory cache ready');
+    const pagination = screen.getByRole('navigation', {
+        name: 'Live inventory by app pagination',
+    });
+    expect(pagination).toHaveTextContent('1–10 of 12 apps · Page 1 of 2');
+    expect(screen.getAllByTitle(/^View cleanup candidates for /)[0]).toHaveTextContent('zeta');
+
+    await user.click(within(pagination).getByRole('button', { name: 'Next' }));
+    expect(pagination).toHaveTextContent('11–12 of 12 apps · Page 2 of 2');
+    expect(screen.getByTitle('View cleanup candidates for juliet')).toBeInTheDocument();
+    expect(screen.getByTitle('View cleanup candidates for kilo')).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Sort by' }), 'app');
+    expect(pagination).toHaveTextContent('1–10 of 12 apps · Page 1 of 2');
+    expect(screen.getAllByTitle(/^View cleanup candidates for /)[0]).toHaveTextContent(
+        'alpha_tools',
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Sort direction: A–Z' }));
+    expect(screen.getAllByTitle(/^View cleanup candidates for /)[0]).toHaveTextContent('zeta');
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Rows' }), '5');
+    expect(pagination).toHaveTextContent('1–5 of 12 apps · Page 1 of 3');
+
+    const appSearch = screen.getByRole('searchbox', { name: 'Find app' });
+    await user.type(appSearch, 'alpha tools');
+    expect(pagination).toHaveTextContent('1–1 of 1 apps · Page 1 of 1');
+    expect(screen.queryByTitle('View cleanup candidates for zeta')).not.toBeInTheDocument();
+
+    await user.click(
+        screen.getByRole('button', {
+            name: /Show health breakdown for alpha_tools:/,
+        }),
+    );
+    const breakdown = screen.getByRole('region', {
+        name: 'Health breakdown for alpha_tools',
+    });
+    expect(within(breakdown).getByText('Needs review')).toBeInTheDocument();
+    expect(within(breakdown).getByText('1 (100%)')).toBeInTheDocument();
+    expect(
+        within(breakdown).getByRole('button', {
+            name: 'View app candidates',
+        }),
+    ).toBeInTheDocument();
 });
 
 test('filters live candidates and shows recorded finding evidence', async () => {

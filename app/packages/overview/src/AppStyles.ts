@@ -503,12 +503,20 @@ export const EmptyState = styled.div`
     text-align: center;
 `;
 
-export const CompositionRow = styled.div`
+interface CompositionRowProps {
+    $selected?: boolean;
+}
+
+export const CompositionRow = styled.div<CompositionRowProps>`
     display: grid;
     grid-template-columns: minmax(150px, 1fr) minmax(260px, 3fr) 90px;
     gap: ${variables.spacingMedium};
     align-items: center;
-    margin-bottom: ${variables.spacingMedium};
+    margin: 0 -${variables.spacingSmall};
+    padding: ${variables.spacingSmall};
+    border-radius: ${variables.borderRadius};
+    background: ${({ $selected }) =>
+        $selected ? variables.interactiveColorOverlaySelected : 'transparent'};
 
     @media (width <= 680px) {
         grid-template-columns: 1fr;
@@ -516,12 +524,26 @@ export const CompositionRow = styled.div`
     }
 `;
 
-export const CompositionBar = styled.div`
+export const CompositionBar = styled.button`
     display: flex;
+    width: 100%;
     height: 16px;
     overflow: hidden;
+    appearance: none;
+    padding: 0;
+    border: 0;
     border-radius: 999px;
     background: ${variables.interactiveColorBackgroundDisabled};
+    cursor: pointer;
+
+    &:hover {
+        filter: brightness(1.08);
+    }
+
+    &:focus-visible {
+        outline: 2px solid ${variables.focusColor};
+        outline-offset: 3px;
+    }
 `;
 
 interface CompositionSegmentProps {
@@ -533,6 +555,104 @@ export const CompositionSegment = styled.span<CompositionSegmentProps>`
     display: block;
     width: ${({ $percent }) => `${$percent}%`};
     background: ${({ $status }) => statusColors[$status]};
+`;
+
+export const CompositionControls = styled.form`
+    display: grid;
+    grid-template-columns: minmax(150px, 1fr) minmax(170px, 1fr) auto auto;
+    gap: ${variables.spacingSmall};
+    align-items: end;
+    margin-bottom: ${variables.spacingMedium};
+
+    input,
+    select {
+        width: 100%;
+        min-width: 0;
+    }
+
+    @media (width <= 760px) {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    @media (width <= 520px) {
+        grid-template-columns: 1fr;
+    }
+`;
+
+export const CompositionControl = styled.label`
+    display: grid;
+    gap: ${variables.spacingXSmall};
+    min-width: 0;
+    color: ${variables.contentColorMuted};
+    font-size: ${variables.fontSizeSmall};
+    font-weight: 600;
+`;
+
+export const CompositionPagination = styled.nav`
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: ${variables.spacingMedium};
+    margin-top: ${variables.spacingMedium};
+    padding-top: ${variables.spacingMedium};
+    border-top: 1px solid ${variables.borderColorWeak};
+
+    @media (width <= 620px) {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+`;
+
+export const CompositionSummary = styled.span`
+    color: ${variables.contentColorMuted};
+    font-size: ${variables.fontSizeSmall};
+    font-variant-numeric: tabular-nums;
+`;
+
+export const CompositionDetails = styled.section`
+    margin-top: ${variables.spacingMedium};
+    padding: ${variables.spacingMedium};
+    border: 1px solid ${variables.borderColorWeak};
+    border-radius: ${variables.borderRadius};
+    background: ${variables.interactiveColorOverlaySelected};
+`;
+
+export const CompositionDetailsHeader = styled.div`
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: ${variables.spacingMedium};
+    margin-bottom: ${variables.spacingSmall};
+
+    strong {
+        overflow-wrap: anywhere;
+    }
+`;
+
+export const CompositionMetricGrid = styled.dl`
+    display: grid;
+    grid-template-columns: repeat(5, minmax(90px, 1fr));
+    gap: ${variables.spacingSmall};
+    margin: 0;
+
+    div {
+        min-width: 0;
+    }
+
+    dt {
+        color: ${variables.contentColorMuted};
+        font-size: ${variables.fontSizeSmall};
+    }
+
+    dd {
+        margin: 2px 0 0;
+        font-variant-numeric: tabular-nums;
+        font-weight: 600;
+    }
+
+    @media (width <= 700px) {
+        grid-template-columns: repeat(2, minmax(90px, 1fr));
+    }
 `;
 
 export const Legend = styled.div`

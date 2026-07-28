@@ -1,5 +1,11 @@
 # Change Log
 
+0.2.1-beta – 2026-07-28
+-------
+
+* Made live inventory by app searchable, sortable, paginated across the complete
+  app list, and expandable to exact health counts.
+
 0.2.0-beta – 2026-07-28
 -------
 

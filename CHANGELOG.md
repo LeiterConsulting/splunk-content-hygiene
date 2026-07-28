@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1-beta — 2026-07-28
+
+- Made the Overview live-inventory tile searchable and sortable by app name,
+  object count, or health percentage
+- Added 5/10/25-row pagination across every live app plus expandable exact
+  health counts while preserving app-filtered candidate drill-through
+
 ## 0.2.0-beta — 2026-07-28
 
 - Added a read-only removal-impact simulation with configurable transitive

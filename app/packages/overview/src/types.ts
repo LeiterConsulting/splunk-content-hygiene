@@ -7,13 +7,7 @@ export type AppPage =
     | 'settings';
 
 export type HealthStatus =
-    | 'active'
-    | 'dormant'
-    | 'orphaned'
-    | 'broken'
-    | 'unowned'
-    | 'protected'
-    | 'unknown';
+    'active' | 'dormant' | 'orphaned' | 'broken' | 'unowned' | 'protected' | 'unknown';
 
 export type ConfidenceLevel = 'high' | 'medium' | 'low' | 'unknown';
 
@@ -53,6 +47,11 @@ export interface DependencyEdge {
 export interface AppComposition {
     app: string;
     objectCount: number;
+    activeCount: number;
+    reviewCount: number;
+    concernCount: number;
+    protectedCount: number;
+    unknownCount: number;
     activePercent: number;
     reviewPercent: number;
     concernPercent: number;
@@ -89,23 +88,11 @@ export interface ContentFinding {
     createdAt: string | null;
 }
 
-export type ScanStatus =
-    | 'queued'
-    | 'running'
-    | 'partial'
-    | 'succeeded'
-    | 'failed'
-    | 'cancelled';
+export type ScanStatus = 'queued' | 'running' | 'partial' | 'succeeded' | 'failed' | 'cancelled';
 
 export interface ScanSummary {
     scanId: string;
-    scanType:
-        | 'bounded'
-        | 'full'
-        | 'incremental'
-        | 'usage'
-        | 'ownership'
-        | 'rescore';
+    scanType: 'bounded' | 'full' | 'incremental' | 'usage' | 'ownership' | 'rescore';
     status: ScanStatus;
     startedAt: string;
     completedAt: string | null;
@@ -131,12 +118,7 @@ export interface InventorySnapshot {
 }
 
 export type ReviewStage =
-    | 'triage'
-    | 'investigating'
-    | 'awaiting_owner'
-    | 'confirmed_eligible'
-    | 'retain'
-    | 'blocked';
+    'triage' | 'investigating' | 'awaiting_owner' | 'confirmed_eligible' | 'retain' | 'blocked';
 
 export interface ReviewRecord {
     objectId: string;
@@ -179,10 +161,6 @@ export interface ScanProgress {
 export interface InventoryClient {
     isAvailable: () => boolean;
     getLatestSnapshot: () => Promise<InventorySnapshot | null>;
-    runBoundedScan: (
-        onProgress?: (progress: ScanProgress) => void
-    ) => Promise<InventorySnapshot>;
-    runFullScan: (
-        onProgress?: (progress: ScanProgress) => void
-    ) => Promise<InventorySnapshot>;
+    runBoundedScan: (onProgress?: (progress: ScanProgress) => void) => Promise<InventorySnapshot>;
+    runFullScan: (onProgress?: (progress: ScanProgress) => void) => Promise<InventorySnapshot>;
 }

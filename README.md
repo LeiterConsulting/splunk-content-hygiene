@@ -17,7 +17,8 @@ The beta is deliberately safe:
 
 ## What it includes
 
-- Overview reporting for the latest live scan
+- Overview reporting for the latest live scan, including searchable, sortable,
+  paginated per-app health composition
 - Cleanup-candidate filtering, evidence inspection, review stages, and CSV/JSON
   export
 - Directional dependency exploration, multi-step drill-through, candidate-group
@@ -35,7 +36,7 @@ users visible to the initiating Splunk user.
 
 ## Install the beta
 
-1. Download `content_hygiene-0.2.0-beta.tar.gz` and `SHA256SUMS` from the
+1. Download `content_hygiene-0.2.1-beta.tar.gz` and `SHA256SUMS` from the
    corresponding GitHub prerelease.
 2. Verify the SHA-256 digest.
 3. In Splunk Web, open **Apps > Manage Apps > Install app from file** and upload
@@ -83,7 +84,7 @@ yarn validate
 ```
 
 The verified installable archive is written to
-`app/dist/content_hygiene-0.2.0-beta.tar.gz`. Run `yarn release:prepare` to
+`app/dist/content_hygiene-0.2.1-beta.tar.gz`. Run `yarn release:prepare` to
 perform the complete validation and update `SHA256SUMS`.
 
 ## Current limitations
