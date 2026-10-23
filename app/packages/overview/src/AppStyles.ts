@@ -1,31 +1,47 @@
-import styled, { css } from 'styled-components';
+import styled from 'styled-components';
 import { mixins, variables } from '@splunk/themes';
+import {
+    ActionButton,
+    ChoiceControl,
+    TextControl,
+    NotesControl,
+    FieldControl,
+    DataTable,
+    Notice,
+} from './components/SplunkControls';
 import { HealthStatus, ReviewStage } from './types';
 
-const statusColors: Record<HealthStatus, string> = {
-    active: '#4fae58',
-    dormant: '#e5a632',
-    orphaned: '#db584c',
-    broken: '#d83b3b',
-    unowned: '#4f8ed8',
-    protected: '#6c8ebf',
-    unknown: '#8b949e',
+export const statusColors = {
+    active: variables.statusColorNormalStrong,
+    dormant: variables.statusColorMediumStrong,
+    orphaned: variables.statusColorHighStrong,
+    broken: variables.statusColorCriticalStrong,
+    unowned: variables.statusColorInfoStrong,
+    protected: variables.statusColorInfoStrong,
+    unknown: variables.contentColorDefault,
 };
-
-export const StyledApp = styled.main`
+export const StyledApp = styled.div`
     ${mixins.reset('block')};
     min-height: 100vh;
     box-sizing: border-box;
     background: ${variables.backgroundColorPage};
     color: ${variables.contentColorDefault};
-    font-size: ${variables.fontSizeLarge};
+    font-size: ${variables.fontSize};
+    line-height: 1.5;
+    button:focus-visible,
+    input:focus-visible,
+    textarea:focus-visible,
+    [tabindex]:focus-visible {
+        outline: 3px solid ${variables.contentColorLink};
+        outline-offset: 2px;
+    }
 `;
 
 export const Page = styled.div`
     width: 100%;
     max-width: 1600px;
     margin: 0 auto;
-    padding: ${variables.spacingXLarge};
+    padding: ${variables.spacingLarge};
     box-sizing: border-box;
 `;
 
@@ -43,57 +59,30 @@ export const HeaderRow = styled.header`
 
 export const Title = styled.h1`
     margin: 0;
-    font-size: 28px;
+    font-size: ${variables.fontSizeXXLarge};
     line-height: 1.25;
     font-weight: 600;
 `;
 
 export const Subtitle = styled.p`
     margin: ${variables.spacingXSmall} 0 0;
-    color: ${variables.contentColorMuted};
+    color: ${variables.contentColorDefault};
     line-height: 1.5;
 `;
 
 export const ButtonRow = styled.div`
     display: flex;
+    align-items: flex-end;
     flex-wrap: wrap;
     gap: ${variables.spacingSmall};
+    min-width: 0;
 `;
 
-interface StyledButtonProps {
-    $primary?: boolean;
-}
-
-export const StyledButton = styled.button<StyledButtonProps>`
-    appearance: none;
-    border: 1px solid
-        ${({ $primary }) =>
-            $primary ? variables.interactiveColorAccent : variables.interactiveColorBorder};
-    border-radius: ${variables.borderRadius};
-    background: ${({ $primary }) =>
-        $primary ? variables.interactiveColorAccent : variables.interactiveColorBackground};
-    color: ${({ $primary }) =>
-        $primary ? variables.contentColorInverted : variables.contentColorDefault};
-    cursor: pointer;
-    min-height: 34px;
-    padding: 6px 14px;
-    font: inherit;
-    font-weight: 500;
-
-    &:hover {
-        border-color: ${variables.interactiveColorBorderHover};
-        filter: brightness(1.04);
-    }
-
-    &:focus-visible {
-        outline: 2px solid ${variables.focusColor};
-        outline-offset: 2px;
-    }
-
-    &:disabled {
-        cursor: not-allowed;
-        opacity: 0.55;
-    }
+export const StyledButton = styled(ActionButton)`
+    margin: 0;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
 `;
 
 export const ScanBanner = styled.section`
@@ -104,7 +93,7 @@ export const ScanBanner = styled.section`
     padding: ${variables.spacingMedium} ${variables.spacingLarge};
     margin-bottom: ${variables.spacingLarge};
     border: 1px solid ${variables.borderColor};
-    border-left: 4px solid ${variables.contentColorPositive};
+    border-left: 4px solid ${variables.statusColorNormalStrong};
     border-radius: ${variables.borderRadius};
     background: ${variables.backgroundColorSection};
 
@@ -119,7 +108,7 @@ export const ScanMeta = styled.div`
     align-items: center;
     flex-wrap: wrap;
     gap: ${variables.spacingSmall};
-    color: ${variables.contentColorMuted};
+    color: ${variables.contentColorDefault};
 `;
 
 export const SourceBadge = styled.span`
@@ -153,10 +142,10 @@ interface MetricCardProps {
 }
 
 const metricAccent = {
-    positive: variables.contentColorPositive,
-    warning: variables.contentColorWarning,
-    negative: variables.contentColorNegative,
-    info: variables.contentColorInfo,
+    positive: variables.statusColorNormalStrong,
+    warning: variables.statusColorHighStrong,
+    negative: variables.statusColorCriticalStrong,
+    info: variables.statusColorInfoStrong,
     neutral: variables.contentColorDefault,
 };
 
@@ -171,7 +160,7 @@ export const MetricCard = styled.article<MetricCardProps>`
 `;
 
 export const MetricLabel = styled.div`
-    color: ${variables.contentColorMuted};
+    color: ${variables.contentColorDefault};
     font-size: ${variables.fontSizeSmall};
     font-weight: 600;
     letter-spacing: 0.02em;
@@ -187,7 +176,7 @@ export const MetricValue = styled.div`
 
 export const MetricHint = styled.div`
     margin-top: ${variables.spacingXSmall};
-    color: ${variables.contentColorMuted};
+    color: ${variables.contentColorDefault};
     font-size: ${variables.fontSizeSmall};
     line-height: 1.4;
 `;
@@ -222,6 +211,8 @@ export const Card = styled.section`
 
 export const CardHeader = styled.header`
     display: flex;
+    flex-wrap: wrap;
+    min-width: 0;
     align-items: center;
     justify-content: space-between;
     gap: ${variables.spacingMedium};
@@ -249,103 +240,82 @@ export const FilterBar = styled.form`
     border: 1px solid ${variables.borderColor};
     border-radius: ${variables.borderRadius};
     background: ${variables.backgroundColorSection};
-`;
-
-export const FilterField = styled.label`
-    display: grid;
-    gap: ${variables.spacingXSmall};
-    min-width: 150px;
-    color: ${variables.contentColorMuted};
-    font-size: ${variables.fontSizeSmall};
-    font-weight: 600;
-`;
-
-const inputStyles = css`
-    min-height: 34px;
-    box-sizing: border-box;
-    border: 1px solid ${variables.interactiveColorBorder};
-    border-radius: ${variables.borderRadius};
-    background: ${variables.interactiveColorBackground};
-    color: ${variables.contentColorDefault};
-    padding: 6px 10px;
-    font: inherit;
-
-    &:focus {
-        outline: 2px solid ${variables.focusColor};
-        outline-offset: 1px;
+    .center-object-picker {
+        flex: 2 1 300px;
     }
 `;
 
-export const Select = styled.select`
-    ${inputStyles};
+export const FilterField = styled(FieldControl)`
+    min-width: 0;
+    flex: 1 1 180px;
+    max-width: 100%;
+    margin: 0;
+    label {
+        color: ${variables.contentColorDefault};
+    }
 `;
-
-export const Input = styled.input`
-    ${inputStyles};
-    min-width: 220px;
-`;
-
-export const TextArea = styled.textarea`
-    ${inputStyles};
+export const Select = styled(ChoiceControl)`
+    min-width: 0;
     width: 100%;
-    min-height: 96px;
-    resize: vertical;
+    max-width: 100%;
+    margin: 0;
+`;
+export const Input = styled(TextControl)`
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+`;
+export const TextArea = styled(NotesControl)`
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
 `;
 
 export const TableScroller = styled.div`
     overflow: auto;
+    max-width: 100%;
+    min-width: 0;
 `;
 
-export const Table = styled.table`
-    width: 100%;
-    border-collapse: collapse;
-    font-size: ${variables.fontSizeSmall};
+export const Table = styled(DataTable)`
+    max-width: 100%;
 
+    /* Keep a readable identifier column even beside an investigation panel.
+       The native Table scrolls within its card instead of squeezing long
+       object/app names into one- or two-character lines. */
     th,
     td {
-        padding: 10px 12px;
-        border-bottom: 1px solid ${variables.borderColorWeak};
-        text-align: left;
-        vertical-align: middle;
+        min-width: 96px;
     }
-
+    th:first-child,
+    td:first-child {
+        min-width: 240px;
+    }
     th {
-        position: sticky;
-        top: 0;
-        z-index: 1;
-        background: ${variables.backgroundColorSection};
-        color: ${variables.contentColorMuted};
-        font-weight: 600;
-        white-space: nowrap;
+        color: ${variables.contentColorDefault};
     }
-
-    tbody tr:hover {
-        background: ${variables.interactiveColorOverlayHover};
-    }
-
-    tbody tr:last-child td {
-        border-bottom: 0;
+    td {
+        overflow-wrap: anywhere;
     }
 `;
-
-export const RowButton = styled.button`
-    border: 0;
-    background: transparent;
-    color: ${variables.contentColorLink};
-    cursor: pointer;
+export const RowButton = styled(ActionButton).attrs({ appearance: 'standalone' as const })`
+    &&,
+    &&:hover,
+    &&:focus,
+    &&:active {
+        color: ${variables.contentColorLink};
+        background-color: transparent;
+    }
+    margin: 0;
     padding: 0;
-    font: inherit;
-    font-weight: 600;
+    height: auto;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
     text-align: left;
-
-    &:hover {
-        text-decoration: underline;
-    }
-
-    &:focus-visible {
-        outline: 2px solid ${variables.focusColor};
-        outline-offset: 3px;
-    }
+    text-decoration: underline;
+    text-underline-offset: 2px;
 `;
 
 interface StatusBadgeProps {
@@ -379,18 +349,18 @@ export const Score = styled.span`
     min-width: 34px;
     border-radius: ${variables.borderRadius};
     padding: 2px 6px;
-    background: ${variables.interactiveColorOverlaySelected};
+    background: ${variables.backgroundColorSection};
     font-variant-numeric: tabular-nums;
     font-weight: 600;
 `;
 
-const reviewStageColors: Record<ReviewStage, string> = {
-    triage: '#4f8ed8',
-    investigating: '#e5a632',
-    awaiting_owner: '#a970ff',
-    confirmed_eligible: '#4fae58',
-    retain: '#4f8ed8',
-    blocked: '#d83b3b',
+const reviewStageColors = {
+    triage: variables.statusColorInfoStrong,
+    investigating: variables.statusColorMediumStrong,
+    awaiting_owner: variables.statusColorMediumStrong,
+    confirmed_eligible: variables.statusColorNormalStrong,
+    retain: variables.statusColorInfoStrong,
+    blocked: variables.statusColorCriticalStrong,
 };
 
 interface ReviewStagePillProps {
@@ -417,7 +387,7 @@ export const WorkflowForm = styled.form`
 
 export const SmallText = styled.p`
     margin: ${variables.spacingXSmall} 0 0;
-    color: ${variables.contentColorMuted};
+    color: ${variables.contentColorDefault};
     font-size: ${variables.fontSizeSmall};
     line-height: 1.45;
 `;
@@ -428,11 +398,15 @@ export const Breadcrumbs = styled.nav`
     flex-wrap: wrap;
     gap: ${variables.spacingSmall};
     margin-bottom: ${variables.spacingMedium};
-    color: ${variables.contentColorMuted};
+    color: ${variables.contentColorDefault};
     font-size: ${variables.fontSizeSmall};
 `;
 
 export const DetailLayout = styled.section`
+    min-width: 0;
+    > * {
+        min-width: 0;
+    }
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
     gap: ${variables.spacingLarge};
@@ -444,7 +418,12 @@ export const DetailLayout = styled.section`
 `;
 
 export const DetailPanel = styled.aside`
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
     position: sticky;
+    max-height: calc(100vh - 48px);
+    overflow: auto;
     top: ${variables.spacingLarge};
     border: 1px solid ${variables.borderColor};
     border-radius: ${variables.borderRadius};
@@ -453,6 +432,8 @@ export const DetailPanel = styled.aside`
 
     @media (width <= 1040px) {
         position: static;
+        max-height: none;
+        overflow: visible;
     }
 `;
 
@@ -466,18 +447,20 @@ export const DetailSection = styled.section`
 `;
 
 export const DetailTitle = styled.h2`
+    overflow-wrap: anywhere;
     margin: 0 0 ${variables.spacingSmall};
     font-size: ${variables.fontSizeXLarge};
 `;
 
 export const DefinitionList = styled.dl`
+    min-width: 0;
     display: grid;
-    grid-template-columns: minmax(90px, 0.8fr) minmax(120px, 1.4fr);
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.4fr);
     gap: ${variables.spacingSmall} ${variables.spacingMedium};
     margin: 0;
 
     dt {
-        color: ${variables.contentColorMuted};
+        color: ${variables.contentColorDefault};
     }
 
     dd {
@@ -499,7 +482,7 @@ export const EmptyState = styled.div`
     place-items: center;
     min-height: 220px;
     padding: ${variables.spacingXXLarge};
-    color: ${variables.contentColorMuted};
+    color: ${variables.contentColorDefault};
     text-align: center;
 `;
 
@@ -537,7 +520,8 @@ export const CompositionBar = styled.button`
     cursor: pointer;
 
     &:hover {
-        filter: brightness(1.08);
+        outline: 1px solid ${variables.contentColorDefault};
+        outline-offset: 2px;
     }
 
     &:focus-visible {
@@ -579,13 +563,8 @@ export const CompositionControls = styled.form`
     }
 `;
 
-export const CompositionControl = styled.label`
-    display: grid;
-    gap: ${variables.spacingXSmall};
+export const CompositionControl = styled(FilterField)`
     min-width: 0;
-    color: ${variables.contentColorMuted};
-    font-size: ${variables.fontSizeSmall};
-    font-weight: 600;
 `;
 
 export const CompositionPagination = styled.nav`
@@ -604,7 +583,7 @@ export const CompositionPagination = styled.nav`
 `;
 
 export const CompositionSummary = styled.span`
-    color: ${variables.contentColorMuted};
+    color: ${variables.contentColorDefault};
     font-size: ${variables.fontSizeSmall};
     font-variant-numeric: tabular-nums;
 `;
@@ -640,7 +619,7 @@ export const CompositionMetricGrid = styled.dl`
     }
 
     dt {
-        color: ${variables.contentColorMuted};
+        color: ${variables.contentColorDefault};
         font-size: ${variables.fontSizeSmall};
     }
 
@@ -659,7 +638,7 @@ export const Legend = styled.div`
     display: flex;
     flex-wrap: wrap;
     gap: ${variables.spacingMedium};
-    color: ${variables.contentColorMuted};
+    color: ${variables.contentColorDefault};
     font-size: ${variables.fontSizeSmall};
 `;
 
@@ -706,7 +685,7 @@ export const GraphSvg = styled.svg`
     }
 
     .edge {
-        stroke: ${variables.contentColorMuted};
+        stroke: ${variables.contentColorDefault};
         stroke-width: 1.5;
     }
 
@@ -727,12 +706,11 @@ export const GraphSvg = styled.svg`
     }
 `;
 
-export const InlineNotice = styled.div`
-    padding: ${variables.spacingMedium} ${variables.spacingLarge};
-    border: 1px solid ${variables.contentColorWarning};
-    border-radius: ${variables.borderRadius};
-    color: ${variables.contentColorDefault};
-    line-height: 1.45;
+export const InlineNotice = styled(Notice)`
+    width: 100%;
+    box-sizing: border-box;
+    overflow-wrap: anywhere;
+    line-height: 1.5;
 `;
 
 export const ProgressTrack = styled.div`
@@ -750,5 +728,5 @@ interface ProgressBarProps {
 export const ProgressBar = styled.div<ProgressBarProps>`
     width: ${({ $percent }) => `${Math.max(0, Math.min(100, $percent))}%`};
     height: 100%;
-    background: ${variables.interactiveColorAccent};
+    background: ${variables.statusColorInfoStrong};
 `;

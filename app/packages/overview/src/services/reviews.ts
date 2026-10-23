@@ -1,6 +1,7 @@
+/* eslint-disable no-underscore-dangle -- Splunk KV Store defines the _key protocol field. */
 import { username, splunkdPath } from '@splunk/splunk-utils/config';
-import { createFetchInit } from '@splunk/splunk-utils/fetch';
 import { createRESTURL } from '@splunk/splunk-utils/url';
+import { splunkRequest, SplunkRequestError as ReviewRequestError } from './rest';
 
 import {
     HealthStatus,
@@ -40,16 +41,6 @@ interface KvReviewRecord extends JsonRecord {
     updated_by: string;
 }
 
-class ReviewRequestError extends Error {
-    status: number;
-
-    constructor(status: number, message: string) {
-        super(message);
-        this.name = 'ReviewRequestError';
-        this.status = status;
-    }
-}
-
 export const reviewStageOptions: Array<{
     value: ReviewStage;
     label: string;
@@ -87,9 +78,7 @@ export const reviewStageOptions: Array<{
     },
 ];
 
-const reviewStages = new Set<ReviewStage>(
-    reviewStageOptions.map(({ value }) => value)
-);
+const reviewStages = new Set<ReviewStage>(reviewStageOptions.map(({ value }) => value));
 
 const healthStatuses = new Set<HealthStatus>([
     'active',
@@ -107,25 +96,20 @@ function stringValue(value: unknown, fallback = ''): string {
 
 function nullableNumber(value: unknown): number | null {
     const parsed = Number(value);
-    return value === null || value === undefined || value === '' ||
-        !Number.isFinite(parsed)
+    return value === null || value === undefined || value === '' || !Number.isFinite(parsed)
         ? null
         : parsed;
 }
 
 function usageCoverageValue(value: unknown): UsageCoverage | null {
-    return value === 'complete' ||
-        value === 'partial' ||
-        value === 'unavailable'
-        ? value
-        : null;
+    return value === 'complete' || value === 'partial' || value === 'unavailable' ? value : null;
 }
 
 function collectionUrl(suffix = ''): string {
-    return createRESTURL(
-        `storage/collections/data/${COLLECTION}${suffix}`,
-        { owner: 'nobody', app: APP_ID }
-    );
+    return createRESTURL(`storage/collections/data/${COLLECTION}${suffix}`, {
+        owner: 'nobody',
+        app: APP_ID,
+    });
 }
 
 function withQuery(url: string, query: Record<string, string | number>): string {
@@ -134,47 +118,10 @@ function withQuery(url: string, query: Record<string, string | number>): string 
     return `${url}?${search.toString()}`;
 }
 
-async function responseError(
-    response: Response,
-    fallback: string
-): Promise<ReviewRequestError> {
-    try {
-        const data = (await response.json()) as {
-            messages?: Array<{ text?: string }>;
-        };
-        const message = data.messages?.find(({ text }) => Boolean(text))?.text;
-        return new ReviewRequestError(response.status, message ?? fallback);
-    } catch {
-        return new ReviewRequestError(response.status, fallback);
-    }
-}
+const requestJson = splunkRequest;
 
-async function requestJson<T>(
-    url: string,
-    init: RequestInit = {},
-    expectedStatuses: number[] = [200]
-): Promise<T> {
-    const response = await fetch(
-        url,
-        createFetchInit({
-            ...init,
-            headers: {
-                Accept: 'application/json',
-                ...(init.headers ?? {}),
-            },
-        })
-    );
-    if (!expectedStatuses.includes(response.status)) {
-        throw await responseError(
-            response,
-            `Review library request failed with status ${response.status}`
-        );
-    }
-    if (response.status === 204) {
-        return null as T;
-    }
-    const responseBody = await response.text();
-    return responseBody ? (JSON.parse(responseBody) as T) : (null as T);
+export function canonicalReviewId(objectId: string): string {
+    return objectId.replace(/^(?:report|alert)::/, 'saved_search::');
 }
 
 function isReviewStage(value: string): value is ReviewStage {
@@ -189,28 +136,17 @@ export function reviewRecordFromKv(record: KvReviewRecord): ReviewRecord {
     const stage = stringValue(record.stage, 'triage');
     const healthStatus = stringValue(record.health_status_at_review, 'unknown');
     return {
-        objectId: stringValue(record.object_id),
+        objectId: canonicalReviewId(stringValue(record.object_id)),
         objectName: stringValue(record.object_name),
-        canonicalName: stringValue(
-            record.canonical_name,
-            stringValue(record.object_name)
-        ),
+        canonicalName: stringValue(record.canonical_name, stringValue(record.object_name)),
         objectType: stringValue(record.object_type, 'Unknown'),
         app: stringValue(record.app, 'unknown'),
         owner: stringValue(record.owner) || null,
-        healthStatusAtReview: isHealthStatus(healthStatus)
-            ? healthStatus
-            : 'unknown',
-        usageCoverageAtReview: usageCoverageValue(
-            record.usage_coverage_at_review
-        ),
-        usageLastObservedAtReview:
-            stringValue(record.usage_last_observed_at_review) || null,
-        usageObservationCountAtReview: nullableNumber(
-            record.usage_observation_count_at_review
-        ),
-        usageRunIdAtReview:
-            stringValue(record.usage_run_id_at_review) || null,
+        healthStatusAtReview: isHealthStatus(healthStatus) ? healthStatus : 'unknown',
+        usageCoverageAtReview: usageCoverageValue(record.usage_coverage_at_review),
+        usageLastObservedAtReview: stringValue(record.usage_last_observed_at_review) || null,
+        usageObservationCountAtReview: nullableNumber(record.usage_observation_count_at_review),
+        usageRunIdAtReview: stringValue(record.usage_run_id_at_review) || null,
         stage: isReviewStage(stage) ? stage : 'triage',
         note: stringValue(record.note),
         assignedTo: stringValue(record.assigned_to) || null,
@@ -225,19 +161,27 @@ function recordKey(objectId: string): string {
     return stableRecordKey(objectId, 'review');
 }
 
-async function getReviewRecord(
-    objectId: string
-): Promise<KvReviewRecord | null> {
-    try {
-        return await requestJson<KvReviewRecord>(
-            collectionUrl(`/${encodeURIComponent(recordKey(objectId))}`)
+async function getReviewRecord(objectId: string): Promise<KvReviewRecord | null> {
+    const canonical = canonicalReviewId(objectId);
+    const identities = [
+        ...new Set([
+            canonical,
+            canonical.replace(/^saved_search::/, 'report::'),
+            canonical.replace(/^saved_search::/, 'alert::'),
+        ]),
+    ];
+    const records = await requestJson<KvReviewRecord[]>(
+        withQuery(collectionUrl(), {
+            query: JSON.stringify({ object_id: { $in: identities } }),
+            limit: 4,
+        }),
+    );
+    if (records.length > 1) {
+        throw new Error(
+            'Multiple legacy reviews match this saved search. Resolve the duplicate app-local records before updating its decision.',
         );
-    } catch (error) {
-        if (error instanceof ReviewRequestError && error.status === 404) {
-            return null;
-        }
-        throw error;
     }
+    return records[0] ?? null;
 }
 
 async function listReviews(): Promise<ReviewRecord[]> {
@@ -251,7 +195,7 @@ async function listReviews(): Promise<ReviewRecord[]> {
                 sort: 'updated_at:-1',
                 limit: PAGE_SIZE,
                 skip,
-            })
+            }),
         );
         records.push(...page);
         if (page.length < PAGE_SIZE) {
@@ -261,29 +205,39 @@ async function listReviews(): Promise<ReviewRecord[]> {
     }
     /* eslint-enable no-await-in-loop */
 
-    return records.map(reviewRecordFromKv);
+    const grouped = new Map<string, ReviewRecord[]>();
+    records
+        .map(reviewRecordFromKv)
+        .forEach((record) =>
+            grouped.set(record.objectId, [...(grouped.get(record.objectId) ?? []), record]),
+        );
+    return [...grouped.values()].map((matches) =>
+        matches.length === 1
+            ? matches[0]
+            : {
+                  ...matches[0],
+                  stage: 'blocked' as const,
+                  note: 'Multiple legacy reviews match this identity; reconcile the original records before changing the decision.',
+              },
+    );
 }
 
 async function upsertReview(input: ReviewInput): Promise<ReviewRecord> {
     const now = new Date().toISOString();
     const existing = await getReviewRecord(input.object.objectId);
     const record: KvReviewRecord = {
-        _key: recordKey(input.object.objectId),
-        object_id: input.object.objectId,
+        _key: existing?._key ?? recordKey(canonicalReviewId(input.object.objectId)),
+        object_id: canonicalReviewId(input.object.objectId),
         object_name: input.object.name,
         canonical_name: input.object.canonicalName,
         object_type: input.object.objectType,
         app: input.object.app,
         owner: input.object.owner,
         health_status_at_review: input.object.healthStatus,
-        usage_coverage_at_review:
-            input.object.usageEvidence?.coverage ?? null,
-        usage_last_observed_at_review:
-            input.object.usageEvidence?.lastObserved ?? null,
-        usage_observation_count_at_review:
-            input.object.usageEvidence?.observationCount ?? null,
-        usage_run_id_at_review:
-            input.object.usageEvidence?.usageRunId ?? null,
+        usage_coverage_at_review: input.object.usageEvidence?.coverage ?? null,
+        usage_last_observed_at_review: input.object.usageEvidence?.lastObserved ?? null,
+        usage_observation_count_at_review: input.object.usageEvidence?.observationCount ?? null,
+        usage_run_id_at_review: input.object.usageEvidence?.usageRunId ?? null,
         stage: input.stage,
         note: input.note.trim().slice(0, 4000),
         assigned_to: input.assignedTo?.trim().slice(0, 256) || null,
@@ -292,9 +246,7 @@ async function upsertReview(input: ReviewInput): Promise<ReviewRecord> {
         updated_at: now,
         updated_by: username || 'unknown',
     };
-    const suffix = existing
-        ? `/${encodeURIComponent(recordKey(input.object.objectId))}`
-        : '';
+    const suffix = existing ? `/${encodeURIComponent(existing._key)}` : '';
     const updateFields: JsonRecord = {};
     Object.keys(record).forEach((key) => {
         if (key !== '_key') {
@@ -309,16 +261,20 @@ async function upsertReview(input: ReviewInput): Promise<ReviewRecord> {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(requestRecord),
         },
-        [200, 201]
+        [200, 201],
     );
     return reviewRecordFromKv(record);
 }
 
 async function deleteReview(objectId: string): Promise<void> {
+    const existing = await getReviewRecord(objectId);
+    if (!existing) {
+        return;
+    }
     await requestJson<unknown>(
-        collectionUrl(`/${encodeURIComponent(recordKey(objectId))}`),
+        collectionUrl(`/${encodeURIComponent(existing._key)}`),
         { method: 'DELETE' },
-        [200, 204]
+        [200, 204],
     );
 }
 

@@ -18,7 +18,7 @@ const completeCoverage: AnalysisCompleteness = {
 };
 
 function object(
-    overrides: Partial<ContentObject> & Pick<ContentObject, 'objectId' | 'canonicalName'>
+    overrides: Partial<ContentObject> & Pick<ContentObject, 'objectId' | 'canonicalName'>,
 ): ContentObject {
     return {
         name: overrides.canonicalName,
@@ -45,13 +45,13 @@ function object(
 
 test('extracts supported SPL relationships without treating dynamic names as static', () => {
     const references = extractSplReferences(
-        '| inputlookup assets.csv | lookup owner_lookup user | `normalize_user(user)` | savedsearch "Daily Review" | datamodel Authentication Authentication search | search index=main sourcetype=access_combined | lookup $dynamic_lookup$ key | search index=_* sourcetype=access_* | lookup generated_* key'
+        '| inputlookup assets.csv | lookup owner_lookup user | `normalize_user(user)` | savedsearch "Daily Review" | datamodel Authentication Authentication search | search index=main sourcetype=access_combined | lookup $dynamic_lookup$ key | search index=_* sourcetype=access_* | lookup generated_* key',
     );
 
     expect(references).toEqual(
         expect.arrayContaining([
             expect.objectContaining({
-                targetType: 'lookup',
+                targetType: 'lookup_file',
                 targetName: 'assets.csv',
                 relation: 'reads',
             }),
@@ -80,21 +80,21 @@ test('extracts supported SPL relationships without treating dynamic names as sta
                 targetType: 'sourcetype',
                 targetName: 'access_combined',
             }),
-        ])
+        ]),
     );
     expect(
         references.some(
             (reference) =>
                 reference.targetName.includes('dynamic') ||
                 reference.targetName.includes('*') ||
-                reference.targetName === '_'
-        )
+                reference.targetName === '_',
+        ),
     ).toBe(false);
 });
 
 test('ignores command-like text and field constraints inside string literals', () => {
     const references = extractSplReferences(
-        '| eval search_type="datamodel acceleration" | eval example="index=retired sourcetype=missing" | search index=main'
+        '| eval search_type="datamodel acceleration" | eval example="index=retired sourcetype=missing" | search index=main',
     );
 
     expect(references).toEqual([
@@ -125,10 +125,10 @@ test('extracts structured and inline dashboard relationships', () => {
                 targetName: 'main',
             }),
             expect.objectContaining({
-                targetType: 'lookup',
+                targetType: 'lookup_file',
                 targetName: 'assets.csv',
             }),
-        ])
+        ]),
     );
 });
 
@@ -152,13 +152,9 @@ test('persists resolved edges and marks explicit missing targets as repair findi
         },
     ];
 
-    const result = analyzeInventory(
-        [source, macro],
-        sources,
-        completeCoverage
-    );
+    const result = analyzeInventory([source, macro], sources, completeCoverage);
     const analyzedSource = result.objects.find(
-        (contentObject) => contentObject.objectId === source.objectId
+        (contentObject) => contentObject.objectId === source.objectId,
     );
 
     expect(result.edges).toHaveLength(2);
@@ -172,7 +168,7 @@ test('persists resolved edges and marks explicit missing targets as repair findi
                 targetId: expect.stringContaining('missing::lookup'),
                 resolved: false,
             }),
-        ])
+        ]),
     );
     expect(analyzedSource?.healthStatus).toBe('broken');
     expect(result.findings).toEqual([
@@ -215,14 +211,14 @@ test('resolves same-name private targets within the source owner namespace', () 
                 sourceLocation: 'search',
             },
         ],
-        completeCoverage
+        completeCoverage,
     );
 
     expect(result.edges[0]).toEqual(
         expect.objectContaining({
             targetId: analystMacro.objectId,
             resolved: true,
-        })
+        }),
     );
 });
 
@@ -246,20 +242,18 @@ test('does not call a target broken when collector coverage is partial', () => {
                 sourceLocation: 'search',
             },
         ],
-        partialCoverage
+        partialCoverage,
     );
 
     expect(result.edges[0]).toEqual(
         expect.objectContaining({
             confidence: 'unknown',
             resolved: false,
-        })
+        }),
     );
     expect(result.objects[0].healthStatus).toBe('dormant');
     expect(
-        result.findings.some(
-            (findingValue) => findingValue.findingType === 'repair_required'
-        )
+        result.findings.some((findingValue) => findingValue.findingType === 'repair_required'),
     ).toBe(false);
 });
 
@@ -283,14 +277,14 @@ test('keeps an unresolved sourcetype unknown when its catalog is non-authoritati
                 sourceLocation: 'search',
             },
         ],
-        nonAuthoritativeSourcetypes
+        nonAuthoritativeSourcetypes,
     );
 
     expect(result.edges[0]).toEqual(
         expect.objectContaining({
             confidence: 'unknown',
             resolved: false,
-        })
+        }),
     );
     expect(result.objects[0].healthStatus).toBe('unknown');
     expect(result.findings).toHaveLength(0);
@@ -308,11 +302,7 @@ test('protected objects cannot become cleanup findings', () => {
         healthStatus: 'protected',
     });
 
-    const result = analyzeInventory(
-        [protectedObject],
-        [],
-        completeCoverage
-    );
+    const result = analyzeInventory([protectedObject], [], completeCoverage);
 
     expect(result.objects[0].healthStatus).toBe('protected');
     expect(result.objects[0].abandonmentConfidence).toBeNull();
@@ -328,18 +318,12 @@ test('does not infer an ownership gap when Splunk omits ACL scope metadata', () 
         sharing: null,
     });
 
-    const result = analyzeInventory(
-        [unknownAclObject],
-        [],
-        completeCoverage
-    );
+    const result = analyzeInventory([unknownAclObject], [], completeCoverage);
 
     expect(result.objects[0].healthStatus).toBe('unknown');
-    expect(
-        result.findings.some(
-            (findingValue) => findingValue.findingType === 'unowned'
-        )
-    ).toBe(false);
+    expect(result.findings.some((findingValue) => findingValue.findingType === 'unowned')).toBe(
+        false,
+    );
 });
 
 test('identifies a true user-scoped object without an owner', () => {
@@ -350,11 +334,7 @@ test('identifies a true user-scoped object without an owner', () => {
         sharing: 'user',
     });
 
-    const result = analyzeInventory(
-        [unownedObject],
-        [],
-        completeCoverage
-    );
+    const result = analyzeInventory([unownedObject], [], completeCoverage);
 
     expect(result.objects[0].healthStatus).toBe('unowned');
     expect(result.findings).toEqual([

@@ -4,3 +4,7 @@
  * to get picked up. See: https://github.com/testing-library/jest-dom#usage
  */
 import '@testing-library/jest-dom';
+
+// Evidence fixtures use explicit July windows; keep freshness tests repeatable.
+beforeEach(() => { jest.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-28T12:00:00Z')); });
+afterEach(() => { jest.restoreAllMocks(); });

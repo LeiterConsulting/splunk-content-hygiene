@@ -1,8 +1,8 @@
-<nav search_view="search">
-    <view name="Overview" default="true" />
-    <view name="CleanupCandidates" />
-    <view name="DependencyExplorer" />
-    <view name="ReviewLibrary" />
-    <view name="Ownership" />
-    <view name="Settings" />
+<nav search_view="search" color="#12314b">
+    <view name="Overview" default="true" icon="layoutoverview" />
+    <view name="CleanupCandidates" icon="filemagnifier" />
+    <view name="DependencyExplorer" icon="filenode" />
+    <view name="ReviewLibrary" icon="organizernotebook" />
+    <view name="Ownership" icon="circlesfour" />
+    <view name="Settings" icon="cog" />
 </nav>

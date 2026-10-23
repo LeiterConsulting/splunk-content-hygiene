@@ -1,13 +1,10 @@
 import React from 'react';
-import {
-    DefinitionList,
-    EvidenceList,
-    InlineNotice,
-    SpacedBlock,
-} from '../AppStyles';
+import { DefinitionList, EvidenceList, InlineNotice, SpacedBlock } from '../AppStyles';
 import {
     usageCoverageLabel,
     usageSourceForObject,
+    usageValidity,
+    EVIDENCE_MAX_AGE_DAYS,
 } from '../services/usage';
 import { ContentObject, UsageEvidence } from '../types';
 
@@ -47,19 +44,18 @@ function usageNotice(usage: UsageEvidence): string {
     return 'No attributable activity was observed, but source coverage is incomplete; no inactivity conclusion is supported.';
 }
 
-export function UsageEvidencePanel({
-    contentObject,
-}: UsageEvidencePanelProps): React.ReactElement {
+export function UsageEvidencePanel({ contentObject }: UsageEvidencePanelProps): React.ReactElement {
     const supportedSource = usageSourceForObject(contentObject);
     const usage = contentObject.usageEvidence;
+    const validity = usageValidity(contentObject);
 
     if (!supportedSource) {
         return (
             <>
                 <strong>Usage evidence</strong>
                 <p>
-                    Direct usage telemetry is not currently attributable to this
-                    object type. Dependency and ownership evidence still apply.
+                    Direct usage telemetry is not currently attributable to this object type.
+                    Dependency and ownership evidence still apply.
                 </p>
             </>
         );
@@ -70,9 +66,8 @@ export function UsageEvidencePanel({
             <>
                 <strong>Usage evidence</strong>
                 <p>
-                    No usage window has been measured for this object. Run an
-                    on-demand usage scan from Settings before interpreting
-                    inactivity.
+                    No usage window has been measured for this object. Run an on-demand usage scan
+                    from Settings before interpreting inactivity.
                 </p>
             </>
         );
@@ -82,7 +77,11 @@ export function UsageEvidencePanel({
         <>
             <strong>Usage evidence</strong>
             <SpacedBlock>
-                <InlineNotice>{usageNotice(usage)}</InlineNotice>
+                <InlineNotice>
+                    {validity === 'current'
+                        ? usageNotice(usage)
+                        : `Historical evidence (${validity}). It cannot establish current inactivity or removal readiness. Collect a fresh window after object changes and at least every ${EVIDENCE_MAX_AGE_DAYS} days.`}
+                </InlineNotice>
             </SpacedBlock>
             <DefinitionList>
                 <dt>Evidence source</dt>
@@ -90,7 +89,10 @@ export function UsageEvidencePanel({
                 <dt>Window</dt>
                 <dd>{usage.windowDays} days</dd>
                 <dt>Coverage</dt>
-                <dd>{usageCoverageLabel(usage.coverage)}</dd>
+                <dd>
+                    {usageCoverageLabel(usage.coverage)} ·{' '}
+                    {validity === 'current' ? 'Current' : 'Historical'}
+                </dd>
                 <dt>Last observed</dt>
                 <dd>{formatDateTime(usage.lastObserved)}</dd>
                 <dt>Observations</dt>

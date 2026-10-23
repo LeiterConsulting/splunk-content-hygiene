@@ -1,4 +1,7 @@
 <?xml version="1.0"?>
-<view template="content_hygiene:/templates/pages/splunk_ui_app.html" type="html">
+<dashboard version="1.1" script="pages/ContentHygiene.js" stylesheet="content-hygiene-host.css" hideTitle="true" hideEdit="true" hideExport="true" hideChrome="false" hideSplunkBar="false" hideAppBar="false">
     <label>Cleanup Candidates</label>
-</view>
+    <row id="content_hygiene_host_row"><panel id="content_hygiene_host_panel"><html>
+        <div id="content-hygiene-root"><p role="status">Loading Content Hygiene…</p><noscript>Enable JavaScript to use this workspace.</noscript></div>
+    </html></panel></row>
+</dashboard>

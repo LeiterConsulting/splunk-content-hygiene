@@ -1,5 +1,7 @@
 # Splunk Content Hygiene
 
+![Content Hygiene](docs/images/content-hygiene.svg)
+
 [![CI](https://github.com/LeiterConsulting/splunk-content-hygiene/actions/workflows/ci.yml/badge.svg)](https://github.com/LeiterConsulting/splunk-content-hygiene/actions/workflows/ci.yml)
 
 Splunk Content Hygiene is an evidence-first Splunk Enterprise app for
@@ -21,7 +23,7 @@ The beta is deliberately safe:
   paginated per-app health composition
 - Cleanup-candidate filtering, evidence inspection, review stages, and CSV/JSON
   export
-- Directional dependency exploration, multi-step drill-through, candidate-group
+- Grouped, expandable directional dependency exploration, multi-step drill-through, candidate-group
   and review-stage filters, graph-derived removal-impact simulation, ordered
   remediation guidance, and relationship/impact export
 - A persistent Review Library with triage, investigation, owner-confirmation,
@@ -35,11 +37,12 @@ The beta is deliberately safe:
 
 The complete scan inventories installed apps, saved searches, dashboards,
 macros, lookup definitions and files, data models, indexes, sourcetypes, and
-users visible to the initiating Splunk user.
+users visible to the initiating Splunk user. Private objects are excluded from
+the shared cache; access is restricted to explicit hygiene roles.
 
 ## Install the beta
 
-1. Download `content_hygiene-0.3.0-beta.tar.gz` and `SHA256SUMS` from the
+1. Download `content_hygiene-0.4.0-beta.tar.gz` and `SHA256SUMS` from the
    corresponding GitHub prerelease.
 2. Verify the SHA-256 digest.
 3. In Splunk Web, open **Apps > Manage Apps > Install app from file** and upload
@@ -48,8 +51,10 @@ users visible to the initiating Splunk user.
 5. Run a bounded scan first, then a complete scan when the permission and
    connectivity check succeeds.
 
-The beta is verified on Splunk Enterprise 10.0.1. Broader Splunk Enterprise
-10.x and Splunk Cloud certification is not yet complete. See
+The hardening beta has real-data browser validation on Splunk Enterprise
+10.2.8 and 10.4.4, including modern navigation, native launcher icons, and both
+workspace themes. Broader 10.x,
+search-head-cluster, and Splunk Cloud certification is not complete. See
 [Installation](docs/INSTALLATION.md) for upgrade and verification details.
 
 ## Investigation workflow
@@ -73,6 +78,7 @@ remediation remains outside this app.
 - [Installation](docs/INSTALLATION.md)
 - [Administration](docs/ADMINISTRATION.md)
 - [Architecture and data flow](docs/ARCHITECTURE.md)
+- [Branding and native navigation](docs/BRANDING.md)
 - [Data model](docs/DATA_MODEL.md)
 - [Development and testing](docs/DEVELOPMENT.md)
 - [Release process](docs/RELEASE.md)
@@ -90,7 +96,7 @@ yarn validate
 ```
 
 The verified installable archive is written to
-`app/dist/content_hygiene-0.3.0-beta.tar.gz`. Run `yarn release:prepare` to
+`app/dist/content_hygiene-0.4.0-beta.tar.gz`. Run `yarn release:prepare` to
 perform the complete validation and update `SHA256SUMS`.
 
 ## Current limitations

@@ -1,15 +1,15 @@
 []
-access = read : [ * ], write : [ admin, sc_admin ]
+access = read : [ admin, sc_admin, content_hygiene_viewer, content_hygiene_reviewer, content_hygiene_operator ], write : [ admin, sc_admin, content_hygiene_operator ]
 export = none
 
 [collections/ch_*]
-access = read : [ * ], write : [ admin, sc_admin ]
+access = read : [ admin, sc_admin, content_hygiene_viewer, content_hygiene_reviewer, content_hygiene_operator ], write : [ admin, sc_admin, content_hygiene_operator ]
 export = none
 
 [collections/ch_reviews]
-access = read : [ * ], write : [ * ]
+access = read : [ admin, sc_admin, content_hygiene_viewer, content_hygiene_reviewer, content_hygiene_operator ], write : [ admin, sc_admin, content_hygiene_reviewer, content_hygiene_operator ]
 export = none
 
 [views/*]
-access = read : [ * ], write : [ admin, sc_admin ]
+access = read : [ admin, sc_admin, content_hygiene_viewer, content_hygiene_reviewer, content_hygiene_operator ], write : [ admin, sc_admin ]
 export = none

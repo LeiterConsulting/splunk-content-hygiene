@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="40" viewBox="0 0 160 40" role="img" aria-label="Content Hygiene"><title>Content Hygiene</title><g transform="translate(2 2) scale(.5)">
+  <title>Content Hygiene — investigate content relationships</title>
+  <rect x="2" y="2" width="68" height="68" rx="16" fill="#12314b"/>
+  <g fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M27.5 21L40 18.8M21 27.5L18.8 40M26.5 26.5L35 34"/>
+    <circle cx="22" cy="22" r="6"/>
+    <circle cx="45" cy="18" r="5"/>
+    <circle cx="18" cy="45" r="5"/>
+  </g>
+  <circle cx="45" cy="44" r="14" fill="#12314b" stroke="#6bd6ff" stroke-width="4"/>
+  <circle cx="45" cy="44" r="4" fill="#ffffff"/>
+  <path d="M55.5 54.5L63 62" stroke="#ffffff" stroke-width="5" stroke-linecap="round"/>
+</g><g transform="translate(45 2) scale(1.4)" fill="none" stroke="#12314b" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path transform="translate(0 0)" d="M7 2L6 1H2L1 2V9L2 10H6L7 9"/><path transform="translate(10 0)" d="M2 1H6L7 2V9L6 10H2L1 9V2Z"/><path transform="translate(20 0)" d="M1 10V1L7 10V1"/><path transform="translate(30 0)" d="M0 1H8M4 1V10"/><path transform="translate(40 0)" d="M7 1H1V10H7M1 5.5H6"/><path transform="translate(50 0)" d="M1 10V1L7 10V1"/><path transform="translate(60 0)" d="M0 1H8M4 1V10"/></g><g transform="translate(45 21) scale(1.4)" fill="none" stroke="#12314b" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path transform="translate(0 0)" d="M1 1V10M7 1V10M1 5.5H7"/><path transform="translate(10 0)" d="M0 1L4 5.5L8 1M4 5.5V10"/><path transform="translate(20 0)" d="M7 3V2L6 1H2L1 2V9L2 10H6L7 9V6H4"/><path transform="translate(30 0)" d="M1 1H7M4 1V10M1 10H7"/><path transform="translate(40 0)" d="M7 1H1V10H7M1 5.5H6"/><path transform="translate(50 0)" d="M1 10V1L7 10V1"/><path transform="translate(60 0)" d="M7 1H1V10H7M1 5.5H6"/></g></svg>

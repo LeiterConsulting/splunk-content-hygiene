@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 72 72" role="img" aria-label="Content Hygiene">
+  <title>Content Hygiene — investigate content relationships</title>
+  <rect x="2" y="2" width="68" height="68" rx="16" fill="#12314b"/>
+  <g fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M27.5 21L40 18.8M21 27.5L18.8 40M26.5 26.5L35 34"/>
+    <circle cx="22" cy="22" r="6"/>
+    <circle cx="45" cy="18" r="5"/>
+    <circle cx="18" cy="45" r="5"/>
+  </g>
+  <circle cx="45" cy="44" r="14" fill="#12314b" stroke="#6bd6ff" stroke-width="4"/>
+  <circle cx="45" cy="44" r="4" fill="#ffffff"/>
+  <path d="M55.5 54.5L63 62" stroke="#ffffff" stroke-width="5" stroke-linecap="round"/>
+</svg>

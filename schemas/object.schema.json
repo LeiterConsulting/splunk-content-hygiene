@@ -3,16 +3,12 @@
   "$id": "https://example.invalid/splunk-content-hygiene/object.schema.json",
   "title": "Content Hygiene Object",
   "type": "object",
-  "required": [
-    "object_id",
-    "name",
-    "object_type",
-    "app",
-    "health_status",
-    "protected",
-    "evidence"
-  ],
+  "required": ["object_id", "name", "object_type", "app", "health_status", "protected", "evidence"],
   "properties": {
+    "analysis_warnings": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
     "object_id": {
       "type": "string",
       "minLength": 1
@@ -27,48 +23,27 @@
       "type": "string"
     },
     "owner": {
-      "type": [
-        "string",
-        "null"
-      ]
+      "type": ["string", "null"]
     },
     "sharing": {
-      "type": [
-        "string",
-        "null"
-      ]
+      "type": ["string", "null"]
     },
     "enabled": {
-      "type": [
-        "boolean",
-        "null"
-      ]
+      "type": ["boolean", "null"]
     },
     "scheduled": {
-      "type": [
-        "boolean",
-        "null"
-      ]
+      "type": ["boolean", "null"]
     },
     "created": {
-      "type": [
-        "string",
-        "null"
-      ],
+      "type": ["string", "null"],
       "format": "date-time"
     },
     "updated": {
-      "type": [
-        "string",
-        "null"
-      ],
+      "type": ["string", "null"],
       "format": "date-time"
     },
     "last_used": {
-      "type": [
-        "string",
-        "null"
-      ],
+      "type": ["string", "null"],
       "format": "date-time"
     },
     "inbound_references": {
@@ -80,29 +55,15 @@
       "minimum": 0
     },
     "health_status": {
-      "enum": [
-        "active",
-        "dormant",
-        "orphaned",
-        "broken",
-        "unowned",
-        "protected",
-        "unknown"
-      ]
+      "enum": ["active", "dormant", "orphaned", "broken", "unowned", "protected", "unknown"]
     },
     "abandonment_confidence": {
-      "type": [
-        "integer",
-        "null"
-      ],
+      "type": ["integer", "null"],
       "minimum": 0,
       "maximum": 100
     },
     "removal_impact": {
-      "type": [
-        "integer",
-        "null"
-      ],
+      "type": ["integer", "null"],
       "minimum": 0,
       "maximum": 100
     },
@@ -120,10 +81,7 @@
       "additionalProperties": true
     },
     "scan_id": {
-      "type": [
-        "string",
-        "null"
-      ]
+      "type": ["string", "null"]
     }
   },
   "additionalProperties": true

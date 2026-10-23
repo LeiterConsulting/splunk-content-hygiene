@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.4.0-beta — 2026-10-23
+
+- Added original vector-derived launcher/wordmark graphics, documented classic
+  icon placements, and semantic Splunk 10.4-compatible navigation icons
+- Verified native launcher delivery and light/dark browser behavior on 10.2.8
+  and 10.4.4; documented stale native asset-cache troubleshooting
+- Migrated custom Mako pages to native Simple XML hosts, with explicit
+  cache-busted chunk paths and AMD-aware native theme loading
+- Removed the empty dashboard-header band without hiding native navigation
+- Preserved readable identifier columns with native in-card table scrolling
+- Corrected candidate searches for pasted underscore/hyphen object names
+- Scoped host input-style corrections to the app's portal-rendered dropdown
+  filters, including readable empty placeholders in dark mode
+- Corrected implicit/parenthesized SPL filters, static `IN` lists, and exclusions
+  to prevent missed dependencies and punctuation-suffixed phantom targets
+- Added verified immutable snapshots, retained complete baselines, cancellation,
+  bounded REST timeouts, indexed KV queries, and derived-evidence retention
+- Corrected SPL/Studio parsing, macro arity, namespace resolution, stable
+  saved-search review identity, and lookup-file/app-containment relationships
+- Unified current versus historical/modified/expired usage evidence and exports
+- Replaced custom controls with Splunk React UI controls and readable semantic
+  theme colors; corrected shrinking layouts and empty-filter recovery
+- Rebuilt dependency exploration around grouped directional neighborhoods,
+  keyboard-operable inspection/expansion, bounded tables, and an impact tab
+- Restricted shared metadata to explicit hygiene roles and excluded private
+  objects; existing reviews remain durable and customer content stays read-only
+- Added deferred page chunks, page-specific downloads, formula-safe CSV,
+  regression and scale tests, and upgrade/operator documentation
+
 ## 0.3.0-beta — 2026-07-28
 
 - Added bounded, on-demand 30/90/180-day usage-evidence windows for directly

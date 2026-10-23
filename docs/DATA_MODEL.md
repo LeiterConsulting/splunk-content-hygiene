@@ -11,6 +11,11 @@ enabled and scheduled state, update and usage timestamps when known, health
 status, evidence, suggested action, reference counts, protection state, and
 source provenance.
 
+Logical saved-search identity is stable across Saved Search/Report/Alert display
+types. Storage keys are qualified by scan ID. `inventoryScanId` and per-source
+`analysisWarnings` accompany normalized UI objects; JSON exports add the shared
+`usageValidity` result.
+
 Supported health values are `active`, `dormant`, `orphaned`, `broken`,
 `unowned`, `protected`, and `unknown`.
 
@@ -19,6 +24,9 @@ Supported health values are `active`, `dormant`, `orphaned`, `broken`,
 An edge points from a source object to a target identity and records relation,
 confidence, evidence, source location, resolution state, and scan provenance.
 Unresolved targets remain valuable evidence and are not discarded.
+`uses_file` connects a lookup definition to its configured backing file;
+`belongs_to` points from app-scoped content to its containing app. These are
+configuration relationships, not observed executions.
 
 ## Findings
 
@@ -42,6 +50,12 @@ status, object/edge/finding counts, per-collector cached and visible totals,
 warnings, and errors. Status may be queued, running, partial, succeeded, failed,
 or cancelled.
 
+Snapshot version 2 uses a `ch_settings` manifest with separate complete-baseline
+and latest-run pointers. Retirement removes only superseded derived evidence;
+scan summaries and reviews are retained independently.
+Settings can report a newer bounded check separately while operational views
+retain the complete baseline; scan JSON exports include both identities.
+
 Usage runs use scan type `usage` and additionally record the inventory scan
 used for attribution, requested window, overall coverage, eligible and observed
 object counts, and per-source coverage summaries.
@@ -61,7 +75,9 @@ A usage-evidence record is keyed by usage run and object identity. It contains:
 Coverage is `complete`, `partial`, or `unavailable`. A zero observation count
 has no inactivity meaning unless coverage is complete, the evidence belongs to
 the current inventory, and the object was not modified after the evidence
-window.
+window, and the window ended no more than seven days ago. Historical, modified,
+expired, unsupported, and not-measured states remain distinct from source
+coverage. Unsupported telemetry does not mean inactivity.
 
 ## Reviews
 

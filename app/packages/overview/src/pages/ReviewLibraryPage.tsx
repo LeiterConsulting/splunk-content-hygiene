@@ -21,6 +21,7 @@ import {
     Table,
     TableScroller,
 } from '../AppStyles';
+import { ResultPagination } from '../components/ResultPagination';
 import { PageHeader } from '../components/PageHeader';
 import { ReviewEditor } from '../components/ReviewEditor';
 import { ReviewStageBadge } from '../components/ReviewStageBadge';
@@ -28,12 +29,8 @@ import { StatusBadge } from '../components/StatusBadge';
 import { SummaryMetric } from '../components/SummaryMetric';
 import { UsageEvidencePanel } from '../components/UsageEvidencePanel';
 import { reviewStageOptions } from '../services/reviews';
-import {
-    ContentObject,
-    InventorySnapshot,
-    ReviewInput,
-    ReviewRecord,
-} from '../types';
+import { usageValidity } from '../services/usage';
+import { ContentObject, InventorySnapshot, ReviewInput, ReviewRecord } from '../types';
 import { downloadCsv } from '../utils/downloadCsv';
 import { downloadJson } from '../utils/downloadJson';
 import { navigateToView, readQueryParam } from '../utils/navigation';
@@ -73,7 +70,8 @@ function lastObservedObject(review: ReviewRecord): ContentObject {
         evidence: [
             'This object is not present in the latest cached inventory. The review record retains its last observed identity.',
         ],
-        suggestedAction: 'Confirm whether the object was removed, renamed, or is outside current scan visibility.',
+        suggestedAction:
+            'Confirm whether the object was removed, renamed, or is outside current scan visibility.',
     };
 }
 
@@ -90,10 +88,7 @@ function formatDateTime(value: string): string {
           }).format(date);
 }
 
-function exportReviews(
-    rows: ReviewRecord[],
-    objectById: Map<string, ContentObject>
-): void {
+function exportReviews(rows: ReviewRecord[], objectById: Map<string, ContentObject>): void {
     downloadCsv(
         'content-hygiene-review-library.csv',
         [
@@ -107,6 +102,8 @@ function exportReviews(
             'Note',
             'Current inventory status',
             'Health at review',
+            'Usage validity',
+            'Usage window ended',
             'Current usage coverage',
             'Current usage observations',
             'Current last observed',
@@ -130,10 +127,12 @@ function exportReviews(
             review.note,
             objectById.has(review.objectId) ? 'present' : 'not present',
             review.healthStatusAtReview,
-            objectById.get(review.objectId)?.usageEvidence?.coverage ??
-                'not measured',
-            objectById.get(review.objectId)?.usageEvidence?.observationCount ??
-                '',
+            objectById.has(review.objectId)
+                ? usageValidity(objectById.get(review.objectId)!)
+                : 'not_in_inventory',
+            objectById.get(review.objectId)?.usageEvidence?.windowEnd ?? '',
+            objectById.get(review.objectId)?.usageEvidence?.coverage ?? 'not measured',
+            objectById.get(review.objectId)?.usageEvidence?.observationCount ?? '',
             objectById.get(review.objectId)?.lastUsed ?? '',
             review.usageCoverageAtReview ?? 'not measured',
             review.usageObservationCountAtReview ?? '',
@@ -143,7 +142,7 @@ function exportReviews(
             review.createdAt,
             review.updatedAt,
             review.updatedBy,
-        ])
+        ]),
     );
 }
 
@@ -157,9 +156,7 @@ export function ReviewLibraryPage({
     onDeleteReview,
 }: ReviewLibraryPageProps): React.ReactElement {
     const [query, setQuery] = useState(readQueryParam('query'));
-    const [stageFilter, setStageFilter] = useState(
-        readQueryParam('stage') || 'all'
-    );
+    const [stageFilter, setStageFilter] = useState(readQueryParam('stage') || 'all');
     const [appFilter, setAppFilter] = useState('all');
     const [typeFilter, setTypeFilter] = useState('all');
     const [presenceFilter, setPresenceFilter] = useState('all');
@@ -167,12 +164,10 @@ export function ReviewLibraryPage({
     const [page, setPage] = useState(0);
     const objects = snapshot?.objects ?? [];
     const objectById = new Map(
-        objects.map((contentObject) => [contentObject.objectId, contentObject])
+        objects.map((contentObject) => [contentObject.objectId, contentObject]),
     );
     const apps = Array.from(new Set(reviews.map((review) => review.app))).sort();
-    const objectTypes = Array.from(
-        new Set(reviews.map((review) => review.objectType))
-    ).sort();
+    const objectTypes = Array.from(new Set(reviews.map((review) => review.objectType))).sort();
     const normalizedQuery = query.trim().toLowerCase();
     const filteredReviews = reviews
         .filter((review) => {
@@ -180,8 +175,7 @@ export function ReviewLibraryPage({
             return (
                 (stageFilter === 'all' || review.stage === stageFilter) &&
                 (appFilter === 'all' || review.app === appFilter) &&
-                (typeFilter === 'all' ||
-                    review.objectType === typeFilter) &&
+                (typeFilter === 'all' || review.objectType === typeFilter) &&
                 (presenceFilter === 'all' ||
                     (presenceFilter === 'present' && isPresent) ||
                     (presenceFilter === 'missing' && !isPresent)) &&
@@ -194,27 +188,22 @@ export function ReviewLibraryPage({
                         review.owner ?? '',
                         review.assignedTo ?? '',
                         review.note,
-                    ].some((value) =>
-                        value.toLowerCase().includes(normalizedQuery)
-                    ))
+                    ].some((value) => value.toLowerCase().includes(normalizedQuery)))
             );
         })
         .sort(
             (left, right) =>
                 right.updatedAt.localeCompare(left.updatedAt) ||
-                left.objectName.localeCompare(right.objectName)
+                left.objectName.localeCompare(right.objectName),
         );
     const totalPages = Math.max(1, Math.ceil(filteredReviews.length / PAGE_SIZE));
     const currentPage = Math.min(page, totalPages - 1);
     const pageStart = currentPage * PAGE_SIZE;
     const pageReviews = filteredReviews.slice(pageStart, pageStart + PAGE_SIZE);
     const selectedReview =
-        filteredReviews.find((review) => review.objectId === selectedId) ??
-        pageReviews[0] ??
-        null;
+        filteredReviews.find((review) => review.objectId === selectedId) ?? pageReviews[0] ?? null;
     const selectedObject = selectedReview
-        ? objectById.get(selectedReview.objectId) ??
-          lastObservedObject(selectedReview)
+        ? (objectById.get(selectedReview.objectId) ?? lastObservedObject(selectedReview))
         : null;
     const stageCount = (stage: ReviewRecord['stage']): number =>
         reviews.filter((review) => review.stage === stage).length;
@@ -228,9 +217,7 @@ export function ReviewLibraryPage({
                     <ButtonRow>
                         <StyledButton
                             type="button"
-                            onClick={() =>
-                                exportReviews(filteredReviews, objectById)
-                            }
+                            onClick={() => exportReviews(filteredReviews, objectById)}
                             disabled={filteredReviews.length === 0}
                         >
                             Export filtered CSV
@@ -238,19 +225,14 @@ export function ReviewLibraryPage({
                         <StyledButton
                             type="button"
                             onClick={() =>
-                                downloadJson(
-                                    'content-hygiene-review-library.json',
-                                    {
-                                        exportedAt: new Date().toISOString(),
-                                        scanId: snapshot?.scan.scanId ?? null,
-                                        reviews: filteredReviews.map((review) => ({
-                                            ...review,
-                                            currentObject:
-                                                objectById.get(review.objectId) ??
-                                                null,
-                                        })),
-                                    }
-                                )
+                                downloadJson('content-hygiene-review-library.json', {
+                                    exportedAt: new Date().toISOString(),
+                                    scanId: snapshot?.scan.scanId ?? null,
+                                    reviews: filteredReviews.map((review) => ({
+                                        ...review,
+                                        currentObject: objectById.get(review.objectId) ?? null,
+                                    })),
+                                })
                             }
                             disabled={filteredReviews.length === 0}
                         >
@@ -294,17 +276,13 @@ export function ReviewLibraryPage({
                 />
                 <SummaryMetric
                     label="Retain / blocked"
-                    value={(
-                        stageCount('retain') + stageCount('blocked')
-                    ).toLocaleString()}
+                    value={(stageCount('retain') + stageCount('blocked')).toLocaleString()}
                     hint="Excluded or prevented from cleanup"
                     accent="neutral"
                 />
             </MetricGrid>
 
-            {loadError ? (
-                <InlineNotice role="alert">{loadError}</InlineNotice>
-            ) : null}
+            {loadError ? <InlineNotice role="alert">{loadError}</InlineNotice> : null}
 
             <FilterBar
                 aria-label="Review library filters"
@@ -410,39 +388,12 @@ export function ReviewLibraryPage({
                             {filteredReviews.length === 1 ? '' : 's'}
                         </CardTitle>
                         {filteredReviews.length > 0 ? (
-                            <ButtonRow>
-                                <span>
-                                    {pageStart + 1}–
-                                    {Math.min(
-                                        pageStart + PAGE_SIZE,
-                                        filteredReviews.length
-                                    )}{' '}
-                                    of {filteredReviews.length}
-                                </span>
-                                <StyledButton
-                                    type="button"
-                                    disabled={currentPage === 0}
-                                    onClick={() =>
-                                        setPage(Math.max(0, currentPage - 1))
-                                    }
-                                >
-                                    Previous
-                                </StyledButton>
-                                <StyledButton
-                                    type="button"
-                                    disabled={currentPage >= totalPages - 1}
-                                    onClick={() =>
-                                        setPage(
-                                            Math.min(
-                                                totalPages - 1,
-                                                currentPage + 1
-                                            )
-                                        )
-                                    }
-                                >
-                                    Next
-                                </StyledButton>
-                            </ButtonRow>
+                            <ResultPagination
+                                page={currentPage}
+                                pageSize={PAGE_SIZE}
+                                total={filteredReviews.length}
+                                onChange={setPage}
+                            />
                         ) : null}
                     </CardHeader>
                     {filteredReviews.length === 0 ? (
@@ -454,8 +405,8 @@ export function ReviewLibraryPage({
                                         : 'No matching review records'}
                                 </strong>
                                 <p>
-                                    Add a candidate or dependency object to the
-                                    library, or clear the filters.
+                                    Add a candidate or dependency object to the library, or clear
+                                    the filters.
                                 </p>
                             </div>
                         </EmptyState>
@@ -474,9 +425,7 @@ export function ReviewLibraryPage({
                                 </thead>
                                 <tbody>
                                     {pageReviews.map((review) => {
-                                        const currentObject = objectById.get(
-                                            review.objectId
-                                        );
+                                        const currentObject = objectById.get(review.objectId);
                                         return (
                                             <tr key={review.objectId}>
                                                 <td>
@@ -487,9 +436,7 @@ export function ReviewLibraryPage({
                                                             review.objectId
                                                         }
                                                         onClick={() =>
-                                                            setSelectedId(
-                                                                review.objectId
-                                                            )
+                                                            setSelectedId(review.objectId)
                                                         }
                                                     >
                                                         {review.objectName}
@@ -498,30 +445,19 @@ export function ReviewLibraryPage({
                                                 </td>
                                                 <td>{review.objectType}</td>
                                                 <td>
-                                                    <ReviewStageBadge
-                                                        stage={review.stage}
-                                                    />
+                                                    <ReviewStageBadge stage={review.stage} />
                                                 </td>
-                                                <td>
-                                                    {review.assignedTo ??
-                                                        'Unassigned'}
-                                                </td>
+                                                <td>{review.assignedTo ?? 'Unassigned'}</td>
                                                 <td>
                                                     {currentObject ? (
                                                         <StatusBadge
-                                                            status={
-                                                                currentObject.healthStatus
-                                                            }
+                                                            status={currentObject.healthStatus}
                                                         />
                                                     ) : (
                                                         'Not present'
                                                     )}
                                                 </td>
-                                                <td>
-                                                    {formatDateTime(
-                                                        review.updatedAt
-                                                    )}
-                                                </td>
+                                                <td>{formatDateTime(review.updatedAt)}</td>
                                             </tr>
                                         );
                                     })}
@@ -532,18 +468,12 @@ export function ReviewLibraryPage({
                 </Card>
 
                 {selectedReview && selectedObject ? (
-                    <DetailPanel
-                        aria-label={`Review details for ${selectedReview.objectName}`}
-                    >
+                    <DetailPanel aria-label={`Review details for ${selectedReview.objectName}`}>
                         <DetailSection>
-                            <DetailTitle>
-                                {selectedReview.objectName}
-                            </DetailTitle>
+                            <DetailTitle>{selectedReview.objectName}</DetailTitle>
                             <ButtonRow>
                                 <ReviewStageBadge stage={selectedReview.stage} />
-                                <StatusBadge
-                                    status={selectedObject.healthStatus}
-                                />
+                                <StatusBadge status={selectedObject.healthStatus} />
                             </ButtonRow>
                         </DetailSection>
                         <DetailSection>
@@ -565,44 +495,33 @@ export function ReviewLibraryPage({
                                 <dt>Outbound refs</dt>
                                 <dd>{selectedObject.outboundReferences}</dd>
                                 <dt>Usage coverage at review</dt>
-                                <dd>
-                                    {selectedReview.usageCoverageAtReview ??
-                                        'Not measured'}
-                                </dd>
+                                <dd>{selectedReview.usageCoverageAtReview ?? 'Not measured'}</dd>
                                 <dt>Observations at review</dt>
                                 <dd>
-                                    {selectedReview.usageObservationCountAtReview ??
-                                        'Not measured'}
+                                    {selectedReview.usageObservationCountAtReview ?? 'Not measured'}
                                 </dd>
                                 <dt>Last observed at review</dt>
                                 <dd>
                                     {selectedReview.usageLastObservedAtReview
-                                        ? formatDateTime(
-                                              selectedReview.usageLastObservedAtReview
-                                          )
+                                        ? formatDateTime(selectedReview.usageLastObservedAtReview)
                                         : 'Not observed'}
                                 </dd>
                                 <dt>Last updated by</dt>
                                 <dd>{selectedReview.updatedBy}</dd>
                                 <dt>Last updated</dt>
-                                <dd>
-                                    {formatDateTime(selectedReview.updatedAt)}
-                                </dd>
+                                <dd>{formatDateTime(selectedReview.updatedAt)}</dd>
                             </DefinitionList>
                         </DetailSection>
                         {!objectById.has(selectedReview.objectId) ? (
                             <DetailSection>
                                 <InlineNotice>
-                                    This record remains in the library even
-                                    though the object is not visible in the
-                                    latest cached scan.
+                                    This record remains in the library even though the object is not
+                                    visible in the latest cached scan.
                                 </InlineNotice>
                             </DetailSection>
                         ) : null}
                         <DetailSection>
-                            <UsageEvidencePanel
-                                contentObject={selectedObject}
-                            />
+                            <UsageEvidencePanel contentObject={selectedObject} />
                         </DetailSection>
                         <DetailSection>
                             <ButtonRow>
@@ -613,9 +532,7 @@ export function ReviewLibraryPage({
                                             object: selectedReview.objectId,
                                         })
                                     }
-                                    disabled={
-                                        !objectById.has(selectedReview.objectId)
-                                    }
+                                    disabled={!objectById.has(selectedReview.objectId)}
                                 >
                                     Explore dependencies
                                 </StyledButton>
@@ -626,9 +543,7 @@ export function ReviewLibraryPage({
                                             object: selectedReview.objectId,
                                         })
                                     }
-                                    disabled={
-                                        !objectById.has(selectedReview.objectId)
-                                    }
+                                    disabled={!objectById.has(selectedReview.objectId)}
                                 >
                                     View candidate evidence
                                 </StyledButton>
@@ -638,10 +553,7 @@ export function ReviewLibraryPage({
                             <ReviewEditor
                                 contentObject={selectedObject}
                                 review={selectedReview}
-                                scanId={
-                                    snapshot?.scan.scanId ??
-                                    selectedReview.scanId
-                                }
+                                scanId={snapshot?.scan.scanId ?? selectedReview.scanId}
                                 canWrite={canWriteReviews}
                                 onSave={onSaveReview}
                                 onDelete={onDeleteReview}

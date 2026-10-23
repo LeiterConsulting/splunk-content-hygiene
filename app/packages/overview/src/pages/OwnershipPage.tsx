@@ -22,6 +22,7 @@ import {
     Table,
     TableScroller,
 } from '../AppStyles';
+import { ResultPagination } from '../components/ResultPagination';
 import { PageHeader } from '../components/PageHeader';
 import { ReviewStageBadge } from '../components/ReviewStageBadge';
 import { StatusBadge } from '../components/StatusBadge';
@@ -41,7 +42,7 @@ interface OwnershipPageProps {
 
 function exportOwnershipWorksheet(
     objects: ContentObject[],
-    reviewByObject: Map<string, ReviewRecord>
+    reviewByObject: Map<string, ReviewRecord>,
 ): void {
     downloadCsv(
         'content-hygiene-ownership-review.csv',
@@ -68,26 +69,21 @@ function exportOwnershipWorksheet(
             reviewByObject.get(contentObject.objectId)?.stage ?? '',
             reviewByObject.get(contentObject.objectId)?.assignedTo ?? '',
             '',
-        ])
+        ]),
     );
 }
 
-function objectsForOwner(
-    owner: string,
-    objects: ContentObject[]
-): ContentObject[] {
+function objectsForOwner(owner: string, objects: ContentObject[]): ContentObject[] {
     if (owner === 'App/global scope') {
         return objects.filter(
             (contentObject) =>
                 !contentObject.owner &&
-                (contentObject.sharing === 'app' ||
-                    contentObject.sharing === 'global')
+                (contentObject.sharing === 'app' || contentObject.sharing === 'global'),
         );
     }
     if (owner === 'Unowned') {
         return objects.filter(
-            (contentObject) =>
-                !contentObject.owner && contentObject.sharing === 'user'
+            (contentObject) => !contentObject.owner && contentObject.sharing === 'user',
         );
     }
     if (owner === 'Ownership metadata unavailable') {
@@ -96,16 +92,13 @@ function objectsForOwner(
                 !contentObject.owner &&
                 contentObject.sharing !== 'app' &&
                 contentObject.sharing !== 'global' &&
-                contentObject.sharing !== 'user'
+                contentObject.sharing !== 'user',
         );
     }
     return objects.filter((contentObject) => contentObject.owner === owner);
 }
 
-function ownershipEmptyTitle(
-    isLoading: boolean,
-    ownerCount: number
-): string {
+function ownershipEmptyTitle(isLoading: boolean, ownerCount: number): string {
     if (isLoading) {
         return 'Loading live ownership data…';
     }
@@ -116,7 +109,7 @@ function ownershipEmptyTitle(
 
 function ownerInterpretation(
     owner: string,
-    status: 'active' | 'disabled' | 'missing' | 'shared' | 'unknown'
+    status: 'active' | 'disabled' | 'missing' | 'shared' | 'unknown',
 ): string {
     if (status === 'shared') {
         return 'These objects are owned by their app or shared globally in Splunk. They are not treated as missing-owner findings.';
@@ -140,56 +133,61 @@ export function OwnershipPage({
 }: OwnershipPageProps): React.ReactElement {
     const [query, setQuery] = useState('');
     const [selectedOwner, setSelectedOwner] = useState('');
+    const [ownerPage, setOwnerPage] = useState(0);
+    const [objectPage, setObjectPage] = useState(0);
+    const [gapPage, setGapPage] = useState(0);
     const objects = snapshot?.objects ?? [];
-    const reviewByObject = new Map(
-        reviews.map((review) => [review.objectId, review])
-    );
+    const reviewByObject = new Map(reviews.map((review) => [review.objectId, review]));
     const ownerSummaries = snapshot?.owners ?? [];
     const unownedObjects = objects.filter(
-        (contentObject) =>
-            contentObject.owner === null &&
-            contentObject.sharing === 'user'
+        (contentObject) => contentObject.owner === null && contentObject.sharing === 'user',
     );
     const sharedScopeObjects = objects.filter(
         (contentObject) =>
             contentObject.owner === null &&
-            (contentObject.sharing === 'app' ||
-                contentObject.sharing === 'global')
+            (contentObject.sharing === 'app' || contentObject.sharing === 'global'),
     );
     const unknownScopeObjects = objects.filter(
         (contentObject) =>
             contentObject.owner === null &&
             contentObject.sharing !== 'user' &&
             contentObject.sharing !== 'app' &&
-            contentObject.sharing !== 'global'
+            contentObject.sharing !== 'global',
     );
     const accountableObjects = objects.filter(
         (contentObject) =>
             Boolean(contentObject.owner) ||
             contentObject.sharing === 'app' ||
-            contentObject.sharing === 'global'
+            contentObject.sharing === 'global',
     ).length;
     const coverage =
-        objects.length === 0
-            ? 0
-            : Math.round((accountableObjects / objects.length) * 1000) / 10;
+        objects.length === 0 ? 0 : Math.round((accountableObjects / objects.length) * 1000) / 10;
     const activeOwnersWithContent = ownerSummaries.filter(
-        (summary) => summary.status === 'active' && summary.objectCount > 0
+        (summary) => summary.status === 'active' && summary.objectCount > 0,
     ).length;
     const disabledOwnerObjects = ownerSummaries
         .filter((summary) => summary.status === 'disabled')
         .reduce((total, summary) => total + summary.objectCount, 0);
     const normalizedQuery = query.trim().toLowerCase();
     const filteredOwners = ownerSummaries.filter((summary) =>
-        summary.owner.toLowerCase().includes(normalizedQuery)
+        summary.owner.toLowerCase().includes(normalizedQuery),
     );
     const selected =
-        ownerSummaries.find((summary) => summary.owner === selectedOwner) ??
-        filteredOwners[0];
-    const selectedObjects = selected
-        ? objectsForOwner(selected.owner, objects)
-        : [];
+        ownerSummaries.find((summary) => summary.owner === selectedOwner) ?? filteredOwners[0];
+    const selectedObjects = selected ? objectsForOwner(selected.owner, objects) : [];
 
+    const currentOwnerPage = Math.min(
+        ownerPage,
+        Math.max(0, Math.ceil(filteredOwners.length / 25) - 1),
+    );
+    const currentObjectPage = Math.min(
+        objectPage,
+        Math.max(0, Math.ceil(selectedObjects.length / 25) - 1),
+    );
+    const currentGapPage = Math.min(
+        gapPage,
+        Math.max(0, Math.ceil(unownedObjects.length / 25) - 1),
+    );
     return (
         <>
             <PageHeader
@@ -201,10 +199,8 @@ export function OwnershipPage({
                             type="button"
                             onClick={() =>
                                 exportOwnershipWorksheet(
-                                    selectedObjects.length > 0
-                                        ? selectedObjects
-                                        : objects,
-                                    reviewByObject
+                                    selectedObjects.length > 0 ? selectedObjects : objects,
+                                    reviewByObject,
                                 )
                             }
                             disabled={objects.length === 0}
@@ -214,21 +210,15 @@ export function OwnershipPage({
                         <StyledButton
                             type="button"
                             onClick={() =>
-                                downloadJson(
-                                    'content-hygiene-ownership-report.json',
-                                    {
-                                        exportedAt: new Date().toISOString(),
-                                        scanId: snapshot?.scan.scanId ?? null,
-                                        owners: ownerSummaries,
-                                        objects: objects.map((contentObject) => ({
-                                            ...contentObject,
-                                            review:
-                                                reviewByObject.get(
-                                                    contentObject.objectId
-                                                ) ?? null,
-                                        })),
-                                    }
-                                )
+                                downloadJson('content-hygiene-ownership-report.json', {
+                                    exportedAt: new Date().toISOString(),
+                                    scanId: snapshot?.scan.scanId ?? null,
+                                    owners: ownerSummaries,
+                                    objects: objects.map((contentObject) => ({
+                                        ...contentObject,
+                                        review: reviewByObject.get(contentObject.objectId) ?? null,
+                                    })),
+                                })
                             }
                             disabled={objects.length === 0}
                         >
@@ -241,41 +231,25 @@ export function OwnershipPage({
             <MetricGrid aria-label="Ownership summary">
                 <SummaryMetric
                     label="Active named owners"
-                    value={
-                        snapshot
-                            ? numberFormatter.format(activeOwnersWithContent)
-                            : '—'
-                    }
+                    value={snapshot ? numberFormatter.format(activeOwnersWithContent) : '—'}
                     hint="Active accounts attached to cached objects"
                     accent="positive"
                 />
                 <SummaryMetric
                     label="Ownership gaps"
-                    value={
-                        snapshot
-                            ? numberFormatter.format(unownedObjects.length)
-                            : '—'
-                    }
+                    value={snapshot ? numberFormatter.format(unownedObjects.length) : '—'}
                     hint="User-scoped objects without a resolvable owner"
                     accent="negative"
                 />
                 <SummaryMetric
                     label="Disabled-owner objects"
-                    value={
-                        snapshot
-                            ? numberFormatter.format(disabledOwnerObjects)
-                            : '—'
-                    }
+                    value={snapshot ? numberFormatter.format(disabledOwnerObjects) : '—'}
                     hint="Cached objects attached to a disabled account"
                     accent="warning"
                 />
                 <SummaryMetric
                     label="App/global scope"
-                    value={
-                        snapshot
-                            ? numberFormatter.format(sharedScopeObjects.length)
-                            : '—'
-                    }
+                    value={snapshot ? numberFormatter.format(sharedScopeObjects.length) : '—'}
                     hint="Objects intentionally owned by an app or global scope"
                     accent="warning"
                 />
@@ -287,20 +261,13 @@ export function OwnershipPage({
                 />
                 <SummaryMetric
                     label="Ownership metadata unavailable"
-                    value={
-                        snapshot
-                            ? numberFormatter.format(unknownScopeObjects.length)
-                            : '—'
-                    }
+                    value={snapshot ? numberFormatter.format(unknownScopeObjects.length) : '—'}
                     hint="Objects not asserted as gaps because ACL scope was not exposed"
                     accent="info"
                 />
             </MetricGrid>
 
-            <FilterBar
-                aria-label="Ownership filters"
-                onSubmit={(event) => event.preventDefault()}
-            >
+            <FilterBar aria-label="Ownership filters" onSubmit={(event) => event.preventDefault()}>
                 <FilterField>
                     Search owners
                     <Input
@@ -320,15 +287,18 @@ export function OwnershipPage({
                     <Card>
                         <CardHeader>
                             <CardTitle>Live ownership inventory</CardTitle>
+                            <ResultPagination
+                                page={currentOwnerPage}
+                                pageSize={25}
+                                total={filteredOwners.length}
+                                onChange={setOwnerPage}
+                            />
                         </CardHeader>
                         {filteredOwners.length === 0 ? (
                             <EmptyState>
                                 <div>
                                     <strong>
-                                        {ownershipEmptyTitle(
-                                            isLoading,
-                                            ownerSummaries.length
-                                        )}
+                                        {ownershipEmptyTitle(isLoading, ownerSummaries.length)}
                                     </strong>
                                     <p>
                                         {ownerSummaries.length === 0
@@ -350,58 +320,65 @@ export function OwnershipPage({
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {filteredOwners.map((summary) => {
-                                            const activePercent =
-                                                summary.objectCount === 0
-                                                    ? 0
-                                                    : Math.round(
-                                                          (summary.activeCount /
-                                                              summary.objectCount) *
-                                                              100
-                                                      );
-                                            return (
-                                                <tr key={summary.owner}>
-                                                    <td>
-                                                        <RowButton
-                                                            type="button"
-                                                            aria-pressed={
-                                                                selected?.owner ===
-                                                                summary.owner
-                                                            }
-                                                            onClick={() =>
-                                                                setSelectedOwner(
+                                        {filteredOwners
+                                            .slice(
+                                                currentOwnerPage * 25,
+                                                currentOwnerPage * 25 + 25,
+                                            )
+                                            .map((summary) => {
+                                                const activePercent =
+                                                    summary.objectCount === 0
+                                                        ? 0
+                                                        : Math.round(
+                                                              (summary.activeCount /
+                                                                  summary.objectCount) *
+                                                                  100,
+                                                          );
+                                                return (
+                                                    <tr key={summary.owner}>
+                                                        <td>
+                                                            <RowButton
+                                                                type="button"
+                                                                aria-pressed={
+                                                                    selected?.owner ===
                                                                     summary.owner
-                                                                )
-                                                            }
-                                                        >
-                                                            {summary.owner}
-                                                        </RowButton>
-                                                    </td>
-                                                    <td>{summary.status}</td>
-                                                    <td>
-                                                        {numberFormatter.format(
-                                                            summary.objectCount
-                                                        )}
-                                                    </td>
-                                                    <td>
-                                                        {numberFormatter.format(
-                                                            summary.reviewCount
-                                                        )}
-                                                    </td>
-                                                    <td>
-                                                        <ProgressTrack
-                                                            aria-label={`${activePercent}% known active`}
-                                                        >
-                                                            <ProgressBar
-                                                                $percent={
-                                                                    activePercent
                                                                 }
-                                                            />
-                                                        </ProgressTrack>
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
+                                                                onClick={() => {
+                                                                    setSelectedOwner(summary.owner);
+                                                                    setObjectPage(0);
+                                                                }}
+                                                            >
+                                                                {summary.owner}
+                                                            </RowButton>
+                                                        </td>
+                                                        <td>{summary.status}</td>
+                                                        <td>
+                                                            {numberFormatter.format(
+                                                                summary.objectCount,
+                                                            )}
+                                                        </td>
+                                                        <td>
+                                                            {numberFormatter.format(
+                                                                summary.reviewCount,
+                                                            )}
+                                                        </td>
+                                                        <td>
+                                                            <ProgressTrack
+                                                                role="progressbar"
+                                                                aria-valuenow={activePercent}
+                                                                aria-valuemin={0}
+                                                                aria-valuemax={100}
+                                                                aria-label={`${activePercent}% known active`}
+                                                            >
+                                                                <ProgressBar
+                                                                    $percent={activePercent}
+                                                                />
+                                                            </ProgressTrack>
+                                                            <span>{activePercent}%</span>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
                                     </tbody>
                                 </Table>
                             </TableScroller>
@@ -411,14 +388,17 @@ export function OwnershipPage({
                     <SpacedBlock>
                         <Card>
                             <CardHeader>
-                                <CardTitle>
-                                    User-scoped ownership gaps
-                                </CardTitle>
+                                <CardTitle>User-scoped ownership gaps</CardTitle>
+                                <ResultPagination
+                                    page={currentGapPage}
+                                    pageSize={25}
+                                    total={unownedObjects.length}
+                                    onChange={setGapPage}
+                                />
                             </CardHeader>
                             {unownedObjects.length === 0 ? (
                                 <EmptyState>
-                                    No cached user-scoped objects have an
-                                    ownership gap.
+                                    No cached user-scoped objects have an ownership gap.
                                 </EmptyState>
                             ) : (
                                 <TableScroller>
@@ -435,41 +415,33 @@ export function OwnershipPage({
                                         </thead>
                                         <tbody>
                                             {unownedObjects
-                                                .slice(0, 25)
+                                                .slice(
+                                                    currentGapPage * 25,
+                                                    currentGapPage * 25 + 25,
+                                                )
                                                 .map((contentObject) => (
-                                                    <tr
-                                                        key={
-                                                            contentObject.objectId
-                                                        }
-                                                    >
+                                                    <tr key={contentObject.objectId}>
                                                         <td>
                                                             <RowButton
                                                                 type="button"
                                                                 onClick={() =>
-                                                                    navigateToView(
-                                                                        'candidates',
-                                                                        {
-                                                                            object: contentObject.objectId,
-                                                                        }
-                                                                    )
+                                                                    navigateToView('candidates', {
+                                                                        object: contentObject.objectId,
+                                                                    })
                                                                 }
                                                             >
-                                                                {
-                                                                    contentObject.name
-                                                                }
+                                                                {contentObject.name}
                                                             </RowButton>
                                                         </td>
-                                                        <td>
-                                                            {contentObject.app}
-                                                        </td>
+                                                        <td>{contentObject.app}</td>
                                                         <td>
                                                             {reviewByObject.has(
-                                                                contentObject.objectId
+                                                                contentObject.objectId,
                                                             ) ? (
                                                                 <ReviewStageBadge
                                                                     stage={
                                                                         reviewByObject.get(
-                                                                            contentObject.objectId
+                                                                            contentObject.objectId,
                                                                         )!.stage
                                                                     }
                                                                 />
@@ -481,27 +453,18 @@ export function OwnershipPage({
                                                             <StyledButton
                                                                 type="button"
                                                                 onClick={() =>
-                                                                    navigateToView(
-                                                                        'dependencies',
-                                                                        {
-                                                                            object: contentObject.objectId,
-                                                                        }
-                                                                    )
+                                                                    navigateToView('dependencies', {
+                                                                        object: contentObject.objectId,
+                                                                    })
                                                                 }
                                                             >
                                                                 Dependencies
                                                             </StyledButton>
                                                         </td>
-                                                        <td>
-                                                            {
-                                                                contentObject.objectType
-                                                            }
-                                                        </td>
+                                                        <td>{contentObject.objectType}</td>
                                                         <td>
                                                             <StatusBadge
-                                                                status={
-                                                                    contentObject.healthStatus
-                                                                }
+                                                                status={contentObject.healthStatus}
                                                             />
                                                         </td>
                                                     </tr>
@@ -515,9 +478,7 @@ export function OwnershipPage({
                 </div>
 
                 {selected ? (
-                    <DetailPanel
-                        aria-label={`Ownership details for ${selected.owner}`}
-                    >
+                    <DetailPanel aria-label={`Ownership details for ${selected.owner}`}>
                         <DetailSection>
                             <DetailTitle>{selected.owner}</DetailTitle>
                             <strong>Account status: {selected.status}</strong>
@@ -525,45 +486,30 @@ export function OwnershipPage({
                         <DetailSection>
                             <DefinitionList>
                                 <dt>Total objects</dt>
-                                <dd>
-                                    {numberFormatter.format(
-                                        selected.objectCount
-                                    )}
-                                </dd>
+                                <dd>{numberFormatter.format(selected.objectCount)}</dd>
                                 <dt>Known active</dt>
-                                <dd>
-                                    {numberFormatter.format(
-                                        selected.activeCount
-                                    )}
-                                </dd>
+                                <dd>{numberFormatter.format(selected.activeCount)}</dd>
                                 <dt>Needs review</dt>
-                                <dd>
-                                    {numberFormatter.format(
-                                        selected.reviewCount
-                                    )}
-                                </dd>
+                                <dd>{numberFormatter.format(selected.reviewCount)}</dd>
                                 <dt>Without named owner</dt>
-                                <dd>
-                                    {numberFormatter.format(
-                                        selected.unownedCount
-                                    )}
-                                </dd>
+                                <dd>{numberFormatter.format(selected.unownedCount)}</dd>
                             </DefinitionList>
                         </DetailSection>
                         <DetailSection>
                             <strong>Interpretation</strong>
-                            <p>
-                                {ownerInterpretation(
-                                    selected.owner,
-                                    selected.status
-                                )}
-                            </p>
+                            <p>{ownerInterpretation(selected.owner, selected.status)}</p>
                         </DetailSection>
                         <DetailSection>
                             <strong>
                                 Objects attributed to this owner (
                                 {numberFormatter.format(selectedObjects.length)})
                             </strong>
+                            <ResultPagination
+                                page={currentObjectPage}
+                                pageSize={25}
+                                total={selectedObjects.length}
+                                onChange={setObjectPage}
+                            />
                             {selectedObjects.length === 0 ? (
                                 <p>No cached objects are attributed here.</p>
                             ) : (
@@ -578,45 +524,37 @@ export function OwnershipPage({
                                         </thead>
                                         <tbody>
                                             {selectedObjects
-                                                .slice(0, 50)
+                                                .slice(
+                                                    currentObjectPage * 25,
+                                                    currentObjectPage * 25 + 25,
+                                                )
                                                 .map((contentObject) => (
-                                                    <tr
-                                                        key={
-                                                            contentObject.objectId
-                                                        }
-                                                    >
+                                                    <tr key={contentObject.objectId}>
                                                         <td>
                                                             <RowButton
                                                                 type="button"
                                                                 onClick={() =>
-                                                                    navigateToView(
-                                                                        'dependencies',
-                                                                        {
-                                                                            object: contentObject.objectId,
-                                                                        }
-                                                                    )
+                                                                    navigateToView('dependencies', {
+                                                                        object: contentObject.objectId,
+                                                                    })
                                                                 }
                                                             >
-                                                                {
-                                                                    contentObject.name
-                                                                }
+                                                                {contentObject.name}
                                                             </RowButton>
                                                         </td>
                                                         <td>
                                                             <StatusBadge
-                                                                status={
-                                                                    contentObject.healthStatus
-                                                                }
+                                                                status={contentObject.healthStatus}
                                                             />
                                                         </td>
                                                         <td>
                                                             {reviewByObject.has(
-                                                                contentObject.objectId
+                                                                contentObject.objectId,
                                                             ) ? (
                                                                 <ReviewStageBadge
                                                                     stage={
                                                                         reviewByObject.get(
-                                                                            contentObject.objectId
+                                                                            contentObject.objectId,
                                                                         )!.stage
                                                                     }
                                                                 />
@@ -633,10 +571,7 @@ export function OwnershipPage({
                             {selectedObjects.length > 50 ? (
                                 <p>
                                     Export the selected ownership CSV for all{' '}
-                                    {numberFormatter.format(
-                                        selectedObjects.length
-                                    )}{' '}
-                                    objects.
+                                    {numberFormatter.format(selectedObjects.length)} objects.
                                 </p>
                             ) : null}
                         </DetailSection>

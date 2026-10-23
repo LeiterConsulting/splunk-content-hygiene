@@ -1,12 +1,9 @@
 import { username, splunkdPath } from '@splunk/splunk-utils/config';
 import { createFetchInit } from '@splunk/splunk-utils/fetch';
 import { createRESTURL } from '@splunk/splunk-utils/url';
+import { splunkRequest, SplunkRequestError as RestRequestError } from './rest';
 
-import {
-    AnalysisCompleteness,
-    RawAnalysisSource,
-    analyzeInventory,
-} from './analysis';
+import { AnalysisCompleteness, RawAnalysisSource, analyzeInventoryAsync } from './analysis';
 import {
     CollectedUsageSource,
     DASHBOARD_ACCESS_SOURCE_ID,
@@ -17,6 +14,7 @@ import {
     sourceCoverageForWindow,
 } from './usage';
 import {
+    AppPage,
     ConfidenceLevel,
     ContentFinding,
     ContentObject,
@@ -46,6 +44,8 @@ const LOCK_TTL_MS = 30 * 60 * 1000;
 const BATCH_SIZE = 100;
 const BATCH_CONCURRENCY = 4;
 const SNAPSHOT_PAGE_SIZE = 1000;
+const MANIFEST_KEY = 'inventory_manifest_v2';
+const SNAPSHOT_VERSION = 2;
 
 type JsonRecord = Record<string, unknown>;
 
@@ -152,6 +152,7 @@ interface KvObjectRecord extends JsonRecord {
     suggested_action: string;
     source: JsonRecord;
     scan_id: string;
+    analysis_warnings?: string[];
 }
 
 interface KvOwnerRecord extends JsonRecord {
@@ -220,16 +221,6 @@ interface UsageSourceDefinition {
     label: string;
     activityKind: UsageActivityKind;
     search: (windowDays: UsageWindowDays) => string;
-}
-
-class RestRequestError extends Error {
-    status: number;
-
-    constructor(status: number, message: string) {
-        super(message);
-        this.name = 'RestRequestError';
-        this.status = status;
-    }
 }
 
 const objectCollectors: ObjectCollectorDefinition[] = [
@@ -302,7 +293,9 @@ const usageSourceDefinitions: UsageSourceDefinition[] = [
         sourceId: SEARCH_AUDIT_SOURCE_ID,
         label: 'Splunk search audit',
         activityKind: 'saved_search_execution',
-        search: (windowDays) => `search index=_audit action=search savedsearch_name=* earliest=-${windowDays}d latest=now
+        search: (
+            windowDays,
+        ) => `search index=_audit action=search savedsearch_name=* earliest=-${windowDays}d latest=now
 | eval activity_name=savedsearch_name, activity_app=coalesce(app, search_app, "unknown"), activity_user=coalesce(user, "")
 | eval normalized_info=lower(coalesce(info, status, "unknown"))
 | where isnotnull(activity_name) AND len(activity_name)>0
@@ -320,7 +313,9 @@ const usageSourceDefinitions: UsageSourceDefinition[] = [
         sourceId: DASHBOARD_ACCESS_SOURCE_ID,
         label: 'Splunk Web access log',
         activityKind: 'dashboard_view',
-        search: (windowDays) => `search index=_internal sourcetype=splunk_web_access earliest=-${windowDays}d latest=now
+        search: (
+            windowDays,
+        ) => `search index=_internal sourcetype=splunk_web_access earliest=-${windowDays}d latest=now
 | eval request_path=coalesce(uri_path, uri, path)
 | rex field=request_path "(?i)(?:/[a-z]{2}-[A-Z]{2})?/app/(?<activity_app>[^/?]+)/(?<activity_name>[^/?#]+)"
 | eval activity_name=urldecode(activity_name), activity_user=coalesce(user, "")
@@ -336,9 +331,7 @@ const usageSourceDefinitions: UsageSourceDefinition[] = [
 ];
 
 function asRecord(value: unknown): JsonRecord {
-    return value && typeof value === 'object' && !Array.isArray(value)
-        ? (value as JsonRecord)
-        : {};
+    return value && typeof value === 'object' && !Array.isArray(value) ? (value as JsonRecord) : {};
 }
 
 function stringValue(value: unknown, fallback = ''): string {
@@ -406,28 +399,29 @@ function normalizeSearchTimestamp(value: unknown): string | null {
 }
 
 function usageCoverage(value: unknown): UsageCoverage {
-    return value === 'complete' ||
-        value === 'partial' ||
-        value === 'unavailable'
+    return value === 'complete' || value === 'partial' || value === 'unavailable'
         ? value
         : 'unavailable';
 }
 
 function usageWindowDays(value: unknown): UsageWindowDays {
-    return value === 30 || value === 90 || value === 180
-        ? value
-        : 90;
+    return value === 30 || value === 90 || value === 180 ? value : 90;
 }
 
 function objectTypeKey(objectType: string): string {
-    return objectType.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
+    return ['Saved Search', 'Report', 'Alert'].includes(objectType)
+        ? 'saved_search'
+        : objectType
+              .trim()
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, '_');
 }
 
 export function canonicalObjectId(
     objectType: string,
     app: string,
     name: string,
-    userNamespace: string | null = null
+    userNamespace: string | null = null,
 ): string {
     const base = `${objectTypeKey(objectType)}::${app.trim()}`;
     return userNamespace
@@ -460,21 +454,20 @@ function isProtectedObject(
     collectorId: string,
     app: string,
     name: string,
-    content: JsonRecord
+    content: JsonRecord,
 ): boolean {
     const normalizedApp = app.toLowerCase();
     const normalizedName = name.toLowerCase();
     return (
-        collectorId === 'apps' &&
-        (booleanValue(content.core) === true || normalizedApp === 'system')
-    ) ||
+        (collectorId === 'apps' &&
+            (booleanValue(content.core) === true || normalizedApp === 'system')) ||
         (collectorId === 'indexes' &&
-            (booleanValue(content.isInternal) === true ||
-                normalizedName.startsWith('_'))) ||
+            (booleanValue(content.isInternal) === true || normalizedName.startsWith('_'))) ||
         normalizedApp === APP_ID ||
         normalizedApp === 'system' ||
         normalizedApp.startsWith('splunk_') ||
-        normalizedApp.startsWith('splunk-');
+        normalizedApp.startsWith('splunk-')
+    );
 }
 
 function enabledFromContent(content: JsonRecord): boolean | null {
@@ -482,10 +475,7 @@ function enabledFromContent(content: JsonRecord): boolean | null {
     return disabled === null ? null : !disabled;
 }
 
-function objectTypeForEntry(
-    collector: ObjectCollectorDefinition,
-    content: JsonRecord
-): string {
+function objectTypeForEntry(collector: ObjectCollectorDefinition, content: JsonRecord): string {
     if (collector.id !== 'saved_searches') {
         return collector.objectType;
     }
@@ -497,13 +487,8 @@ function objectTypeForEntry(
     return scheduled ? 'Report' : 'Saved Search';
 }
 
-function scheduledFromContent(
-    collectorId: string,
-    content: JsonRecord
-): boolean | null {
-    return collectorId === 'saved_searches'
-        ? booleanValue(content.is_scheduled)
-        : null;
+function scheduledFromContent(collectorId: string, content: JsonRecord): boolean | null {
+    return collectorId === 'saved_searches' ? booleanValue(content.is_scheduled) : null;
 }
 
 function serializeAnalysisValue(value: unknown): string {
@@ -520,7 +505,7 @@ export function normalizeObjectEntry(
     entry: SplunkRestEntry,
     collector: ObjectCollectorDefinition,
     scanId: string,
-    collectedAt: string
+    collectedAt: string,
 ): KvObjectRecord {
     const content = asRecord(entry.content);
     const acl = entryAcl(entry);
@@ -528,10 +513,7 @@ export function normalizeObjectEntry(
         collector.id === 'apps'
             ? entry.name
             : stringValue(acl.app, stringValue(content['eai:appName'], 'unknown'));
-    const ownerValue = stringValue(
-        acl.owner,
-        stringValue(content['eai:userName'], '')
-    );
+    const ownerValue = stringValue(acl.owner, stringValue(content['eai:userName'], ''));
     const owner =
         ownerValue.length === 0 || ownerValue === 'nobody' || ownerValue === 'system'
             ? null
@@ -546,14 +528,9 @@ export function normalizeObjectEntry(
         objectType,
         app,
         entry.name,
-        sharing === 'user' ? ownerValue || 'unknown' : null
+        sharing === 'user' ? ownerValue || 'unknown' : null,
     );
-    const protectedObject = isProtectedObject(
-        collector.id,
-        app,
-        entry.name,
-        content
-    );
+    const protectedObject = isProtectedObject(collector.id, app, entry.name, content);
     const enabled = enabledFromContent(content);
     const scheduled = scheduledFromContent(collector.id, content);
     const evidence = [
@@ -564,7 +541,7 @@ export function normalizeObjectEntry(
     ];
 
     return {
-        _key: stableRecordKey(objectId),
+        _key: stableRecordKey(`${scanId}::${objectId}`),
         object_id: objectId,
         name: entry.name,
         display_name: displayName,
@@ -600,7 +577,7 @@ export function normalizeObjectEntry(
 function analysisSourceForEntry(
     entry: SplunkRestEntry,
     collector: ObjectCollectorDefinition,
-    record: KvObjectRecord
+    record: KvObjectRecord,
 ): RawAnalysisSource | null {
     const content = asRecord(entry.content);
     let text = '';
@@ -617,6 +594,10 @@ function analysisSourceForEntry(
         text = stringValue(content['eai:data']);
         kind = 'dashboard';
         sourceLocation = 'eai:data';
+    } else if (collector.id === 'lookup_definitions') {
+        text = stringValue(content.filename);
+        kind = 'lookup';
+        sourceLocation = 'filename';
     } else if (collector.id === 'data_models') {
         text = serializeAnalysisValue(content['dataset.commands']);
         sourceLocation = 'dataset.commands';
@@ -635,14 +616,14 @@ function analysisSourceForEntry(
 function normalizeOwnerEntry(
     entry: SplunkRestEntry,
     scanId: string,
-    collectedAt: string
+    collectedAt: string,
 ): KvOwnerRecord {
     const content = asRecord(entry.content);
     const lockedOut = booleanValue(content['locked-out']) === true;
     const roles = stringArray(content.roles);
 
     return {
-        _key: stableRecordKey(entry.name, 'owner'),
+        _key: stableRecordKey(`${scanId}::${entry.name}`, 'owner'),
         owner: entry.name,
         status: lockedOut ? 'disabled' : 'active',
         roles,
@@ -660,10 +641,10 @@ function normalizeOwnerEntry(
 }
 
 function collectionUrl(collection: string, suffix = ''): string {
-    return createRESTURL(
-        `storage/collections/data/${collection}${suffix}`,
-        { owner: 'nobody', app: APP_ID }
-    );
+    return createRESTURL(`storage/collections/data/${collection}${suffix}`, {
+        owner: 'nobody',
+        app: APP_ID,
+    });
 }
 
 function withQuery(url: string, query: Record<string, string | number>): string {
@@ -672,44 +653,13 @@ function withQuery(url: string, query: Record<string, string | number>): string 
     return `${url}?${search.toString()}`;
 }
 
-async function responseError(response: Response, fallback: string): Promise<Error> {
-    try {
-        const data = (await response.json()) as {
-            messages?: Array<{ text?: string }>;
-        };
-        const message = data.messages?.find(({ text }) => Boolean(text))?.text;
-        return new RestRequestError(response.status, message ?? fallback);
-    } catch {
-        return new RestRequestError(response.status, fallback);
-    }
-}
-
-async function requestJson<T>(
-    url: string,
-    init: RequestInit = {},
-    expectedStatuses: number[] = [200]
-): Promise<T> {
-    const response = await fetch(
+let activeScanController: AbortController | null = null;
+async function requestJson<T>(url: string, init: RequestInit = {}, statuses = [200]): Promise<T> {
+    return splunkRequest<T>(
         url,
-        createFetchInit({
-            ...init,
-            headers: {
-                Accept: 'application/json',
-                ...(init.headers ?? {}),
-            },
-        })
+        { ...init, signal: init.signal ?? activeScanController?.signal },
+        statuses,
     );
-
-    if (!expectedStatuses.includes(response.status)) {
-        throw await responseError(
-            response,
-            `Splunk request failed with status ${response.status}`
-        );
-    }
-    if (response.status === 204) {
-        return null as T;
-    }
-    return (await response.json()) as T;
 }
 
 async function runOneshotSearch(search: string): Promise<SplunkSearchResponse> {
@@ -720,10 +670,8 @@ async function runOneshotSearch(search: string): Promise<SplunkSearchResponse> {
     body.set('count', '0');
     body.set('max_time', '120');
     body.set('timeout', '130');
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 140000);
     try {
-        return await requestJson<SplunkSearchResponse>(
+        return await splunkRequest<SplunkSearchResponse>(
             createRESTURL('search/jobs', {
                 owner: username || '-',
                 app: APP_ID,
@@ -734,19 +682,18 @@ async function runOneshotSearch(search: string): Promise<SplunkSearchResponse> {
                     'Content-Type': 'application/x-www-form-urlencoded',
                 },
                 body: body.toString(),
-                signal: controller.signal,
+                signal: activeScanController?.signal,
             },
-            [200, 201]
+            [200, 201],
+            140000,
         );
     } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') {
+        if (error instanceof Error && error.name === 'TimeoutError') {
             throw new Error(
-                'The telemetry search exceeded the 140-second interactive safety limit.'
+                'The telemetry search exceeded the 140-second interactive safety limit.',
             );
         }
         throw error;
-    } finally {
-        clearTimeout(timeout);
     }
 }
 
@@ -754,27 +701,21 @@ async function collectUsageSource(
     definition: UsageSourceDefinition,
     windowDays: UsageWindowDays,
     windowStart: string,
-    windowEnd: string
+    windowEnd: string,
 ): Promise<CollectedUsageSource> {
     const response = await runOneshotSearch(definition.search(windowDays));
     const rows = response.results ?? [];
-    const coverageRow = rows.find(
-        (row) => stringValue(row.record_kind) === 'coverage'
-    );
-    const activityRows = rows.filter(
-        (row) => stringValue(row.record_kind) === 'activity'
-    );
+    const coverageRow = rows.find((row) => stringValue(row.record_kind) === 'coverage');
+    const activityRows = rows.filter((row) => stringValue(row.record_kind) === 'activity');
     const sourceEventCount = numberValue(coverageRow?.source_event_count);
-    const coverageStart = normalizeSearchTimestamp(
-        coverageRow?.coverage_start
-    );
+    const coverageStart = normalizeSearchTimestamp(coverageRow?.coverage_start);
     const coverageEnd = normalizeSearchTimestamp(coverageRow?.coverage_end);
     const sourceWindowCoverage = sourceCoverageForWindow(
         sourceEventCount,
         coverageStart,
         coverageEnd,
         windowStart,
-        windowEnd
+        windowEnd,
     );
     const activities: UsageActivityAggregate[] = activityRows
         .map((row) => ({
@@ -791,18 +732,14 @@ async function collectUsageSource(
             (activity) =>
                 activity.app.length > 0 &&
                 activity.name.length > 0 &&
-                activity.observationCount > 0
+                activity.observationCount > 0,
         );
     const truncated = activities.length >= 10000;
     const responseWarnings = (response.messages ?? [])
-        .filter(
-            (message) =>
-                message.type === 'WARN' || message.type === 'ERROR'
-        )
+        .filter((message) => message.type === 'WARN' || message.type === 'ERROR')
         .map((message) => message.text ?? 'Splunk returned a search warning.');
     const coverage: UsageCoverage =
-        sourceWindowCoverage === 'complete' &&
-        (truncated || responseWarnings.length > 0)
+        sourceWindowCoverage === 'complete' && (truncated || responseWarnings.length > 0)
             ? 'partial'
             : sourceWindowCoverage;
     const warnings = [
@@ -810,15 +747,11 @@ async function collectUsageSource(
             ? 'No source events were visible, so absence of object activity cannot be interpreted.'
             : null,
         coverage === 'partial'
-            ? `Visible source data spans ${
-                  coverageStart ?? 'an unknown start'
-              } through ${
+            ? `Visible source data spans ${coverageStart ?? 'an unknown start'} through ${
                   coverageEnd ?? 'an unknown end'
               }, which does not establish the complete requested window.`
             : null,
-        truncated
-            ? 'Activity aggregation reached the 10,000-row safety cap.'
-            : null,
+        truncated ? 'Activity aggregation reached the 10,000-row safety cap.' : null,
         ...responseWarnings,
     ].filter((value): value is string => Boolean(value));
 
@@ -842,14 +775,10 @@ async function collectUsageSource(
 
 async function collectEntries(
     collector: ObjectCollectorDefinition,
-    mode: ScanMode
+    mode: ScanMode,
 ): Promise<CollectedEntries> {
-    const maximum =
-        mode === 'bounded'
-            ? BOUNDED_SCAN_LIMIT
-            : FULL_SCAN_MAX_PER_COLLECTOR;
-    const pageSize =
-        mode === 'bounded' ? BOUNDED_SCAN_LIMIT : FULL_SCAN_PAGE_SIZE;
+    const maximum = mode === 'bounded' ? BOUNDED_SCAN_LIMIT : FULL_SCAN_MAX_PER_COLLECTOR;
+    const pageSize = mode === 'bounded' ? BOUNDED_SCAN_LIMIT : FULL_SCAN_PAGE_SIZE;
     const entries: SplunkRestEntry[] = [];
     let total = 0;
     let offset = 0;
@@ -857,14 +786,11 @@ async function collectEntries(
     /* eslint-disable no-await-in-loop -- collector pages are intentionally serial to cap search-head request load. */
     while (entries.length < maximum) {
         const count = Math.min(pageSize, maximum - entries.length);
-        const url = withQuery(
-            createRESTURL(collector.endpoint, collector.namespace),
-            {
-                count,
-                offset,
-                output_mode: 'json',
-            }
-        );
+        const url = withQuery(createRESTURL(collector.endpoint, collector.namespace), {
+            count,
+            offset,
+            output_mode: 'json',
+        });
         const response = await requestJson<SplunkRestResponse>(url);
         const page = response.entry ?? [];
         total = numberValue(response.paging?.total ?? page.length);
@@ -891,21 +817,17 @@ async function collectOwners(mode: ScanMode): Promise<CollectedEntries> {
             endpoint: 'authentication/users',
             objectType: 'Owner',
         },
-        mode
+        mode,
     );
 }
 
 async function batchSave(collection: string, records: JsonRecord[]): Promise<void> {
     const batchCount = Math.ceil(records.length / BATCH_SIZE);
     const batches = Array.from({ length: batchCount }, (_, index) =>
-        records.slice(index * BATCH_SIZE, (index + 1) * BATCH_SIZE)
+        records.slice(index * BATCH_SIZE, (index + 1) * BATCH_SIZE),
     );
     /* eslint-disable no-await-in-loop -- batch groups cap concurrent KV writes to protect the search head. */
-    for (
-        let offset = 0;
-        offset < batches.length;
-        offset += BATCH_CONCURRENCY
-    ) {
+    for (let offset = 0; offset < batches.length; offset += BATCH_CONCURRENCY) {
         const group = batches.slice(offset, offset + BATCH_CONCURRENCY);
         await Promise.all(
             group.map((batch) =>
@@ -916,18 +838,15 @@ async function batchSave(collection: string, records: JsonRecord[]): Promise<voi
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(batch),
                     },
-                    [200, 201]
-                )
-            )
+                    [200, 201],
+                ),
+            ),
         );
     }
     /* eslint-enable no-await-in-loop */
 }
 
-async function createRecord(
-    collection: string,
-    record: JsonRecord
-): Promise<void> {
+async function createRecord(collection: string, record: JsonRecord): Promise<void> {
     await requestJson<unknown>(
         collectionUrl(collection),
         {
@@ -935,31 +854,39 @@ async function createRecord(
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(record),
         },
-        [200, 201]
+        [200, 201],
     );
 }
 
-async function updateRecord(
-    collection: string,
-    key: string,
-    record: JsonRecord
-): Promise<void> {
+async function updateRecord(collection: string, key: string, record: JsonRecord): Promise<void> {
+    if (!key || typeof key !== 'string') {
+        throw new Error('Refusing to update a KV record without an explicit identity.');
+    }
+    // KV POST replaces the document. Preserve lifecycle/provenance fields when
+    // applying a checkpoint; it is not a server-side partial merge.
+    const previous = await getRecord<JsonRecord>(collection, key);
+    if (!previous) {
+        throw new Error(`The app-local ${collection} record is no longer available.`);
+    }
+    const merged = Object.fromEntries(
+        Object.entries({ ...previous, ...record }).filter(
+            ([name]) => name !== '_key' && name !== '_user',
+        ),
+    );
     await requestJson<unknown>(
         collectionUrl(collection, `/${encodeURIComponent(key)}`),
         {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(record),
+            body: JSON.stringify(merged),
         },
-        [200, 201]
+        [200, 201],
     );
 }
 
 async function getRecord<T>(collection: string, key: string): Promise<T | null> {
     try {
-        return await requestJson<T>(
-            collectionUrl(collection, `/${encodeURIComponent(key)}`)
-        );
+        return await requestJson<T>(collectionUrl(collection, `/${encodeURIComponent(key)}`));
     } catch (error) {
         if (error instanceof RestRequestError && error.status === 404) {
             return null;
@@ -972,7 +899,7 @@ async function deleteRecord(collection: string, key: string): Promise<void> {
     await requestJson<unknown>(
         collectionUrl(collection, `/${encodeURIComponent(key)}`),
         { method: 'DELETE' },
-        [200, 204]
+        [200, 204],
     );
 }
 
@@ -1003,16 +930,11 @@ async function acquireScanLock(scanId: string): Promise<void> {
 
     const existing = await getRecord<ScanLockRecord>('ch_settings', LOCK_KEY);
     if (existing && new Date(existing.expires_at).getTime() > Date.now()) {
-        throw new Error(
-            `An inventory scan is already running (${existing.scan_id}).`
-        );
+        throw new Error(`An inventory scan is already running (${existing.scan_id}).`);
     }
 
     if (existing) {
-        const interrupted = await getRecord<KvScanRecord>(
-            'ch_scan_runs',
-            existing.scan_id
-        );
+        const interrupted = await getRecord<KvScanRecord>('ch_scan_runs', existing.scan_id);
         if (interrupted?.status === 'running') {
             await updateRecord('ch_scan_runs', existing.scan_id, {
                 status: 'failed',
@@ -1036,28 +958,33 @@ async function releaseScanLock(scanId: string): Promise<void> {
     }
 }
 
+async function assertScanLock(scanId: string): Promise<void> {
+    const lock = await getRecord<ScanLockRecord>('ch_settings', LOCK_KEY);
+    if (lock?.scan_id !== scanId || new Date(lock.expires_at).getTime() <= Date.now()) {
+        throw new Error(
+            'The collection lock is no longer owned by this scan. The previous baseline was preserved.',
+        );
+    }
+}
+
 function scanRecordToSummary(record: KvScanRecord): ScanSummary {
     const warnings = stringArray(record.warnings);
     const errors = stringArray(record.errors);
     const collectorCountsRecord = asRecord(record.collector_counts);
     const collectorTotalsRecord = asRecord(record.collector_totals);
-    const collectorCounts = Object.entries(collectorCountsRecord).reduce<
-        Record<string, number>
-    >(
+    const collectorCounts = Object.entries(collectorCountsRecord).reduce<Record<string, number>>(
         (counts, [key, value]) => ({
             ...counts,
             [key]: numberValue(value),
         }),
-        {}
+        {},
     );
-    const collectorTotals = Object.entries(collectorTotalsRecord).reduce<
-        Record<string, number>
-    >(
+    const collectorTotals = Object.entries(collectorTotalsRecord).reduce<Record<string, number>>(
         (totals, [key, value]) => ({
             ...totals,
             [key]: numberValue(value),
         }),
-        {}
+        {},
     );
 
     return {
@@ -1082,19 +1009,14 @@ function scanRecordToSummary(record: KvScanRecord): ScanSummary {
                 ? record.analysis_status
                 : 'pending',
         dataSource: 'live',
+        snapshotVersion: numberValue(record.snapshot_version),
     };
 }
 
 function isHealthStatus(value: string): value is HealthStatus {
-    return [
-        'active',
-        'dormant',
-        'orphaned',
-        'broken',
-        'unowned',
-        'protected',
-        'unknown',
-    ].includes(value);
+    return ['active', 'dormant', 'orphaned', 'broken', 'unowned', 'protected', 'unknown'].includes(
+        value,
+    );
 }
 
 function isConfidenceLevel(value: string): value is ConfidenceLevel {
@@ -1121,16 +1043,15 @@ function objectRecordToContentObject(record: KvObjectRecord): ContentObject {
         name: stringValue(record.display_name, stringValue(record.name)),
         objectType: stringValue(record.object_type, 'Unknown'),
         app: stringValue(record.app, 'unknown'),
-        owner:
-            typeof record.owner === 'string' && record.owner.length > 0
-                ? record.owner
-                : null,
+        owner: typeof record.owner === 'string' && record.owner.length > 0 ? record.owner : null,
         sharing: stringValue(record.sharing) || null,
         enabled: booleanValue(record.enabled),
         scheduled: booleanValue(record.scheduled),
         updated: normalizeTimestamp(record.updated),
         lastUsed: normalizeTimestamp(record.last_used),
         usageEvidence: null,
+        inventoryScanId: record.scan_id,
+        analysisWarnings: stringArray(record.analysis_warnings),
         healthStatus: isHealthStatus(healthStatus) ? healthStatus : 'unknown',
         abandonmentConfidence: nullableScore(record.abandonment_confidence),
         removalImpact: nullableScore(record.removal_impact),
@@ -1140,7 +1061,7 @@ function objectRecordToContentObject(record: KvObjectRecord): ContentObject {
         evidence: stringArray(record.evidence),
         suggestedAction: stringValue(
             record.suggested_action,
-            'Collect usage and dependency evidence before review'
+            'Collect usage and dependency evidence before review',
         ),
     };
 }
@@ -1164,30 +1085,20 @@ function findingRecordToContentFinding(record: KvFindingRecord): ContentFinding 
     return {
         findingId: stringValue(record.finding_id),
         objectId: stringValue(record.object_id),
-        findingType: isFindingType(findingType)
-            ? findingType
-            : 'insufficient_evidence',
+        findingType: isFindingType(findingType) ? findingType : 'insufficient_evidence',
         abandonmentConfidence: nullableScore(record.abandonment_confidence),
         removalImpact: nullableScore(record.removal_impact),
         reasons: stringArray(record.reasons),
-        suggestedAction: stringValue(
-            record.suggested_action,
-            'Review the recorded evidence'
-        ),
+        suggestedAction: stringValue(record.suggested_action, 'Review the recorded evidence'),
         createdAt: normalizeTimestamp(record.created_at),
     };
 }
 
 function isUsageActivityKind(value: string): value is UsageActivityKind {
-    return (
-        value === 'saved_search_execution' || value === 'dashboard_view'
-    );
+    return value === 'saved_search_execution' || value === 'dashboard_view';
 }
 
-function usageEvidenceToRecord(
-    objectId: string,
-    usage: UsageEvidence
-): KvUsageEvidenceRecord {
+function usageEvidenceToRecord(objectId: string, usage: UsageEvidence): KvUsageEvidenceRecord {
     return {
         _key: stableRecordKey(`${usage.usageRunId}::${objectId}`, 'usage'),
         scan_id: usage.usageRunId,
@@ -1220,15 +1131,10 @@ function usageRecordToEvidence(record: KvUsageEvidenceRecord): UsageEvidence {
         inventoryScanId: stringValue(record.inventory_scan_id),
         sourceId: stringValue(record.source_id),
         sourceLabel: stringValue(record.source_label, 'Splunk telemetry'),
-        activityKind: isUsageActivityKind(activityKind)
-            ? activityKind
-            : 'saved_search_execution',
+        activityKind: isUsageActivityKind(activityKind) ? activityKind : 'saved_search_execution',
         windowDays: usageWindowDays(numberValue(record.window_days)),
-        windowStart:
-            normalizeTimestamp(record.window_start) ??
-            new Date(0).toISOString(),
-        windowEnd:
-            normalizeTimestamp(record.window_end) ?? new Date(0).toISOString(),
+        windowStart: normalizeTimestamp(record.window_start) ?? new Date(0).toISOString(),
+        windowEnd: normalizeTimestamp(record.window_end) ?? new Date(0).toISOString(),
         coverage: usageCoverage(record.coverage),
         coverageStart: normalizeTimestamp(record.coverage_start),
         coverageEnd: normalizeTimestamp(record.coverage_end),
@@ -1248,9 +1154,7 @@ function usageSourceSummaryFromRecord(value: unknown): UsageSourceSummary {
     return {
         sourceId: stringValue(record.sourceId),
         label: stringValue(record.label, 'Splunk telemetry'),
-        activityKind: isUsageActivityKind(activityKind)
-            ? activityKind
-            : 'saved_search_execution',
+        activityKind: isUsageActivityKind(activityKind) ? activityKind : 'saved_search_execution',
         coverage: usageCoverage(record.coverage),
         coverageStart: normalizeTimestamp(record.coverageStart),
         coverageEnd: normalizeTimestamp(record.coverageEnd),
@@ -1264,7 +1168,7 @@ function usageSourceSummaryFromRecord(value: unknown): UsageSourceSummary {
 
 function usageSummaryFromScanRecord(
     record: KvScanRecord,
-    currentInventoryScanId: string
+    currentInventoryScanId: string,
 ): UsageSummary {
     const warnings = stringArray(record.warnings);
     return {
@@ -1274,33 +1178,23 @@ function usageSummaryFromScanRecord(
         startedAt: record.started_at,
         completedAt: record.completed_at,
         windowDays: usageWindowDays(numberValue(record.usage_window_days)),
-        windowStart:
-            normalizeTimestamp(record.usage_window_start) ??
-            record.started_at,
+        windowStart: normalizeTimestamp(record.usage_window_start) ?? record.started_at,
         windowEnd:
-            normalizeTimestamp(record.usage_window_end) ??
-            record.completed_at ??
-            record.started_at,
+            normalizeTimestamp(record.usage_window_end) ?? record.completed_at ?? record.started_at,
         coverage: usageCoverage(record.usage_coverage),
         eligibleObjectCount: numberValue(record.eligible_object_count),
-        fullyCoveredObjectCount: numberValue(
-            record.fully_covered_object_count
-        ),
+        fullyCoveredObjectCount: numberValue(record.fully_covered_object_count),
         observedObjectCount: numberValue(record.observed_object_count),
         warningCount: warnings.length,
         warnings,
         sources: Array.isArray(record.usage_sources)
             ? record.usage_sources.map(usageSourceSummaryFromRecord)
             : [],
-        matchesCurrentInventory:
-            record.inventory_scan_id === currentInventoryScanId,
+        matchesCurrentInventory: record.inventory_scan_id === currentInventoryScanId,
     };
 }
 
-function analyzedObjectToRecord(
-    original: KvObjectRecord,
-    analyzed: ContentObject
-): KvObjectRecord {
+function analyzedObjectToRecord(original: KvObjectRecord, analyzed: ContentObject): KvObjectRecord {
     return {
         ...original,
         inbound_references: analyzed.inboundReferences,
@@ -1309,14 +1203,12 @@ function analyzedObjectToRecord(
         abandonment_confidence: analyzed.abandonmentConfidence,
         removal_impact: analyzed.removalImpact,
         evidence: analyzed.evidence,
+        analysis_warnings: analyzed.analysisWarnings ?? [],
         suggested_action: analyzed.suggestedAction,
     };
 }
 
-function dependencyEdgeToRecord(
-    edge: DependencyEdge,
-    scanId: string
-): KvEdgeRecord {
+function dependencyEdgeToRecord(edge: DependencyEdge, scanId: string): KvEdgeRecord {
     return {
         _key: stableRecordKey(`${scanId}::${edge.edgeId}`, 'edge'),
         edge_id: edge.edgeId,
@@ -1331,10 +1223,7 @@ function dependencyEdgeToRecord(
     };
 }
 
-function contentFindingToRecord(
-    finding: ContentFinding,
-    scanId: string
-): KvFindingRecord {
+function contentFindingToRecord(finding: ContentFinding, scanId: string): KvFindingRecord {
     return {
         _key: stableRecordKey(`${scanId}::${finding.findingId}`, 'finding'),
         finding_id: finding.findingId,
@@ -1351,7 +1240,8 @@ function contentFindingToRecord(
 
 async function getCollectionRecords<T>(
     collection: string,
-    scanId: string
+    scanId: string,
+    fields?: string,
 ): Promise<T[]> {
     const records: T[] = [];
     let skip = 0;
@@ -1361,7 +1251,9 @@ async function getCollectionRecords<T>(
         const url = withQuery(collectionUrl(collection), {
             query: JSON.stringify({ scan_id: scanId }),
             limit: SNAPSHOT_PAGE_SIZE,
+            sort: '_key:1',
             skip,
+            ...(fields ? { fields } : {}),
         });
         const page = await requestJson<T[]>(url);
         records.push(...page);
@@ -1375,17 +1267,128 @@ async function getCollectionRecords<T>(
     return records;
 }
 
+interface InventoryManifest extends JsonRecord {
+    _key: string;
+    baseline_scan_id: string | null;
+    latest_scan_id: string;
+    published_at: string;
+}
+
 async function getLatestInventoryScanRecord(): Promise<KvScanRecord | null> {
-    const url = withQuery(collectionUrl('ch_scan_runs'), {
-        query: JSON.stringify({
-            scan_type: { $in: ['bounded', 'full'] },
-            status: { $in: ['succeeded', 'partial'] },
+    const manifest = await getRecord<InventoryManifest>('ch_settings', MANIFEST_KEY);
+    if (!manifest) {
+        return null;
+    } // Legacy snapshots do not establish immutable provenance.
+    return getRecord<KvScanRecord>(
+        'ch_scan_runs',
+        manifest.baseline_scan_id ?? manifest.latest_scan_id,
+    );
+}
+
+async function verifySnapshot(record: KvScanRecord): Promise<void> {
+    const [objects, edges, findings, owners] = await Promise.all([
+        getCollectionRecords<KvObjectRecord>('ch_objects', record.scan_id),
+        getCollectionRecords<KvEdgeRecord>('ch_edges', record.scan_id),
+        getCollectionRecords<KvFindingRecord>('ch_findings', record.scan_id),
+        getCollectionRecords<KvOwnerRecord>('ch_owners', record.scan_id),
+    ]);
+    const identities = new Set(objects.map((item) => item.object_id));
+    if (
+        objects.length !== record.object_count ||
+        identities.size !== objects.length ||
+        edges.length !== record.edge_count ||
+        findings.length !== record.finding_count ||
+        owners.length !== (record.collector_counts.owners ?? 0) ||
+        edges.some(
+            (edge) =>
+                !identities.has(edge.source_id) ||
+                (edge.resolved && !identities.has(edge.target_id)),
+        ) ||
+        findings.some((item) => !identities.has(item.object_id))
+    ) {
+        throw new Error(
+            'Inventory snapshot verification failed. The previous operational baseline was preserved.',
+        );
+    }
+}
+
+async function publishSnapshot(record: KvScanRecord, collectionComplete: boolean): Promise<void> {
+    await verifySnapshot(record);
+    await assertScanLock(record.scan_id);
+    const previous = await getRecord<InventoryManifest>('ch_settings', MANIFEST_KEY);
+    const manifest: InventoryManifest = {
+        _key: MANIFEST_KEY,
+        baseline_scan_id:
+            record.scan_type === 'full' && collectionComplete
+                ? record.scan_id
+                : (previous?.baseline_scan_id ?? null),
+        latest_scan_id: record.scan_id,
+        published_at: new Date().toISOString(),
+    };
+    if (previous) {
+        await updateRecord('ch_settings', MANIFEST_KEY, manifest);
+    } else {
+        await createRecord('ch_settings', manifest);
+    }
+}
+
+async function retireSnapshots(): Promise<void> {
+    const manifest = await getRecord<InventoryManifest>('ch_settings', MANIFEST_KEY);
+    if (!manifest) {
+        return;
+    }
+    const records = await requestJson<KvScanRecord[]>(
+        withQuery(collectionUrl('ch_scan_runs'), {
+            query: JSON.stringify({
+                status: { $in: ['succeeded', 'partial', 'failed', 'cancelled'] },
+                evidence_retired: { $ne: true },
+            }),
+            sort: 'started_at:-1',
+            limit: 100,
         }),
-        sort: 'started_at:-1',
-        limit: 1,
+    );
+    const keep = new Set([manifest.latest_scan_id, manifest.baseline_scan_id]);
+    records
+        .filter((item) => item.scan_type === 'usage' && item.snapshot_version === SNAPSHOT_VERSION)
+        .slice(0, 3)
+        .forEach((item) => {
+            keep.add(item.scan_id);
+            keep.add(stringValue(item.inventory_scan_id));
+        });
+    records
+        .filter(
+            (item) =>
+                ['full', 'bounded'].includes(item.scan_type) &&
+                item.snapshot_version === SNAPSHOT_VERSION,
+        )
+        .slice(0, 3)
+        .forEach((item) => keep.add(item.scan_id));
+    const retired = records.filter((item) => {
+        const { _key: storedKey } = item;
+        return (
+            typeof item.scan_id === 'string' &&
+            /^scan-[A-Za-z0-9-]+$/.test(item.scan_id) &&
+            item.scan_id === storedKey &&
+            !keep.has(item.scan_id)
+        );
     });
-    const records = await requestJson<KvScanRecord[]>(url);
-    return records[0] ?? null;
+    // eslint-disable-next-line no-restricted-syntax -- Retire exact app-owned runs sequentially to bound KV load.
+    for (const record of retired) {
+        // Every deletion is constrained to an exact app-owned scan.
+        // eslint-disable-next-line no-await-in-loop
+        await Promise.all(
+            ['ch_objects', 'ch_edges', 'ch_findings', 'ch_owners', 'ch_usage_evidence'].map(
+                (collection) =>
+                    requestJson(
+                        `${collectionUrl(collection)}?${new URLSearchParams({ query: JSON.stringify({ scan_id: record.scan_id }) })}`,
+                        { method: 'DELETE' },
+                        [200, 204],
+                    ),
+            ),
+        );
+        // eslint-disable-next-line no-await-in-loop
+        await updateRecord('ch_scan_runs', record.scan_id, { evidence_retired: true });
+    }
 }
 
 async function getLatestUsageScanRecord(): Promise<KvScanRecord | null> {
@@ -1393,6 +1396,7 @@ async function getLatestUsageScanRecord(): Promise<KvScanRecord | null> {
         query: JSON.stringify({
             scan_type: 'usage',
             status: { $in: ['succeeded', 'partial', 'failed'] },
+            evidence_retired: { $ne: true },
         }),
         sort: 'started_at:-1',
         limit: 1,
@@ -1401,22 +1405,17 @@ async function getLatestUsageScanRecord(): Promise<KvScanRecord | null> {
     return records[0] ?? null;
 }
 
-function summarizeOwners(
-    ownerRecords: KvOwnerRecord[],
-    objects: ContentObject[]
-): OwnerSummary[] {
+function summarizeOwners(ownerRecords: KvOwnerRecord[], objects: ContentObject[]): OwnerSummary[] {
     const ownerStatus = new Map<string, OwnerSummary['status']>(
-        ownerRecords.map(
-            (record): [string, OwnerSummary['status']] => [
-                stringValue(record.owner),
-                record.status === 'disabled' ? 'disabled' : 'active',
-            ]
-        )
+        ownerRecords.map((record): [string, OwnerSummary['status']] => [
+            stringValue(record.owner),
+            record.status === 'disabled' ? 'disabled' : 'active',
+        ]),
     );
     const summaries = new Map<string, OwnerSummary>();
     const statusForObject = (
         contentObject: ContentObject,
-        sharedScope: boolean
+        sharedScope: boolean,
     ): OwnerSummary['status'] => {
         if (contentObject.owner) {
             return ownerStatus.get(contentObject.owner) ?? 'missing';
@@ -1440,10 +1439,8 @@ function summarizeOwners(
     objects.forEach((contentObject) => {
         const sharedScope =
             !contentObject.owner &&
-            (contentObject.sharing === 'app' ||
-                contentObject.sharing === 'global');
-        const userScopedGap =
-            !contentObject.owner && contentObject.sharing === 'user';
+            (contentObject.sharing === 'app' || contentObject.sharing === 'global');
+        const userScopedGap = !contentObject.owner && contentObject.sharing === 'user';
         let owner = contentObject.owner ?? 'Ownership metadata unavailable';
         let status: OwnerSummary['status'] = 'unknown';
         if (contentObject.owner) {
@@ -1467,11 +1464,7 @@ function summarizeOwners(
         if (contentObject.healthStatus === 'active') {
             existing.activeCount += 1;
         }
-        if (
-            ['dormant', 'orphaned', 'broken', 'unowned'].includes(
-                contentObject.healthStatus
-            )
-        ) {
+        if (['dormant', 'orphaned', 'broken', 'unowned'].includes(contentObject.healthStatus)) {
             existing.reviewCount += 1;
         }
         if (userScopedGap) {
@@ -1482,30 +1475,54 @@ function summarizeOwners(
 
     return Array.from(summaries.values()).sort(
         (left, right) =>
-            right.objectCount - left.objectCount ||
-            left.owner.localeCompare(right.owner)
+            right.objectCount - left.objectCount || left.owner.localeCompare(right.owner),
     );
 }
 
 async function loadSnapshot(
     record: KvScanRecord,
-    usageRecordOverride?: KvScanRecord
+    usageRecordOverride?: KvScanRecord,
+    page?: AppPage,
 ): Promise<InventorySnapshot> {
-    const usageRecord =
-        usageRecordOverride ?? (await getLatestUsageScanRecord());
+    const includeEdges = !page || page === 'dependency-explorer';
+    const includeOwners = !page || page === 'ownership';
+    const usageRecord = usageRecordOverride ?? (await getLatestUsageScanRecord());
     const [objectRecords, edgeRecords, findingRecords, ownerRecords, usageRecords] =
         await Promise.all([
-            getCollectionRecords<KvObjectRecord>('ch_objects', record.scan_id),
-            getCollectionRecords<KvEdgeRecord>('ch_edges', record.scan_id),
+            getCollectionRecords<KvObjectRecord>('ch_objects', record.scan_id, 'source:0'),
+            includeEdges
+                ? getCollectionRecords<KvEdgeRecord>('ch_edges', record.scan_id)
+                : Promise.resolve([]),
             getCollectionRecords<KvFindingRecord>('ch_findings', record.scan_id),
-            getCollectionRecords<KvOwnerRecord>('ch_owners', record.scan_id),
+            includeOwners
+                ? getCollectionRecords<KvOwnerRecord>('ch_owners', record.scan_id, 'source:0')
+                : Promise.resolve([]),
             usageRecord
                 ? getCollectionRecords<KvUsageEvidenceRecord>(
                       'ch_usage_evidence',
-                      usageRecord.scan_id
+                      usageRecord.scan_id,
                   )
                 : Promise.resolve([]),
         ]);
+    const objectIds = new Set(objectRecords.map((item) => item.object_id));
+    if (
+        record.snapshot_version !== SNAPSHOT_VERSION ||
+        objectRecords.length !== record.object_count ||
+        objectIds.size !== objectRecords.length ||
+        findingRecords.length !== record.finding_count ||
+        (includeEdges &&
+            (edgeRecords.length !== record.edge_count ||
+                edgeRecords.some(
+                    (edge) =>
+                        !objectIds.has(edge.source_id) ||
+                        (edge.resolved && !objectIds.has(edge.target_id)),
+                ))) ||
+        (includeOwners && ownerRecords.length !== (record.collector_counts.owners ?? 0))
+    ) {
+        throw new Error(
+            'Cached inventory failed integrity verification. Run a complete scan to establish a verified baseline.',
+        );
+    }
     const baseObjects = objectRecords.map(objectRecordToContentObject);
     const baseFindings = findingRecords.map(findingRecordToContentFinding);
     const applied = applyUsageEvidence(
@@ -1515,7 +1532,7 @@ async function loadSnapshot(
             objectId: stringValue(storedUsage.object_id),
             usage: usageRecordToEvidence(storedUsage),
         })),
-        record.scan_id
+        record.scan_id,
     );
     const scan = scanRecordToSummary(record);
     scan.candidateCount = applied.findings.filter((finding) =>
@@ -1525,14 +1542,12 @@ async function loadSnapshot(
             'unowned',
             'needs_review',
             'repair_required',
-        ].includes(finding.findingType)
+        ].includes(finding.findingType),
     ).length;
 
     return {
         scan,
-        usage: usageRecord
-            ? usageSummaryFromScanRecord(usageRecord, record.scan_id)
-            : null,
+        usage: usageRecord ? usageSummaryFromScanRecord(usageRecord, record.scan_id) : null,
         objects: applied.objects,
         edges: edgeRecords.map(edgeRecordToDependencyEdge),
         findings: applied.findings,
@@ -1540,14 +1555,32 @@ async function loadSnapshot(
     };
 }
 
-async function getLatestSnapshot(): Promise<InventorySnapshot | null> {
-    const record = await getLatestInventoryScanRecord();
-    return record ? loadSnapshot(record) : null;
+async function getLatestSnapshot(page?: AppPage): Promise<InventorySnapshot | null> {
+    const manifest = await getRecord<InventoryManifest>('ch_settings', MANIFEST_KEY);
+    if (!manifest) {
+        return null;
+    }
+    const record = await getRecord<KvScanRecord>(
+        'ch_scan_runs',
+        manifest.baseline_scan_id ?? manifest.latest_scan_id,
+    );
+    if (!record) {
+        throw new Error(
+            'The published inventory manifest refers to an unavailable scan. Run a complete scan to rebuild it.',
+        );
+    }
+    const snapshot = await loadSnapshot(record, undefined, page);
+    snapshot.scan.retainedBaseline = manifest.latest_scan_id !== record.scan_id;
+    if (snapshot.scan.retainedBaseline) {
+        const check = await getRecord<KvScanRecord>('ch_scan_runs', manifest.latest_scan_id);
+        snapshot.latestCheck = check ? scanRecordToSummary(check) : null;
+    }
+    return snapshot;
 }
 
 async function runInventoryScan(
     mode: ScanMode,
-    onProgress?: (progress: ScanProgress) => void
+    onProgress?: (progress: ScanProgress) => void,
 ): Promise<InventorySnapshot> {
     if (!splunkdPath) {
         throw new Error('A Splunk Web session is required to run inventory.');
@@ -1577,8 +1610,11 @@ async function runInventoryScan(
     let findingCount = 0;
     let analysisStatus: ScanSummary['analysisStatus'] = 'pending';
     let scanRecordCreated = false;
+    let didPublish = false;
+    let collectionComplete = true;
 
     await acquireScanLock(scanId);
+    activeScanController = new AbortController();
 
     const runningRecord: KvScanRecord = {
         _key: scanId,
@@ -1596,16 +1632,16 @@ async function runInventoryScan(
         collector_totals: {},
         collector_versions: {
             rest_inventory: '0.2.0',
-            dependency_analysis: '0.1.0',
-            classification: '0.1.0',
+            dependency_analysis: '0.4.0',
+            classification: '0.4.0',
         },
         scan_limit_per_collector:
-            mode === 'bounded'
-                ? BOUNDED_SCAN_LIMIT
-                : FULL_SCAN_MAX_PER_COLLECTOR,
+            mode === 'bounded' ? BOUNDED_SCAN_LIMIT : FULL_SCAN_MAX_PER_COLLECTOR,
         scan_mode: mode,
         initiated_by: username || 'unknown',
         analysis_status: 'pending',
+        snapshot_version: SNAPSHOT_VERSION,
+        audience: 'hygiene_roles',
     };
 
     try {
@@ -1623,17 +1659,22 @@ async function runInventoryScan(
             try {
                 const collected = await collectEntries(collector, mode);
                 const collectedAt = new Date().toISOString();
-                const records = collected.entries.map((entry) =>
-                    normalizeObjectEntry(entry, collector, scanId, collectedAt)
+                const eligibleEntries = collected.entries.filter(
+                    (entry) => entryAcl(entry).sharing !== 'user',
+                );
+                const excluded = collected.entries.length - eligibleEntries.length;
+                if (excluded) {
+                    warnings.push(
+                        `${collector.label}: ${excluded} private object(s) excluded from the shared hygiene inventory.`,
+                    );
+                }
+                const records = eligibleEntries.map((entry) =>
+                    normalizeObjectEntry(entry, collector, scanId, collectedAt),
                 );
                 await batchSave('ch_objects', records);
                 allObjectRecords.push(...records);
-                collected.entries.forEach((entry, index) => {
-                    const source = analysisSourceForEntry(
-                        entry,
-                        collector,
-                        records[index]
-                    );
+                eligibleEntries.forEach((entry, index) => {
+                    const source = analysisSourceForEntry(entry, collector, records[index]);
                     if (source) {
                         analysisSources.push(source);
                     }
@@ -1641,21 +1682,22 @@ async function runInventoryScan(
                 collectorCounts[collector.id] = records.length;
                 collectorTotals[collector.id] = collected.total;
                 if (collector.id in completeness) {
-                    completeness[
-                        collector.id as keyof AnalysisCompleteness
-                    ] = collected.complete;
+                    completeness[collector.id as keyof AnalysisCompleteness] = collected.complete;
                 }
                 if (!collected.complete) {
-                    const scanLabel =
-                        mode === 'bounded' ? 'bounded live scan' : 'full scan';
+                    collectionComplete = false;
+                    const scanLabel = mode === 'bounded' ? 'bounded live scan' : 'full scan';
                     warnings.push(
-                        `${collector.label}: ${scanLabel} cached ${records.length.toLocaleString()} of ${collected.total.toLocaleString()} visible records.`
+                        `${collector.label}: ${scanLabel} cached ${records.length.toLocaleString()} of ${collected.total.toLocaleString()} visible records.`,
                     );
                 }
                 objectCount += records.length;
             } catch (error) {
-                const message =
-                    error instanceof Error ? error.message : 'Unknown collector error';
+                collectionComplete = false;
+                if (activeScanController?.signal.aborted) {
+                    throw error;
+                }
+                const message = error instanceof Error ? error.message : 'Unknown collector error';
                 warnings.push(`${collector.label}: ${message}`);
                 collectorCounts[collector.id] = 0;
                 collectorTotals[collector.id] = 0;
@@ -1682,21 +1724,21 @@ async function runInventoryScan(
             const collected = await collectOwners(mode);
             const collectedAt = new Date().toISOString();
             const ownerRecords = collected.entries.map((entry) =>
-                normalizeOwnerEntry(entry, scanId, collectedAt)
+                normalizeOwnerEntry(entry, scanId, collectedAt),
             );
             await batchSave('ch_owners', ownerRecords);
             collectorCounts.owners = ownerRecords.length;
             collectorTotals.owners = collected.total;
             if (!collected.complete) {
-                const scanLabel =
-                    mode === 'bounded' ? 'bounded live scan' : 'full scan';
+                collectionComplete = false;
+                const scanLabel = mode === 'bounded' ? 'bounded live scan' : 'full scan';
                 warnings.push(
-                    `Owners: ${scanLabel} cached ${ownerRecords.length.toLocaleString()} of ${collected.total.toLocaleString()} visible records.`
+                    `Owners: ${scanLabel} cached ${ownerRecords.length.toLocaleString()} of ${collected.total.toLocaleString()} visible records.`,
                 );
             }
         } catch (error) {
-            const message =
-                error instanceof Error ? error.message : 'Unknown collector error';
+            collectionComplete = false;
+            const message = error instanceof Error ? error.message : 'Unknown collector error';
             warnings.push(`Owners: ${message}`);
             collectorCounts.owners = 0;
             collectorTotals.owners = 0;
@@ -1716,28 +1758,29 @@ async function runInventoryScan(
                 // sourcetype does not exist.
                 sourcetypes: false,
             };
-            const analysis = analyzeInventory(
+            const analysis = await analyzeInventoryAsync(
                 allObjectRecords.map(objectRecordToContentObject),
                 analysisSources,
-                assertionCompleteness
+                assertionCompleteness,
             );
+            if (analysis.parserWarnings.length) {
+                const affectedCount = analysis.objects.filter(
+                    (item) => item.analysisWarnings?.length,
+                ).length;
+                warnings.push(
+                    `Dependency parsing: ${affectedCount} object(s) have ${analysis.parserWarnings.length} declared limitations. Use the Dependency Explorer parser-gaps group to inspect source diagnostics. Unsupported or dynamic sources are not treated as complete.`,
+                );
+            }
             const analyzedById = new Map(
-                analysis.objects.map((contentObject) => [
-                    contentObject.objectId,
-                    contentObject,
-                ])
+                analysis.objects.map((contentObject) => [contentObject.objectId, contentObject]),
             );
             const analyzedRecords = allObjectRecords.map((record) => {
                 const analyzed = analyzedById.get(record.object_id);
-                return analyzed
-                    ? analyzedObjectToRecord(record, analyzed)
-                    : record;
+                return analyzed ? analyzedObjectToRecord(record, analyzed) : record;
             });
-            const edgeRecords = analysis.edges.map((edge) =>
-                dependencyEdgeToRecord(edge, scanId)
-            );
+            const edgeRecords = analysis.edges.map((edge) => dependencyEdgeToRecord(edge, scanId));
             const findingRecords = analysis.findings.map((findingValue) =>
-                contentFindingToRecord(findingValue, scanId)
+                contentFindingToRecord(findingValue, scanId),
             );
             await Promise.all([
                 batchSave('ch_objects', analyzedRecords),
@@ -1746,7 +1789,10 @@ async function runInventoryScan(
             ]);
             edgeCount = edgeRecords.length;
             findingCount = findingRecords.length;
-            const completeAnalysis = Object.values(completeness).every(Boolean);
+            const completeAnalysis =
+                collectionComplete &&
+                Object.values(completeness).every(Boolean) &&
+                analysis.parserWarnings.length === 0;
             analysisStatus = completeAnalysis ? 'complete' : 'partial';
             await updateRecord('ch_scan_runs', scanId, {
                 edge_count: edgeCount,
@@ -1755,14 +1801,18 @@ async function runInventoryScan(
                 parser_counts: analysis.parserCounts,
             });
         } catch (error) {
-            const message =
-                error instanceof Error ? error.message : 'Unknown analysis error';
+            const message = error instanceof Error ? error.message : 'Unknown analysis error';
             warnings.push(`Dependency analysis: ${message}`);
             analysisStatus = 'failed';
         }
         completedCollectors += 1;
 
         let status: ScanStatus = 'succeeded';
+        if (analysisStatus === 'failed') {
+            throw new Error(
+                'Dependency persistence failed; the previous snapshot remains the operational baseline.',
+            );
+        }
         if (objectCount === 0) {
             status = 'failed';
         } else if (warnings.length > 0) {
@@ -1790,18 +1840,28 @@ async function runInventoryScan(
             analysis_status: analysisStatus,
         };
         await updateRecord('ch_scan_runs', scanId, completedRecord);
+        if (status !== 'failed') {
+            await publishSnapshot(completedRecord, collectionComplete);
+            didPublish = true;
+            await retireSnapshots().catch(() => undefined);
+        }
         onProgress?.({
             completedCollectors,
             totalCollectors,
             stage: 'Loading live inventory',
         });
-        return loadSnapshot(completedRecord);
+        const published = await getLatestSnapshot();
+        if (!published) {
+            throw new Error('No verified snapshot was published.');
+        }
+        return published;
     } catch (error) {
-        if (scanRecordCreated) {
-            const message =
-                error instanceof Error ? error.message : 'Unknown scan failure';
+        const cancelled = activeScanController?.signal.aborted;
+        activeScanController = null;
+        if (scanRecordCreated && !didPublish) {
+            const message = error instanceof Error ? error.message : 'Unknown scan failure';
             await updateRecord('ch_scan_runs', scanId, {
-                status: 'failed',
+                status: cancelled ? 'cancelled' : 'failed',
                 completed_at: new Date().toISOString(),
                 object_count: objectCount,
                 warnings,
@@ -1812,13 +1872,14 @@ async function runInventoryScan(
         }
         throw error;
     } finally {
+        activeScanController = null;
         await releaseScanLock(scanId).catch(() => undefined);
     }
 }
 
 function unavailableUsageSource(
     definition: UsageSourceDefinition,
-    message: string
+    message: string,
 ): CollectedUsageSource {
     return {
         activities: [],
@@ -1838,9 +1899,7 @@ function unavailableUsageSource(
     };
 }
 
-function combinedUsageCoverage(
-    sources: UsageSourceSummary[]
-): UsageCoverage {
+function combinedUsageCoverage(sources: UsageSourceSummary[]): UsageCoverage {
     const coverages = sources.map(({ coverage }) => coverage);
     if (coverages.every((coverage) => coverage === 'complete')) {
         return 'complete';
@@ -1858,9 +1917,7 @@ function usageScanStatus(coverage: UsageCoverage): ScanStatus {
     return coverage === 'unavailable' ? 'failed' : 'partial';
 }
 
-function usageAnalysisStatus(
-    coverage: UsageCoverage
-): ScanSummary['analysisStatus'] {
+function usageAnalysisStatus(coverage: UsageCoverage): ScanSummary['analysisStatus'] {
     if (coverage === 'complete') {
         return 'complete';
     }
@@ -1869,7 +1926,7 @@ function usageAnalysisStatus(
 
 async function runUsageScan(
     windowDays: UsageWindowDays,
-    onProgress?: (progress: ScanProgress) => void
+    onProgress?: (progress: ScanProgress) => void,
 ): Promise<InventorySnapshot> {
     if (!splunkdPath) {
         throw new Error('A Splunk Web session is required to collect usage evidence.');
@@ -1877,16 +1934,16 @@ async function runUsageScan(
     const inventoryRecord = await getLatestInventoryScanRecord();
     if (!inventoryRecord) {
         throw new Error(
-            'Run a bounded or complete live inventory scan before collecting usage evidence.'
+            'Run a bounded or complete live inventory scan before collecting usage evidence.',
         );
     }
 
-    const inventorySnapshot = await loadSnapshot(inventoryRecord);
+    const inventorySnapshot = await loadSnapshot(inventoryRecord, undefined, 'cleanup-candidates');
     const scanId = createScanId();
     const startedAt = new Date().toISOString();
     const windowEnd = startedAt;
     const windowStart = new Date(
-        new Date(windowEnd).getTime() - windowDays * 86400000
+        new Date(windowEnd).getTime() - windowDays * 86400000,
     ).toISOString();
     const totalCollectors = usageSourceDefinitions.length + 1;
     const collectorCounts: Record<string, number> = {};
@@ -1897,10 +1954,13 @@ async function runUsageScan(
 
     await acquireScanLock(scanId);
 
+    activeScanController = new AbortController();
+
     const runningRecord: KvScanRecord = {
         _key: scanId,
         scan_id: scanId,
         scan_type: 'usage',
+        snapshot_version: SNAPSHOT_VERSION,
         status: 'running',
         started_at: startedAt,
         completed_at: null,
@@ -1918,8 +1978,8 @@ async function runUsageScan(
         usage_window_end: windowEnd,
         usage_coverage: 'unavailable',
         collector_versions: {
-            usage_evidence: '0.1.0',
-            usage_classification: '0.1.0',
+            usage_evidence: '0.4.0',
+            usage_classification: '0.4.0',
         },
         initiated_by: username || 'unknown',
     };
@@ -1941,21 +2001,20 @@ async function runUsageScan(
                     definition,
                     windowDays,
                     windowStart,
-                    windowEnd
+                    windowEnd,
                 );
             } catch (error) {
+                if (activeScanController?.signal.aborted) {
+                    throw error;
+                }
                 collected = unavailableUsageSource(
                     definition,
-                    error instanceof Error
-                        ? error.message
-                        : 'The telemetry search failed.'
+                    error instanceof Error ? error.message : 'The telemetry search failed.',
                 );
             }
             collectedSources.push(collected);
-            collectorCounts[definition.sourceId] =
-                collected.summary.activityRecordCount;
-            collectorTotals[definition.sourceId] =
-                collected.summary.sourceEventCount;
+            collectorCounts[definition.sourceId] = collected.summary.activityRecordCount;
+            collectorTotals[definition.sourceId] = collected.summary.sourceEventCount;
             completedCollectors += 1;
             await updateRecord('ch_scan_runs', scanId, {
                 collector_counts: collectorCounts,
@@ -1978,10 +2037,10 @@ async function runUsageScan(
             windowDays,
             windowStart,
             windowEnd,
-            collectedSources
+            collectedSources,
         );
         const usageRecords = built.records.map(({ objectId, usage }) =>
-            usageEvidenceToRecord(objectId, usage)
+            usageEvidenceToRecord(objectId, usage),
         );
         await batchSave('ch_usage_evidence', usageRecords);
         completedCollectors += 1;
@@ -1997,9 +2056,7 @@ async function runUsageScan(
             warnings: built.warnings,
             errors:
                 coverage === 'unavailable'
-                    ? [
-                          'No configured telemetry source established a usable observation window.',
-                      ]
+                    ? ['No configured telemetry source established a usable observation window.']
                     : [],
             collector_counts: collectorCounts,
             collector_totals: collectorTotals,
@@ -2010,28 +2067,33 @@ async function runUsageScan(
             usage_coverage: coverage,
             eligible_object_count: usageRecords.length,
             fully_covered_object_count: usageRecords.filter(
-                (record) => record.coverage === 'complete'
+                (record) => record.coverage === 'complete',
             ).length,
-            observed_object_count: usageRecords.filter(
-                (record) => record.observation_count > 0
-            ).length,
+            observed_object_count: usageRecords.filter((record) => record.observation_count > 0)
+                .length,
             usage_sources: built.sources.map((source) => ({ ...source })),
         };
+        await assertScanLock(scanId);
         await updateRecord('ch_scan_runs', scanId, completedRecord);
+        await retireSnapshots().catch(() => undefined);
         onProgress?.({
             completedCollectors,
             totalCollectors,
             stage: 'Loading usage-enriched inventory',
         });
-        return loadSnapshot(inventoryRecord, completedRecord);
+        const snapshot = await getLatestSnapshot();
+        if (!snapshot) {
+            throw new Error('The inventory baseline is no longer available.');
+        }
+        return snapshot;
     } catch (error) {
+        const cancelled = activeScanController?.signal.aborted;
+        activeScanController = null;
         if (scanRecordCreated) {
             const message =
-                error instanceof Error
-                    ? error.message
-                    : 'Unknown usage collection failure';
+                error instanceof Error ? error.message : 'Unknown usage collection failure';
             await updateRecord('ch_scan_runs', scanId, {
-                status: 'failed',
+                status: cancelled ? 'cancelled' : 'failed',
                 completed_at: new Date().toISOString(),
                 errors: [message],
                 collector_counts: collectorCounts,
@@ -2041,18 +2103,19 @@ async function runUsageScan(
         }
         throw error;
     } finally {
+        activeScanController = null;
         await releaseScanLock(scanId).catch(() => undefined);
     }
 }
 
 async function runBoundedScan(
-    onProgress?: (progress: ScanProgress) => void
+    onProgress?: (progress: ScanProgress) => void,
 ): Promise<InventorySnapshot> {
     return runInventoryScan('bounded', onProgress);
 }
 
 async function runFullScan(
-    onProgress?: (progress: ScanProgress) => void
+    onProgress?: (progress: ScanProgress) => void,
 ): Promise<InventorySnapshot> {
     return runInventoryScan('full', onProgress);
 }
@@ -2063,4 +2126,5 @@ export const splunkInventoryClient: InventoryClient = {
     runBoundedScan,
     runFullScan,
     runUsageScan,
+    cancelScan: () => activeScanController?.abort(),
 };

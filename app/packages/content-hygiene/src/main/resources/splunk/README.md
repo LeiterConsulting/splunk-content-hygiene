@@ -21,9 +21,23 @@ usage scans do not change the referenced Splunk objects.
 
 ## Requirements
 
-- Splunk Enterprise 10.x
+- Splunk Enterprise with browser validation on 10.2.8 and 10.4.4, including
+  native navigation, launcher icons, and both light/dark workspace themes
 - KV Store enabled on the search head
 - An administrative user for installation and inventory scans
+
+Assign trusted users an explicit `content_hygiene_viewer`,
+`content_hygiene_reviewer`, or `content_hygiene_operator` role. Administrators
+retain access. Private objects are excluded from the shared inventory. After
+upgrading from a pre-0.4 beta, run a complete scan to establish a verified
+immutable baseline; existing review records are preserved.
+
+Usage evidence is historical for decisions after seven days, after an inventory
+change, or when the object was modified after the window. It never authorizes
+removal. The workspace uses a standard Simple XML host with native Splunk
+chrome and semantic modern-navigation icons, not a custom Mako template. It
+does not require a server-wide template exception. Broader release, Cloud,
+and search-head-cluster certification is not complete.
 
 ## Support
 

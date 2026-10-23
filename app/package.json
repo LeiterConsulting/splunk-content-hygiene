@@ -1,9 +1,11 @@
 {
   "name": "splunk-content-hygiene",
-  "version": "0.3.0-beta",
+  "version": "0.4.0-beta",
   "license": "MIT",
   "private": true,
   "scripts": {
+    "branding": "node scripts/branding.mjs",
+    "branding:verify": "node scripts/branding.mjs --check",
     "build": "yarn workspaces run build",
     "format": "git ls-files | grep -E \"\\.(jsx?|css)$\" | xargs prettier --write",
     "format:verify": "git ls-files | grep -E \"\\.(jsx?|css)$\" | xargs prettier --list-different",
@@ -12,11 +14,12 @@
     "package:verify": "node scripts/verify-package.mjs",
     "release:prepare": "yarn validate && node scripts/checksum.mjs",
     "setup": "yarn && yarn build",
-    "test": "yarn workspace @splunk/overview run test",
-    "validate": "yarn test && yarn lint && yarn package && yarn package:verify",
+    "test": "yarn workspace @splunk/overview run test && yarn workspace @splunk/content-hygiene run test",
+    "validate": "yarn branding:verify && yarn test && yarn lint && yarn package && yarn package:verify",
     "start": "yarn workspace @splunk/content-hygiene run start"
   },
   "devDependencies": {
+    "@resvg/resvg-js": "2.6.2",
     "prettier": "^3.6.2"
   },
   "workspaces": [
@@ -24,5 +27,8 @@
   ],
   "engines": {
     "node": ">=22"
+  },
+  "resolutions": {
+    "moment": "^2.31.0"
   }
 }

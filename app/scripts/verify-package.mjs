@@ -56,7 +56,24 @@ if (entries.some((entry) => !entry.startsWith('content_hygiene/'))) {
 const requiredEntries = [
     'content_hygiene/LICENSE',
     'content_hygiene/default/app.conf',
+    'content_hygiene/appserver/static/pages/ContentHygiene.js',
+    'content_hygiene/appserver/static/content-hygiene-host.css',
 ];
+const iconSizes = {
+    'appIcon.png': [36, 36],
+    'appIcon_2x.png': [72, 72],
+    'appIconAlt.png': [36, 36],
+    'appIconAlt_2x.png': [72, 72],
+    'appLogo.png': [160, 40],
+    'appLogo_2x.png': [320, 80],
+};
+for (const file of Object.keys(iconSizes)) {
+    requiredEntries.push(`content_hygiene/static/${file}`, `content_hygiene/appserver/static/${file}`);
+}
+const views = ['Overview', 'CleanupCandidates', 'DependencyExplorer', 'ReviewLibrary', 'Ownership', 'Settings'];
+for (const view of views) {
+    requiredEntries.push(`content_hygiene/default/data/ui/views/${view}.xml`);
+}
 const missingEntry = requiredEntries.find((entry) => !entries.includes(entry));
 
 if (missingEntry) {
@@ -101,6 +118,33 @@ try {
         throw new Error(
             extraction.stderr || 'Unable to extract the release archive.'
         );
+    }
+
+    for (const [file, [width, height]] of Object.entries(iconSizes)) {
+        const launcher = await readFile(path.join(inspectionDirectory, 'content_hygiene/static', file));
+        const web = await readFile(path.join(inspectionDirectory, 'content_hygiene/appserver/static', file));
+        if (!launcher.equals(web)) {
+            throw new Error(`Launcher and web branding differ: ${file}`);
+        }
+        if (launcher.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a' ||
+            launcher.readUInt32BE(16) !== width || launcher.readUInt32BE(20) !== height ||
+            launcher[25] !== 6) {
+            throw new Error(`Branding must be a ${width}x${height} RGBA PNG: ${file}`);
+        }
+    }
+    if (entries.some((entry) => entry.includes('/appserver/templates/'))) {
+        throw new Error('The portable dashboard host must not package custom Mako templates.');
+    }
+    for (const view of views) {
+        const xml = await readFile(path.join(inspectionDirectory, `content_hygiene/default/data/ui/views/${view}.xml`), 'utf8');
+        if (!xml.includes('<dashboard version="1.1"') ||
+            !xml.includes('script="pages/ContentHygiene.js"') ||
+            !xml.includes('stylesheet="content-hygiene-host.css"') ||
+            !xml.includes('hideChrome="false"') || !xml.includes('hideSplunkBar="false"') ||
+            !xml.includes('hideAppBar="false"') || !xml.includes('id="content-hygiene-root"') ||
+            /<search\b|template=|theme=/i.test(xml)) {
+            throw new Error(`Invalid native, theme-inheriting dashboard host: ${view}`);
+        }
     }
 
     const textEntries = entries.filter((entry) =>

@@ -1,0 +1,31 @@
+/* Adapt only this view's content container. Native Splunk navigation remains
+   owned by the host, including the 10.4+ modern sidebar and account controls. */
+/* Classic Simple XML supplies a 960px body minimum. Release only that canvas
+   constraint for our responsive workspace; leave native chrome rules alone. */
+body:has(#content_hygiene_host_row) { min-width: 0; }
+.dashboard-body:has(#content_hygiene_host_row) { min-width: 0; padding: 0; }
+/* hideTitle/hideEdit/hideExport leave an empty 48px dashboard header on both
+   classic and modern Splunk. Collapse only that empty header in our host;
+   retain any future header content and never target native navigation. */
+.dashboard-body:has(#content_hygiene_host_row) .dashboard-header:empty { display: none; }
+#content_hygiene_host_row { margin: 0; }
+#content_hygiene_host_panel { min-width: 0; margin: 0; padding: 0; }
+#content_hygiene_host_panel .dashboard-panel { margin: 0; border: 0; }
+#content_hygiene_host_panel .panel-body.html { padding: 0; }
+#content-hygiene-root { min-width: 0; }
+/* The host's light-dashboard heading rules otherwise override the inherited
+   Splunk React theme. Do not hard-code a light or dark foreground here. */
+#content-hygiene-root :is(h1, h2, h3, h4, h5, h6, p) { color: inherit; }
+/* SUI owns the themed input wrapper. Undo only native dashboard form rules
+   leaking into its raw textbox/textarea, so borders are not doubled and dark
+   placeholder/value text is not painted on a forced white input surface. */
+:is(#content-hygiene-root input[data-test="textbox"], #content-hygiene-root textarea, input[data-content-hygiene-filter="true"]) {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    border-radius: 0;
+    margin: 0;
+    padding: 0;
+}
+:is(#content-hygiene-root input[data-test="textbox"], input[data-content-hygiene-filter="true"]) { height: auto; min-height: 0; }
+:is(#content-hygiene-root input[data-test="textbox"], #content-hygiene-root textarea, input[data-content-hygiene-filter="true"]):not([disabled]) { color: inherit; }

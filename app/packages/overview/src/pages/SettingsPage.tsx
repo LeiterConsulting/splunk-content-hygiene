@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import WaitSpinner from '@splunk/react-ui/WaitSpinner';
 import {
     ButtonRow,
     Card,
@@ -19,6 +20,7 @@ import {
     TwoColumnGrid,
 } from '../AppStyles';
 import { PageHeader } from '../components/PageHeader';
+import { evidenceWindowFresh } from '../services/usage';
 import {
     InventoryClient,
     InventorySnapshot,
@@ -44,6 +46,7 @@ const collections = [
 
 interface SettingsPageProps {
     inventoryClient: InventoryClient;
+    canCollect?: boolean;
     snapshot: InventorySnapshot | null;
     snapshotLoadError: string | null;
     reviews: ReviewRecord[];
@@ -52,7 +55,7 @@ interface SettingsPageProps {
 
 function startingStage(
     mode: 'bounded' | 'full' | 'usage',
-    usageWindowDays: UsageWindowDays
+    usageWindowDays: UsageWindowDays,
 ): string {
     if (mode === 'bounded') {
         return 'Starting bounded live inventory';
@@ -67,13 +70,12 @@ function inventoryMatchLabel(usage: UsageSummary | null | undefined): string {
     if (!usage) {
         return '—';
     }
-    return usage.matchesCurrentInventory
-        ? 'Current inventory'
-        : 'Earlier inventory snapshot';
+    return usage.matchesCurrentInventory ? 'Current inventory' : 'Earlier inventory snapshot';
 }
 
 export function SettingsPage({
     inventoryClient,
+    canCollect = true,
     snapshot,
     snapshotLoadError,
     reviews,
@@ -82,22 +84,22 @@ export function SettingsPage({
     const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null);
     const [scanError, setScanError] = useState<string | null>(null);
     const [isRunning, setIsRunning] = useState(false);
-    const [runningMode, setRunningMode] = useState<
-        'bounded' | 'full' | 'usage' | null
-    >(null);
-    const [usageWindowDays, setUsageWindowDays] =
-        useState<UsageWindowDays>(90);
-    const displayedScan = snapshot?.scan ?? null;
-    const canRunScan = inventoryClient.isAvailable();
+    const [runningMode, setRunningMode] = useState<'bounded' | 'full' | 'usage' | null>(null);
+    const [usageWindowDays, setUsageWindowDays] = useState<UsageWindowDays>(90);
+    const displayedScan = snapshot?.latestCheck ?? snapshot?.scan ?? null;
+    let runFreshness = 'Not measured';
+    if (snapshot?.usage) {
+        runFreshness =
+            snapshot.usage.matchesCurrentInventory && evidenceWindowFresh(snapshot.usage.windowEnd)
+                ? 'Current window'
+                : 'Historical — cannot establish current readiness';
+    }
+    const canRunScan = inventoryClient.isAvailable() && canCollect;
     const progressPercent = scanProgress
-        ? Math.round(
-              (scanProgress.completedCollectors / scanProgress.totalCollectors) * 100
-          )
+        ? Math.round((scanProgress.completedCollectors / scanProgress.totalCollectors) * 100)
         : 0;
 
-    const handleRunScan = async (
-        mode: 'bounded' | 'full' | 'usage'
-    ): Promise<void> => {
+    const handleRunScan = async (mode: 'bounded' | 'full' | 'usage'): Promise<void> => {
         setIsRunning(true);
         setRunningMode(mode);
         setScanError(null);
@@ -109,23 +111,16 @@ export function SettingsPage({
         try {
             let completed: InventorySnapshot;
             if (mode === 'bounded') {
-                completed = await inventoryClient.runBoundedScan(
-                    setScanProgress
-                );
+                completed = await inventoryClient.runBoundedScan(setScanProgress);
             } else if (mode === 'full') {
                 completed = await inventoryClient.runFullScan(setScanProgress);
             } else {
-                completed = await inventoryClient.runUsageScan(
-                    usageWindowDays,
-                    setScanProgress
-                );
+                completed = await inventoryClient.runUsageScan(usageWindowDays, setScanProgress);
             }
             onScanCompleted(completed);
         } catch (error) {
             setScanError(
-                error instanceof Error
-                    ? error.message
-                    : 'The live inventory scan failed.'
+                error instanceof Error ? error.message : 'The live inventory scan failed.',
             );
         } finally {
             setIsRunning(false);
@@ -181,11 +176,10 @@ export function SettingsPage({
                                                   snapshot?.usage?.runId ?? '',
                                                   snapshot?.usage?.coverage ?? '',
                                                   snapshot?.usage?.windowDays ?? '',
-                                                  snapshot?.usage
-                                                      ?.observedObjectCount ?? '',
+                                                  snapshot?.usage?.observedObjectCount ?? '',
                                               ],
                                           ]
-                                        : []
+                                        : [],
                                 )
                             }
                         >
@@ -195,15 +189,13 @@ export function SettingsPage({
                             type="button"
                             disabled={!displayedScan}
                             onClick={() =>
-                                downloadJson(
-                                    'content-hygiene-scan-report.json',
-                                    {
-                                        exportedAt: new Date().toISOString(),
-                                        scan: displayedScan,
-                                        usage: snapshot?.usage ?? null,
-                                        reviewRecordCount: reviews.length,
-                                    }
-                                )
+                                downloadJson('content-hygiene-scan-report.json', {
+                                    exportedAt: new Date().toISOString(),
+                                    scan: displayedScan,
+                                    operationalBaseline: snapshot?.scan ?? null,
+                                    usage: snapshot?.usage ?? null,
+                                    reviewRecordCount: reviews.length,
+                                })
                             }
                         >
                             Export scan JSON
@@ -217,12 +209,28 @@ export function SettingsPage({
                     ? 'Every page is reading this live KV Store snapshot. Inventory scans collect configuration and dependencies; an on-demand usage scan runs bounded read-only searches against native Splunk telemetry and stores only derived evidence in app-local KV Store.'
                     : 'No fallback dataset is used. Run a bounded scan for a quick check or a complete scan for paginated inventory and dependency analysis. Neither scan changes customer content.'}
             </InlineNotice>
+            {!canCollect ? (
+                <InlineNotice>
+                    Collection requires the Content Hygiene operator role. Your current role can
+                    review the verified inventory.
+                </InlineNotice>
+            ) : null}
+            {isRunning ? (
+                <ButtonRow>
+                    <WaitSpinner screenReaderText="Collecting live evidence" />
+                    <StyledButton
+                        onClick={() => inventoryClient.cancelScan?.()}
+                        disabled={!inventoryClient.cancelScan}
+                    >
+                        Cancel scan
+                    </StyledButton>
+                </ButtonRow>
+            ) : null}
 
             {(snapshotLoadError || scanError) && (
                 <SpacedBlock>
                     <InlineNotice role="alert">
-                        {scanError ??
-                            `Live snapshot is unavailable: ${snapshotLoadError}`}
+                        {scanError ?? `Live snapshot is unavailable: ${snapshotLoadError}`}
                     </InlineNotice>
                 </SpacedBlock>
             )}
@@ -278,24 +286,13 @@ export function SettingsPage({
                                 <dt>Scan type</dt>
                                 <dd>{displayedScan?.scanType ?? 'Not run'}</dd>
                                 <dt>Objects</dt>
-                                <dd>
-                                    {displayedScan?.objectCount.toLocaleString() ??
-                                        '—'}
-                                </dd>
+                                <dd>{displayedScan?.objectCount.toLocaleString() ?? '—'}</dd>
                                 <dt>Relationships</dt>
-                                <dd>
-                                    {displayedScan?.edgeCount.toLocaleString() ??
-                                        '—'}
-                                </dd>
+                                <dd>{displayedScan?.edgeCount.toLocaleString() ?? '—'}</dd>
                                 <dt>Findings</dt>
-                                <dd>
-                                    {displayedScan?.findingCount.toLocaleString() ??
-                                        '—'}
-                                </dd>
+                                <dd>{displayedScan?.findingCount.toLocaleString() ?? '—'}</dd>
                                 <dt>Analysis</dt>
-                                <dd>
-                                    {displayedScan?.analysisStatus ?? 'Not run'}
-                                </dd>
+                                <dd>{displayedScan?.analysisStatus ?? 'Not run'}</dd>
                                 <dt>Warnings</dt>
                                 <dd>{displayedScan?.warningCount ?? '—'}</dd>
                                 <dt>Data source</dt>
@@ -303,8 +300,7 @@ export function SettingsPage({
                                 <dt>Review library</dt>
                                 <dd>{reviews.length.toLocaleString()}</dd>
                             </DefinitionList>
-                            {displayedScan &&
-                            displayedScan.warnings.length > 0 ? (
+                            {displayedScan && displayedScan.warnings.length > 0 ? (
                                 <SpacedBlock>
                                     <strong>Collector warnings</strong>
                                     <EvidenceList>
@@ -330,8 +326,8 @@ export function SettingsPage({
                                         onChange={(event) =>
                                             setUsageWindowDays(
                                                 Number(
-                                                    event.currentTarget.value
-                                                ) as UsageWindowDays
+                                                    event.currentTarget.value,
+                                                ) as UsageWindowDays,
                                             )
                                         }
                                     >
@@ -343,9 +339,7 @@ export function SettingsPage({
                                 <StyledButton
                                     type="button"
                                     $primary
-                                    disabled={
-                                        !canRunScan || isRunning || !snapshot
-                                    }
+                                    disabled={!canRunScan || isRunning || !snapshot}
                                     onClick={() => handleRunScan('usage')}
                                 >
                                     {runningMode === 'usage'
@@ -356,10 +350,9 @@ export function SettingsPage({
                         </CardHeader>
                         <CardBody>
                             <InlineNotice>
-                                This operation creates bounded, on-demand Splunk
-                                search jobs. It does not edit, disable, or delete
-                                customer content. Raw user SPL and actor lists are
-                                not persisted.
+                                This operation creates bounded, on-demand Splunk search jobs. It
+                                does not edit, disable, or delete customer content. Raw user SPL and
+                                actor lists are not persisted.
                             </InlineNotice>
                             <DefinitionList>
                                 <dt>Latest usage run</dt>
@@ -367,9 +360,7 @@ export function SettingsPage({
                                 <dt>Status</dt>
                                 <dd>{snapshot?.usage?.status ?? 'Not run'}</dd>
                                 <dt>Coverage</dt>
-                                <dd>
-                                    {snapshot?.usage?.coverage ?? 'Not measured'}
-                                </dd>
+                                <dd>{snapshot?.usage?.coverage ?? 'Not measured'}</dd>
                                 <dt>Window</dt>
                                 <dd>
                                     {snapshot?.usage
@@ -378,8 +369,7 @@ export function SettingsPage({
                                 </dd>
                                 <dt>Eligible objects</dt>
                                 <dd>
-                                    {snapshot?.usage?.eligibleObjectCount.toLocaleString() ??
-                                        '—'}
+                                    {snapshot?.usage?.eligibleObjectCount.toLocaleString() ?? '—'}
                                 </dd>
                                 <dt>Complete-window objects</dt>
                                 <dd>
@@ -388,13 +378,14 @@ export function SettingsPage({
                                 </dd>
                                 <dt>Objects with activity</dt>
                                 <dd>
-                                    {snapshot?.usage?.observedObjectCount.toLocaleString() ??
-                                        '—'}
+                                    {snapshot?.usage?.observedObjectCount.toLocaleString() ?? '—'}
                                 </dd>
                                 <dt>Inventory match</dt>
-                                <dd>
-                                    {inventoryMatchLabel(snapshot?.usage)}
-                                </dd>
+                                <dd>{inventoryMatchLabel(snapshot?.usage)}</dd>
+                                <dt>Run freshness</dt>
+                                <dd>{runFreshness}</dd>
+                                <dt>Window ended</dt>
+                                <dd>{snapshot?.usage?.windowEnd ?? 'Not measured'}</dd>
                             </DefinitionList>
                             {snapshot?.usage?.sources.length ? (
                                 <SpacedBlock>
@@ -403,13 +394,11 @@ export function SettingsPage({
                                         {snapshot.usage.sources.map((source) => (
                                             <li key={source.sourceId}>
                                                 {source.label}: {source.coverage};{' '}
-                                                {source.sourceEventCount.toLocaleString()}{' '}
-                                                source events and{' '}
-                                                {source.matchedObjectCount.toLocaleString()}{' '}
-                                                matched objects
-                                                {source.warning
-                                                    ? ` — ${source.warning}`
-                                                    : ''}
+                                                {source.sourceEventCount.toLocaleString()} source
+                                                events and{' '}
+                                                {source.matchedObjectCount.toLocaleString()} matched
+                                                objects
+                                                {source.warning ? ` — ${source.warning}` : ''}
                                             </li>
                                         ))}
                                     </EvidenceList>
@@ -435,7 +424,7 @@ export function SettingsPage({
                         <CardBody>
                             <DefinitionList>
                                 <dt>Verified target</dt>
-                                <dd>Splunk Enterprise 10.0.1</dd>
+                                <dd>Splunk Enterprise 10.2.8 and 10.4.4 (browser-validated)</dd>
                                 <dt>Frontend</dt>
                                 <dd>Splunk UI Toolkit / React</dd>
                                 <dt>App ID</dt>
@@ -454,8 +443,7 @@ export function SettingsPage({
                 </TwoColumnGrid>
             </SpacedBlock>
 
-            {displayedScan &&
-            Object.keys(displayedScan.collectorCounts).length > 0 ? (
+            {displayedScan && Object.keys(displayedScan.collectorCounts).length > 0 ? (
                 <SpacedBlock>
                     <Card>
                         <CardHeader>
@@ -471,23 +459,19 @@ export function SettingsPage({
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {Object.entries(
-                                        displayedScan.collectorCounts
-                                    ).map(
+                                    {Object.entries(displayedScan.collectorCounts).map(
                                         ([collector, count]) => (
                                             <tr key={collector}>
                                                 <td>{collector.replace(/_/g, ' ')}</td>
                                                 <td>{count.toLocaleString()}</td>
                                                 <td>
                                                     {(
-                                                        displayedScan
-                                                            .collectorTotals[
-                                                            collector
-                                                        ] ?? count
+                                                        displayedScan.collectorTotals[collector] ??
+                                                        count
                                                     ).toLocaleString()}
                                                 </td>
                                             </tr>
-                                        )
+                                        ),
                                     )}
                                 </tbody>
                             </Table>

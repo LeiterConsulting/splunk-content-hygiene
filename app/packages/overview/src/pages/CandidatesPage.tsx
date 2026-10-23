@@ -21,13 +21,14 @@ import {
     Table,
     TableScroller,
 } from '../AppStyles';
+import { ResultPagination } from '../components/ResultPagination';
 import { PageHeader } from '../components/PageHeader';
 import { ReviewEditor } from '../components/ReviewEditor';
 import { ReviewStageBadge } from '../components/ReviewStageBadge';
 import { StatusBadge } from '../components/StatusBadge';
 import { UsageEvidencePanel } from '../components/UsageEvidencePanel';
 import { reviewStageOptions } from '../services/reviews';
-import { usageEvidenceState } from '../services/usage';
+import { usageEvidenceState, usageValidity } from '../services/usage';
 import {
     ContentFinding,
     ContentObject,
@@ -40,12 +41,7 @@ import { downloadCsv } from '../utils/downloadCsv';
 import { downloadJson } from '../utils/downloadJson';
 import { navigateToView, readQueryParam } from '../utils/navigation';
 
-const analyzedCandidateStatuses: HealthStatus[] = [
-    'dormant',
-    'orphaned',
-    'broken',
-    'unowned',
-];
+const analyzedCandidateStatuses: HealthStatus[] = ['dormant', 'orphaned', 'broken', 'unowned'];
 const candidateFindingTypes = new Set([
     'cleanup_candidate',
     'broken_reference',
@@ -79,10 +75,7 @@ function formatScore(value: number | null | undefined): string {
     return value === null || value === undefined ? 'Unknown' : `${value}/100`;
 }
 
-function formatBoolean(
-    value: boolean | null,
-    nullLabel = 'Unknown'
-): string {
+function formatBoolean(value: boolean | null, nullLabel = 'Unknown'): string {
     if (value === null) {
         return nullLabel;
     }
@@ -93,35 +86,27 @@ function ownerLabel(contentObject: ContentObject): string {
     if (contentObject.owner) {
         return contentObject.owner;
     }
-    if (
-        contentObject.sharing === 'app' ||
-        contentObject.sharing === 'global'
-    ) {
+    if (contentObject.sharing === 'app' || contentObject.sharing === 'global') {
         return `${contentObject.sharing} scope`;
     }
-    return contentObject.sharing === 'user'
-        ? 'Ownership gap'
-        : 'Owner metadata unavailable';
+    return contentObject.sharing === 'user' ? 'Ownership gap' : 'Owner metadata unavailable';
 }
 
 function firstFinding(
     findingsByObject: Map<string, ContentFinding[]>,
-    objectId: string
+    objectId: string,
 ): ContentFinding | undefined {
     return findingsByObject.get(objectId)?.[0];
 }
 
 function findingReasons(findings: ContentFinding[]): string[] {
-    return findings.reduce<string[]>(
-        (reasons, finding) => reasons.concat(finding.reasons),
-        []
-    );
+    return findings.reduce<string[]>((reasons, finding) => reasons.concat(finding.reasons), []);
 }
 
 function noCandidatesMessage(
     snapshot: InventorySnapshot | null,
     isLoading: boolean,
-    candidateCount: number
+    candidateCount: number,
 ): string {
     if (!snapshot) {
         return isLoading
@@ -139,7 +124,7 @@ function noCandidatesMessage(
 function exportCandidates(
     rows: ContentObject[],
     findingsByObject: Map<string, ContentFinding[]>,
-    reviewByObject: Map<string, ReviewRecord>
+    reviewByObject: Map<string, ReviewRecord>,
 ): void {
     const header = [
         'Object ID',
@@ -155,6 +140,10 @@ function exportCandidates(
         'Abandonment confidence',
         'Removal impact',
         'Last used',
+        'Usage validity',
+        'Inventory scan ID',
+        'Usage run ID',
+        'Usage window ended',
         'Usage coverage',
         'Usage source',
         'Usage window days',
@@ -174,10 +163,7 @@ function exportCandidates(
         rows.map((contentObject) => {
             const findings = findingsByObject.get(contentObject.objectId) ?? [];
             const primaryFinding = findings[0];
-            const reasons =
-                findings.length > 0
-                    ? findingReasons(findings)
-                    : contentObject.evidence;
+            const reasons = findings.length > 0 ? findingReasons(findings) : contentObject.evidence;
             const review = reviewByObject.get(contentObject.objectId);
             return [
                 contentObject.objectId,
@@ -190,10 +176,13 @@ function exportCandidates(
                 contentObject.scheduled,
                 contentObject.healthStatus,
                 findings.map((finding) => finding.findingType).join(' | '),
-                primaryFinding?.abandonmentConfidence ??
-                    contentObject.abandonmentConfidence,
+                primaryFinding?.abandonmentConfidence ?? contentObject.abandonmentConfidence,
                 primaryFinding?.removalImpact ?? contentObject.removalImpact,
                 contentObject.lastUsed,
+                usageValidity(contentObject),
+                contentObject.inventoryScanId ?? '',
+                contentObject.usageEvidence?.usageRunId ?? '',
+                contentObject.usageEvidence?.windowEnd ?? '',
                 contentObject.usageEvidence?.coverage ?? 'not measured',
                 contentObject.usageEvidence?.sourceLabel ?? '',
                 contentObject.usageEvidence?.windowDays ?? '',
@@ -207,7 +196,7 @@ function exportCandidates(
                 review?.note ?? '',
                 review?.updatedAt ?? '',
             ];
-        })
+        }),
     );
 }
 
@@ -215,20 +204,17 @@ function exportCandidatesJson(
     rows: ContentObject[],
     findingsByObject: Map<string, ContentFinding[]>,
     reviewByObject: Map<string, ReviewRecord>,
-    scanId: string | null
+    scanId: string | null,
 ): void {
-    downloadJson(
-        'content-hygiene-candidates.json',
-        {
-            scanId,
-            exportedAt: new Date().toISOString(),
-            candidates: rows.map((contentObject) => ({
-                object: contentObject,
-                findings: findingsByObject.get(contentObject.objectId) ?? [],
-                review: reviewByObject.get(contentObject.objectId) ?? null,
-            })),
-        }
-    );
+    downloadJson('content-hygiene-candidates.json', {
+        scanId,
+        exportedAt: new Date().toISOString(),
+        candidates: rows.map((contentObject) => ({
+            object: contentObject,
+            findings: findingsByObject.get(contentObject.objectId) ?? [],
+            review: reviewByObject.get(contentObject.objectId) ?? null,
+        })),
+    });
 }
 
 export function CandidatesPage({
@@ -239,25 +225,17 @@ export function CandidatesPage({
     onSaveReview,
     onDeleteReview,
 }: CandidatesPageProps): React.ReactElement {
-    const [statusFilter, setStatusFilter] = useState(
-        readQueryParam('status') || 'all'
-    );
+    const [statusFilter, setStatusFilter] = useState(readQueryParam('status') || 'all');
     const [typeFilter, setTypeFilter] = useState('all');
-    const [appFilter, setAppFilter] = useState(
-        readQueryParam('app') || 'all'
-    );
-    const [reviewFilter, setReviewFilter] = useState(
-        readQueryParam('review') || 'all'
-    );
+    const [appFilter, setAppFilter] = useState(readQueryParam('app') || 'all');
+    const [reviewFilter, setReviewFilter] = useState(readQueryParam('review') || 'all');
     const [usageFilter, setUsageFilter] = useState('all');
     const [sortOrder, setSortOrder] = useState('confidence');
     const [query, setQuery] = useState(readQueryParam('query'));
     const [selectedId, setSelectedId] = useState(readQueryParam('object'));
     const [page, setPage] = useState(0);
     const findingsByObject = new Map<string, ContentFinding[]>();
-    const reviewByObject = new Map(
-        reviews.map((review) => [review.objectId, review])
-    );
+    const reviewByObject = new Map(reviews.map((review) => [review.objectId, review]));
 
     (snapshot?.findings ?? []).forEach((finding) => {
         const existing = findingsByObject.get(finding.objectId) ?? [];
@@ -270,28 +248,22 @@ export function CandidatesPage({
     const candidates = (snapshot?.objects ?? []).filter(
         (contentObject) =>
             analyzedCandidateStatuses.includes(contentObject.healthStatus) ||
-            findingsByObject.has(contentObject.objectId)
+            findingsByObject.has(contentObject.objectId),
     );
     const candidateStatusOptions = Array.from(
-        new Set(candidates.map((contentObject) => contentObject.healthStatus))
+        new Set(candidates.map((contentObject) => contentObject.healthStatus)),
     ).sort();
     const objectTypes = Array.from(
-        new Set(candidates.map((contentObject) => contentObject.objectType))
+        new Set(candidates.map((contentObject) => contentObject.objectType)),
     ).sort();
-    const apps = Array.from(
-        new Set(candidates.map((contentObject) => contentObject.app))
-    ).sort();
-    const normalizedQuery = query.trim().toLowerCase();
+    const apps = Array.from(new Set(candidates.map((contentObject) => contentObject.app))).sort();
+    const normalizedQuery = query.trim().toLowerCase().replace(/[_-]+/g, ' ');
     const filteredCandidates = candidates
         .filter((contentObject) => {
             const matchesStatus =
-                statusFilter === 'all' ||
-                contentObject.healthStatus === statusFilter;
-            const matchesType =
-                typeFilter === 'all' ||
-                contentObject.objectType === typeFilter;
-            const matchesApp =
-                appFilter === 'all' || contentObject.app === appFilter;
+                statusFilter === 'all' || contentObject.healthStatus === statusFilter;
+            const matchesType = typeFilter === 'all' || contentObject.objectType === typeFilter;
+            const matchesApp = appFilter === 'all' || contentObject.app === appFilter;
             const review = reviewByObject.get(contentObject.objectId);
             const matchesReview =
                 reviewFilter === 'all' ||
@@ -299,19 +271,11 @@ export function CandidatesPage({
                 (reviewFilter === 'not_in_library' && !review) ||
                 review?.stage === reviewFilter;
             const usageState = usageEvidenceState(contentObject);
-            const matchesUsage =
-                usageFilter === 'all' || usageState === usageFilter;
+            const matchesUsage = usageFilter === 'all' || usageState === usageFilter;
             const matchesQuery =
                 normalizedQuery.length === 0 ||
-                [
-                    contentObject.name,
-                    contentObject.app,
-                    ownerLabel(contentObject),
-                ].some((value) =>
-                    value
-                        .toLowerCase()
-                        .replace(/[_-]+/g, ' ')
-                        .includes(normalizedQuery)
+                [contentObject.name, contentObject.app, ownerLabel(contentObject)].some((value) =>
+                    value.toLowerCase().replace(/[_-]+/g, ' ').includes(normalizedQuery),
                 );
 
             return (
@@ -324,19 +288,11 @@ export function CandidatesPage({
             );
         })
         .sort((left, right) => {
-            const leftFinding = firstFinding(
-                findingsByObject,
-                left.objectId
-            );
-            const rightFinding = firstFinding(
-                findingsByObject,
-                right.objectId
-            );
+            const leftFinding = firstFinding(findingsByObject, left.objectId);
+            const rightFinding = firstFinding(findingsByObject, right.objectId);
             if (sortOrder === 'impact') {
                 return (
-                    (rightFinding?.removalImpact ??
-                        right.removalImpact ??
-                        -1) -
+                    (rightFinding?.removalImpact ?? right.removalImpact ?? -1) -
                     (leftFinding?.removalImpact ?? left.removalImpact ?? -1)
                 );
             }
@@ -344,36 +300,21 @@ export function CandidatesPage({
                 return left.name.localeCompare(right.name);
             }
             if (sortOrder === 'last_used') {
-                return (right.lastUsed ?? '').localeCompare(
-                    left.lastUsed ?? ''
-                );
+                return (right.lastUsed ?? '').localeCompare(left.lastUsed ?? '');
             }
             return (
-                (rightFinding?.abandonmentConfidence ??
-                    right.abandonmentConfidence ??
-                    -1) -
-                (leftFinding?.abandonmentConfidence ??
-                    left.abandonmentConfidence ??
-                    -1)
+                (rightFinding?.abandonmentConfidence ?? right.abandonmentConfidence ?? -1) -
+                (leftFinding?.abandonmentConfidence ?? left.abandonmentConfidence ?? -1)
             );
         });
-    const totalPages = Math.max(
-        1,
-        Math.ceil(filteredCandidates.length / PAGE_SIZE)
-    );
+    const totalPages = Math.max(1, Math.ceil(filteredCandidates.length / PAGE_SIZE));
     const currentPage = Math.min(page, totalPages - 1);
     const pageStart = currentPage * PAGE_SIZE;
-    const pageCandidates = filteredCandidates.slice(
-        pageStart,
-        pageStart + PAGE_SIZE
-    );
+    const pageCandidates = filteredCandidates.slice(pageStart, pageStart + PAGE_SIZE);
     const selected =
-        filteredCandidates.find(
-            (contentObject) => contentObject.objectId === selectedId
-        ) ?? pageCandidates[0];
-    const selectedFindings = selected
-        ? (findingsByObject.get(selected.objectId) ?? [])
-        : [];
+        filteredCandidates.find((contentObject) => contentObject.objectId === selectedId) ??
+        pageCandidates[0];
+    const selectedFindings = selected ? (findingsByObject.get(selected.objectId) ?? []) : [];
     const selectedFinding = selected
         ? firstFinding(findingsByObject, selected.objectId)
         : undefined;
@@ -381,14 +322,10 @@ export function CandidatesPage({
         new Set(
             selectedFindings.length > 0
                 ? findingReasons(selectedFindings)
-                : (selected?.evidence ?? [])
-        )
+                : (selected?.evidence ?? []),
+        ),
     );
-    const emptyMessage = noCandidatesMessage(
-        snapshot,
-        isLoading,
-        candidates.length
-    );
+    const emptyMessage = noCandidatesMessage(snapshot, isLoading, candidates.length);
 
     return (
         <>
@@ -403,7 +340,7 @@ export function CandidatesPage({
                                 exportCandidates(
                                     filteredCandidates,
                                     findingsByObject,
-                                    reviewByObject
+                                    reviewByObject,
                                 )
                             }
                             disabled={filteredCandidates.length === 0}
@@ -417,7 +354,7 @@ export function CandidatesPage({
                                     filteredCandidates,
                                     findingsByObject,
                                     reviewByObject,
-                                    snapshot?.scan.scanId ?? null
+                                    snapshot?.scan.scanId ?? null,
                                 )
                             }
                             disabled={filteredCandidates.length === 0}
@@ -533,6 +470,8 @@ export function CandidatesPage({
                         <option value="partial">Partial window</option>
                         <option value="unavailable">Source unavailable</option>
                         <option value="not_measured">Not measured</option>
+                        <option value="historical">Historical or invalidated evidence</option>
+                        <option value="unsupported">Direct telemetry not supported</option>
                     </Select>
                 </FilterField>
                 <FilterField>
@@ -575,39 +514,12 @@ export function CandidatesPage({
                             {filteredCandidates.length === 1 ? '' : 's'}
                         </CardTitle>
                         {filteredCandidates.length > 0 ? (
-                            <ButtonRow>
-                                <span>
-                                    {pageStart + 1}–
-                                    {Math.min(
-                                        pageStart + PAGE_SIZE,
-                                        filteredCandidates.length
-                                    )}{' '}
-                                    of {filteredCandidates.length}
-                                </span>
-                                <StyledButton
-                                    type="button"
-                                    disabled={currentPage === 0}
-                                    onClick={() =>
-                                        setPage(Math.max(0, currentPage - 1))
-                                    }
-                                >
-                                    Previous
-                                </StyledButton>
-                                <StyledButton
-                                    type="button"
-                                    disabled={currentPage >= totalPages - 1}
-                                    onClick={() =>
-                                        setPage(
-                                            Math.min(
-                                                totalPages - 1,
-                                                currentPage + 1
-                                            )
-                                        )
-                                    }
-                                >
-                                    Next
-                                </StyledButton>
-                            </ButtonRow>
+                            <ResultPagination
+                                page={currentPage}
+                                pageSize={PAGE_SIZE}
+                                total={filteredCandidates.length}
+                                onChange={setPage}
+                            />
                         ) : null}
                     </CardHeader>
                     {filteredCandidates.length === 0 ? (
@@ -636,7 +548,7 @@ export function CandidatesPage({
                                     {pageCandidates.map((contentObject) => {
                                         const finding = firstFinding(
                                             findingsByObject,
-                                            contentObject.objectId
+                                            contentObject.objectId,
                                         );
                                         return (
                                             <tr key={contentObject.objectId}>
@@ -648,9 +560,7 @@ export function CandidatesPage({
                                                             selected?.objectId
                                                         }
                                                         onClick={() =>
-                                                            setSelectedId(
-                                                                contentObject.objectId
-                                                            )
+                                                            setSelectedId(contentObject.objectId)
                                                         }
                                                     >
                                                         {contentObject.name}
@@ -658,29 +568,19 @@ export function CandidatesPage({
                                                     <div>{contentObject.app}</div>
                                                 </td>
                                                 <td>{contentObject.objectType}</td>
-                                                <td>
-                                                    {ownerLabel(contentObject)}
-                                                </td>
-                                                <td>
-                                                    {formatDate(
-                                                        contentObject.lastUsed
-                                                    )}
-                                                </td>
+                                                <td>{ownerLabel(contentObject)}</td>
+                                                <td>{formatDate(contentObject.lastUsed)}</td>
                                                 <td>
                                                     <StatusBadge
-                                                        status={
-                                                            contentObject.healthStatus
-                                                        }
+                                                        status={contentObject.healthStatus}
                                                     />
                                                 </td>
                                                 <td>
-                                                    {reviewByObject.has(
-                                                        contentObject.objectId
-                                                    ) ? (
+                                                    {reviewByObject.has(contentObject.objectId) ? (
                                                         <ReviewStageBadge
                                                             stage={
                                                                 reviewByObject.get(
-                                                                    contentObject.objectId
+                                                                    contentObject.objectId,
                                                                 )!.stage
                                                             }
                                                         />
@@ -730,12 +630,7 @@ export function CandidatesPage({
                                 <dt>Enabled</dt>
                                 <dd>{formatBoolean(selected.enabled)}</dd>
                                 <dt>Scheduled</dt>
-                                <dd>
-                                    {formatBoolean(
-                                        selected.scheduled,
-                                        'Not applicable'
-                                    )}
-                                </dd>
+                                <dd>{formatBoolean(selected.scheduled, 'Not applicable')}</dd>
                                 <dt>Last modified</dt>
                                 <dd>{formatDate(selected.updated)}</dd>
                                 <dt>Last used</dt>
@@ -764,32 +659,24 @@ export function CandidatesPage({
                                 <dd>
                                     {formatScore(
                                         selectedFinding?.abandonmentConfidence ??
-                                            selected.abandonmentConfidence
+                                            selected.abandonmentConfidence,
                                     )}
                                 </dd>
                                 <dt>Removal impact</dt>
                                 <dd>
                                     {formatScore(
-                                        selectedFinding?.removalImpact ??
-                                            selected.removalImpact
+                                        selectedFinding?.removalImpact ?? selected.removalImpact,
                                     )}
                                 </dd>
                             </DefinitionList>
                         </DetailSection>
                         <DetailSection>
                             <strong>Suggested review action</strong>
-                            <p>
-                                {selectedFinding?.suggestedAction ??
-                                    selected.suggestedAction}
-                            </p>
+                            <p>{selectedFinding?.suggestedAction ?? selected.suggestedAction}</p>
                             <StyledButton
                                 type="button"
                                 onClick={() =>
-                                    exportCandidates(
-                                        [selected],
-                                        findingsByObject,
-                                        reviewByObject
-                                    )
+                                    exportCandidates([selected], findingsByObject, reviewByObject)
                                 }
                             >
                                 Export this finding
@@ -825,9 +712,7 @@ export function CandidatesPage({
                         <DetailSection>
                             <ReviewEditor
                                 contentObject={selected}
-                                review={
-                                    reviewByObject.get(selected.objectId) ?? null
-                                }
+                                review={reviewByObject.get(selected.objectId) ?? null}
                                 scanId={snapshot?.scan.scanId ?? ''}
                                 canWrite={canWriteReviews}
                                 onSave={onSaveReview}

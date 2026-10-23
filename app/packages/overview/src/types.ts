@@ -15,8 +15,7 @@ export type UsageCoverage = 'complete' | 'partial' | 'unavailable';
 
 export type UsageWindowDays = 30 | 90 | 180;
 
-export type UsageActivityKind =
-    'saved_search_execution' | 'dashboard_view';
+export type UsageActivityKind = 'saved_search_execution' | 'dashboard_view';
 
 export interface UsageEvidence {
     usageRunId: string;
@@ -93,6 +92,8 @@ export interface ContentObject {
     protected: boolean;
     evidence: string[];
     suggestedAction: string;
+    analysisWarnings?: string[];
+    inventoryScanId?: string;
 }
 
 export interface DependencyEdge {
@@ -169,10 +170,13 @@ export interface ScanSummary {
     collectorTotals: Record<string, number>;
     analysisStatus: 'pending' | 'complete' | 'partial' | 'failed';
     dataSource: 'live';
+    snapshotVersion?: number;
+    retainedBaseline?: boolean;
 }
 
 export interface InventorySnapshot {
     scan: ScanSummary;
+    latestCheck?: ScanSummary | null;
     usage: UsageSummary | null;
     objects: ContentObject[];
     edges: DependencyEdge[];
@@ -227,11 +231,12 @@ export interface ScanProgress {
 
 export interface InventoryClient {
     isAvailable: () => boolean;
-    getLatestSnapshot: () => Promise<InventorySnapshot | null>;
+    cancelScan?: () => void;
+    getLatestSnapshot: (page?: AppPage) => Promise<InventorySnapshot | null>;
     runBoundedScan: (onProgress?: (progress: ScanProgress) => void) => Promise<InventorySnapshot>;
     runFullScan: (onProgress?: (progress: ScanProgress) => void) => Promise<InventorySnapshot>;
     runUsageScan: (
         windowDays: UsageWindowDays,
-        onProgress?: (progress: ScanProgress) => void
+        onProgress?: (progress: ScanProgress) => void,
     ) => Promise<InventorySnapshot>;
 }

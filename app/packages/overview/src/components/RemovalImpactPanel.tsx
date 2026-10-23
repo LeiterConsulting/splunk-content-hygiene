@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
     ButtonRow,
     Card,
@@ -20,6 +20,8 @@ import {
     TwoColumnGrid,
 } from '../AppStyles';
 import { SummaryMetric } from './SummaryMetric';
+import { ResultPagination } from './ResultPagination';
+import { usageValidity } from '../services/usage';
 import { RemovalImpactAnalysis, RemovalImpactLevel } from '../services/removalImpact';
 import { ContentObject } from '../types';
 
@@ -48,6 +50,9 @@ function impactLabel(level: RemovalImpactLevel): string {
 }
 
 function usageMetricValue(selected: ContentObject): string {
+    if (usageValidity(selected) !== 'current' && selected.usageEvidence) {
+        return 'Historical / invalid';
+    }
     if (!selected.usageEvidence) {
         return 'Not measured';
     }
@@ -56,15 +61,14 @@ function usageMetricValue(selected: ContentObject): string {
         : 'None observed';
 }
 
-function usageMetricAccent(
-    selected: ContentObject,
-): 'warning' | 'positive' | 'neutral' {
+function usageMetricAccent(selected: ContentObject): 'warning' | 'positive' | 'neutral' {
+    if (usageValidity(selected) !== 'current') {
+        return 'neutral';
+    }
     if ((selected.usageEvidence?.observationCount ?? 0) > 0) {
         return 'warning';
     }
-    return selected.usageEvidence?.coverage === 'complete'
-        ? 'positive'
-        : 'neutral';
+    return selected.usageEvidence?.coverage === 'complete' ? 'positive' : 'neutral';
 }
 
 export function RemovalImpactPanel({
@@ -74,6 +78,12 @@ export function RemovalImpactPanel({
     onDepthChange,
     onDrillTo,
 }: RemovalImpactPanelProps): React.ReactElement {
+    const [page, setPage] = useState(0);
+    const currentPage = Math.min(
+        page,
+        Math.max(0, Math.ceil(analysis.affectedObjects.length / 25) - 1),
+    );
+    const affectedPage = analysis.affectedObjects.slice(currentPage * 25, currentPage * 25 + 25);
     return (
         <StackedContent>
             <Card>
@@ -168,6 +178,12 @@ export function RemovalImpactPanel({
                             {analysis.affectedObjects.length} known affected{' '}
                             {plural(analysis.affectedObjects.length, 'object')}
                         </CardTitle>
+                        <ResultPagination
+                            page={currentPage}
+                            pageSize={25}
+                            total={analysis.affectedObjects.length}
+                            onChange={setPage}
+                        />
                     </CardHeader>
                     <TableScroller>
                         <Table>
@@ -182,7 +198,7 @@ export function RemovalImpactPanel({
                                 </tr>
                             </thead>
                             <tbody>
-                                {analysis.affectedObjects.map((affected) => (
+                                {affectedPage.map((affected) => (
                                     <tr key={affected.objectId}>
                                         <td>
                                             <RowButton

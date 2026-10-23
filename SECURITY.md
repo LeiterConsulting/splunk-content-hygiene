@@ -16,8 +16,8 @@ Please allow maintainers time to investigate before public disclosure.
 
 ## Supported versions
 
-`0.3.0-beta` is the current evaluation release and receives best-effort security
-updates. It is not yet certified for production use or Splunk Cloud.
+The `0.4.0-beta` hardening candidate receives best-effort security updates. It is
+not certified for production use, Splunk Cloud, or search-head clustering.
 
 ## Security boundaries
 
@@ -26,6 +26,13 @@ Splunk REST resources available to the signed-in user and writes only to
 application-owned KV Store collections. Review records may contain notes and
 assignee names, so administrators should treat them as internal operational
 data.
+
+Shared caches and review notes are server-restricted to explicit hygiene roles
+and administrators. Private objects are excluded from new inventory snapshots.
+App/global metadata collected by an operator is visible to the assigned hygiene
+audience; it is not re-filtered by each viewer's source-object permissions.
+Grant these roles only to appropriately authorized users. Legacy derived cache
+is retired after a verified post-upgrade scan; durable reviews are preserved.
 
 On-demand usage collection runs bounded searches against native Splunk
 telemetry visible to the signed-in user. It persists aggregate activity counts,

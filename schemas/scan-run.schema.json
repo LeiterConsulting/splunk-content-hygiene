@@ -3,45 +3,25 @@
   "$id": "https://example.invalid/splunk-content-hygiene/scan-run.schema.json",
   "title": "Content Hygiene Scan Run",
   "type": "object",
-  "required": [
-    "scan_id",
-    "scan_type",
-    "status",
-    "started_at"
-  ],
+  "required": ["scan_id", "scan_type", "status", "started_at"],
   "properties": {
+    "snapshot_version": { "type": "integer", "const": 2 },
+    "evidence_retired": { "type": "boolean" },
     "scan_id": {
       "type": "string"
     },
     "scan_type": {
-      "enum": [
-        "bounded",
-        "full",
-        "incremental",
-        "usage",
-        "ownership",
-        "rescore"
-      ]
+      "enum": ["bounded", "full", "incremental", "usage", "ownership", "rescore"]
     },
     "status": {
-      "enum": [
-        "queued",
-        "running",
-        "partial",
-        "succeeded",
-        "failed",
-        "cancelled"
-      ]
+      "enum": ["queued", "running", "partial", "succeeded", "failed", "cancelled"]
     },
     "started_at": {
       "type": "string",
       "format": "date-time"
     },
     "completed_at": {
-      "type": [
-        "string",
-        "null"
-      ],
+      "type": ["string", "null"],
       "format": "date-time"
     },
     "object_count": {
@@ -78,11 +58,7 @@
       "type": "string"
     },
     "usage_window_days": {
-      "enum": [
-        30,
-        90,
-        180
-      ]
+      "enum": [30, 90, 180]
     },
     "usage_window_start": {
       "type": "string",
@@ -93,11 +69,7 @@
       "format": "date-time"
     },
     "usage_coverage": {
-      "enum": [
-        "complete",
-        "partial",
-        "unavailable"
-      ]
+      "enum": ["complete", "partial", "unavailable"]
     }
   },
   "additionalProperties": true

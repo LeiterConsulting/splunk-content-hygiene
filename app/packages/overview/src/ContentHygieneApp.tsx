@@ -1,12 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useState } from 'react';
+import WaitSpinner from '@splunk/react-ui/WaitSpinner';
+import { CustomizeTheme, SplunkThemeProvider } from '@splunk/themes';
 import { Page, StyledApp } from './AppStyles';
 import { ScanStatusBanner } from './components/ScanStatusBanner';
-import { CandidatesPage } from './pages/CandidatesPage';
-import { DependencyPage } from './pages/DependencyPage';
-import { OverviewPage } from './pages/OverviewPage';
-import { OwnershipPage } from './pages/OwnershipPage';
-import { ReviewLibraryPage } from './pages/ReviewLibraryPage';
-import { SettingsPage } from './pages/SettingsPage';
+import { getHygieneAccess } from './services/access';
 import { splunkInventoryClient } from './services/inventory';
 import { splunkReviewClient } from './services/reviews';
 import {
@@ -17,6 +14,34 @@ import {
     ReviewInput,
     ReviewRecord,
 } from './types';
+
+const CandidatesPage = lazy(() =>
+    import('./pages/CandidatesPage').then((module) => ({ default: module.CandidatesPage })),
+);
+const DependencyPage = lazy(() =>
+    import('./pages/DependencyPage').then((module) => ({ default: module.DependencyPage })),
+);
+const OverviewPage = lazy(() =>
+    import('./pages/OverviewPage').then((module) => ({ default: module.OverviewPage })),
+);
+const OwnershipPage = lazy(() =>
+    import('./pages/OwnershipPage').then((module) => ({ default: module.OwnershipPage })),
+);
+const ReviewLibraryPage = lazy(() =>
+    import('./pages/ReviewLibraryPage').then((module) => ({ default: module.ReviewLibraryPage })),
+);
+const SettingsPage = lazy(() =>
+    import('./pages/SettingsPage').then((module) => ({ default: module.SettingsPage })),
+);
+
+// Native controls use muted text for placeholders and default text for option
+// descriptions. Both must remain readable on selected/active menu surfaces as
+// well as the page, including portalled menus.
+export const readableTheme: CustomizeTheme = (theme) => ({
+    ...theme,
+    contentColorDefault: theme.contentColorActive,
+    contentColorMuted: theme.contentColorActive,
+});
 
 interface ContentHygieneAppProps {
     page: AppPage;
@@ -30,15 +55,35 @@ export function ContentHygieneApp({
     reviewClient = splunkReviewClient,
 }: ContentHygieneAppProps): React.ReactElement {
     const [snapshot, setSnapshot] = useState<InventorySnapshot | null>(null);
+    const [access, setAccess] = useState({
+        canCollect: inventoryClient !== splunkInventoryClient,
+        canReview: reviewClient !== splunkReviewClient,
+    });
+    useEffect(() => {
+        if (inventoryClient !== splunkInventoryClient) {
+            return undefined;
+        }
+        let active = true;
+        getHygieneAccess()
+            .then((result) => {
+                if (active) {
+                    setAccess(result);
+                }
+            })
+            .catch(() => {
+                if (active) {
+                    setAccess({ canCollect: false, canReview: false });
+                }
+            });
+        return () => {
+            active = false;
+        };
+    }, [inventoryClient]);
     const [reviews, setReviews] = useState<ReviewRecord[]>([]);
     const [snapshotLoadError, setSnapshotLoadError] = useState<string | null>(null);
     const [reviewLoadError, setReviewLoadError] = useState<string | null>(null);
-    const [isLoadingSnapshot, setIsLoadingSnapshot] = useState(
-        inventoryClient.isAvailable()
-    );
-    const [isLoadingReviews, setIsLoadingReviews] = useState(
-        reviewClient.isAvailable()
-    );
+    const [isLoadingSnapshot, setIsLoadingSnapshot] = useState(inventoryClient.isAvailable());
+    const [isLoadingReviews, setIsLoadingReviews] = useState(reviewClient.isAvailable());
 
     const handleScanCompleted = (completed: InventorySnapshot): void => {
         setSnapshot(completed);
@@ -54,7 +99,7 @@ export function ContentHygieneApp({
         let isActive = true;
         setIsLoadingSnapshot(true);
         inventoryClient
-            .getLatestSnapshot()
+            .getLatestSnapshot(page)
             .then((latestSnapshot) => {
                 if (isActive) {
                     setSnapshot(latestSnapshot);
@@ -66,7 +111,7 @@ export function ContentHygieneApp({
                     setSnapshotLoadError(
                         error instanceof Error
                             ? error.message
-                        : 'Unable to load the live inventory snapshot.'
+                            : 'Unable to load the live inventory snapshot.',
                     );
                 }
             })
@@ -79,7 +124,7 @@ export function ContentHygieneApp({
         return () => {
             isActive = false;
         };
-    }, [inventoryClient]);
+    }, [inventoryClient, page]);
 
     useEffect(() => {
         if (!reviewClient.isAvailable()) {
@@ -102,7 +147,7 @@ export function ContentHygieneApp({
                     setReviewLoadError(
                         error instanceof Error
                             ? error.message
-                            : 'Unable to load the app-local review library.'
+                            : 'Unable to load the app-local review library.',
                     );
                 }
             })
@@ -117,14 +162,12 @@ export function ContentHygieneApp({
         };
     }, [reviewClient]);
 
-    const handleSaveReview = async (
-        input: ReviewInput
-    ): Promise<ReviewRecord> => {
+    const handleSaveReview = async (input: ReviewInput): Promise<ReviewRecord> => {
         const saved = await reviewClient.upsertReview(input);
         setReviews((current) =>
             [...current.filter((review) => review.objectId !== saved.objectId), saved].sort(
-                (left, right) => right.updatedAt.localeCompare(left.updatedAt)
-            )
+                (left, right) => right.updatedAt.localeCompare(left.updatedAt),
+            ),
         );
         setReviewLoadError(null);
         return saved;
@@ -132,9 +175,7 @@ export function ContentHygieneApp({
 
     const handleDeleteReview = async (objectId: string): Promise<void> => {
         await reviewClient.deleteReview(objectId);
-        setReviews((current) =>
-            current.filter((review) => review.objectId !== objectId)
-        );
+        setReviews((current) => current.filter((review) => review.objectId !== objectId));
     };
 
     let content: React.ReactElement;
@@ -146,7 +187,7 @@ export function ContentHygieneApp({
                     snapshot={snapshot}
                     isLoading={isLoadingSnapshot}
                     reviews={reviews}
-                    canWriteReviews={reviewClient.isAvailable()}
+                    canWriteReviews={reviewClient.isAvailable() && access.canReview}
                     onSaveReview={handleSaveReview}
                     onDeleteReview={handleDeleteReview}
                 />
@@ -158,7 +199,7 @@ export function ContentHygieneApp({
                     snapshot={snapshot}
                     isLoading={isLoadingSnapshot}
                     reviews={reviews}
-                    canWriteReviews={reviewClient.isAvailable()}
+                    canWriteReviews={reviewClient.isAvailable() && access.canReview}
                     onSaveReview={handleSaveReview}
                     onDeleteReview={handleDeleteReview}
                 />
@@ -171,7 +212,7 @@ export function ContentHygieneApp({
                     reviews={reviews}
                     isLoading={isLoadingReviews}
                     loadError={reviewLoadError}
-                    canWriteReviews={reviewClient.isAvailable()}
+                    canWriteReviews={reviewClient.isAvailable() && access.canReview}
                     onSaveReview={handleSaveReview}
                     onDeleteReview={handleDeleteReview}
                 />
@@ -190,6 +231,7 @@ export function ContentHygieneApp({
             content = (
                 <SettingsPage
                     inventoryClient={inventoryClient}
+                    canCollect={access.canCollect}
                     snapshot={snapshot}
                     snapshotLoadError={snapshotLoadError}
                     reviews={reviews}
@@ -200,24 +242,31 @@ export function ContentHygieneApp({
         case 'overview':
         default:
             content = (
-                <OverviewPage
-                    snapshot={snapshot}
-                    isLoading={isLoadingSnapshot}
-                    reviews={reviews}
-                />
+                <OverviewPage snapshot={snapshot} isLoading={isLoadingSnapshot} reviews={reviews} />
             );
     }
 
     return (
-        <StyledApp>
-            <Page>
-                <ScanStatusBanner
-                    scan={snapshot?.scan ?? null}
-                    isLoading={isLoadingSnapshot}
-                    loadError={snapshotLoadError}
-                />
-                {content}
-            </Page>
-        </StyledApp>
+        <SplunkThemeProvider customizeTheme={readableTheme}>
+            <StyledApp>
+                <Page>
+                    <ScanStatusBanner
+                        scan={snapshot?.scan ?? null}
+                        isLoading={isLoadingSnapshot}
+                        loadError={snapshotLoadError}
+                    />
+                    <Suspense
+                        fallback={
+                            <WaitSpinner
+                                screenReaderText="Loading Content Hygiene view"
+                                size="large"
+                            />
+                        }
+                    >
+                        {content}
+                    </Suspense>
+                </Page>
+            </StyledApp>
+        </SplunkThemeProvider>
     );
 }

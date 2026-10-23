@@ -4,12 +4,7 @@ import {
     buildUsageEvidence,
     sourceCoverageForWindow,
 } from '../services/usage';
-import {
-    ContentFinding,
-    ContentObject,
-    UsageEvidence,
-    UsageSourceSummary,
-} from '../types';
+import { ContentFinding, ContentObject, UsageEvidence, UsageSourceSummary } from '../types';
 
 const inventoryScanId = 'scan-inventory-current';
 const usageRunId = 'scan-usage-current';
@@ -20,7 +15,7 @@ function contentObject(
     objectId: string,
     canonicalName: string,
     objectType: string,
-    overrides: Partial<ContentObject> = {}
+    overrides: Partial<ContentObject> = {},
 ): ContentObject {
     return {
         objectId,
@@ -47,9 +42,7 @@ function contentObject(
     };
 }
 
-function sourceSummary(
-    overrides: Partial<UsageSourceSummary> = {}
-): UsageSourceSummary {
+function sourceSummary(overrides: Partial<UsageSourceSummary> = {}): UsageSourceSummary {
     return {
         sourceId: 'search_audit',
         label: 'Splunk search audit',
@@ -66,9 +59,7 @@ function sourceSummary(
     };
 }
 
-function evidence(
-    overrides: Partial<UsageEvidence> = {}
-): UsageEvidence {
+function evidence(overrides: Partial<UsageEvidence> = {}): UsageEvidence {
     return {
         usageRunId,
         inventoryScanId,
@@ -92,6 +83,39 @@ function evidence(
     };
 }
 
+test.each([0, 8])(
+    'protected resources retain null cleanup scores with %s observations',
+    (observationCount) => {
+        const object = contentObject('protected', 'protected', 'Saved Search', {
+            protected: true,
+            healthStatus: 'protected',
+            abandonmentConfidence: null,
+            removalImpact: null,
+        });
+        const applied = applyUsageEvidence(
+            [object],
+            [],
+            [
+                {
+                    objectId: object.objectId,
+                    usage: evidence({
+                        observationCount,
+                        lastObserved: observationCount ? windowEnd : null,
+                    }),
+                },
+            ],
+            inventoryScanId,
+        );
+        expect(applied.objects[0]).toMatchObject({
+            healthStatus: 'protected',
+            abandonmentConfidence: null,
+            removalImpact: null,
+        });
+        expect(applied.objects[0].usageEvidence?.observationCount).toBe(observationCount);
+        expect(applied.findings).toHaveLength(0);
+    },
+);
+
 test('requires source records to span both ends of the requested window', () => {
     expect(
         sourceCoverageForWindow(
@@ -99,40 +123,22 @@ test('requires source records to span both ends of the requested window', () => 
             '2026-04-29T13:00:00.000Z',
             '2026-07-28T11:30:00.000Z',
             windowStart,
-            windowEnd
-        )
+            windowEnd,
+        ),
     ).toBe('complete');
     expect(
-        sourceCoverageForWindow(
-            100,
-            '2026-06-01T00:00:00.000Z',
-            windowEnd,
-            windowStart,
-            windowEnd
-        )
+        sourceCoverageForWindow(100, '2026-06-01T00:00:00.000Z', windowEnd, windowStart, windowEnd),
     ).toBe('partial');
-    expect(
-        sourceCoverageForWindow(
-            0,
-            null,
-            null,
-            windowStart,
-            windowEnd
-        )
-    ).toBe('unavailable');
+    expect(sourceCoverageForWindow(0, null, null, windowStart, windowEnd)).toBe('unavailable');
 });
 
 test('matches attributable activity without persisting actor lists', () => {
     const savedSearch = contentObject(
         'saved_search::search::daily_review',
         'daily_review',
-        'Saved Search'
+        'Saved Search',
     );
-    const dashboard = contentObject(
-        'dashboard::search::operations',
-        'operations',
-        'Dashboard'
-    );
+    const dashboard = contentObject('dashboard::search::operations', 'operations', 'Dashboard');
     const sources: CollectedUsageSource[] = [
         {
             summary: sourceSummary(),
@@ -167,13 +173,12 @@ test('matches attributable activity without persisting actor lists', () => {
         90,
         windowStart,
         windowEnd,
-        sources
+        sources,
     );
 
     expect(built.records).toHaveLength(2);
     expect(
-        built.records.find(({ objectId }) => objectId === savedSearch.objectId)
-            ?.usage
+        built.records.find(({ objectId }) => objectId === savedSearch.objectId)?.usage,
     ).toMatchObject({
         observationCount: 14,
         successfulCount: 12,
@@ -181,8 +186,7 @@ test('matches attributable activity without persisting actor lists', () => {
         lastObserved: '2026-07-27T10:00:00.000Z',
     });
     expect(
-        built.records.find(({ objectId }) => objectId === dashboard.objectId)
-            ?.usage
+        built.records.find(({ objectId }) => objectId === dashboard.objectId)?.usage,
     ).toMatchObject({
         coverage: 'complete',
         observationCount: 0,
@@ -196,13 +200,13 @@ test('maps same-name private activity only to its matching owner namespace', () 
         'saved_search::search::user:analyst::daily_review',
         'daily_review',
         'Saved Search',
-        { owner: 'analyst', sharing: 'user' }
+        { owner: 'analyst', sharing: 'user' },
     );
     const reviewer = contentObject(
         'saved_search::search::user:reviewer::daily_review',
         'daily_review',
         'Saved Search',
-        { owner: 'reviewer', sharing: 'user' }
+        { owner: 'reviewer', sharing: 'user' },
     );
     const built = buildUsageEvidence(
         [analyst, reviewer],
@@ -227,16 +231,15 @@ test('maps same-name private activity only to its matching owner namespace', () 
                     },
                 ],
             },
-        ]
+        ],
     );
 
     expect(
-        built.records.find(({ objectId }) => objectId === analyst.objectId)
-            ?.usage.observationCount
+        built.records.find(({ objectId }) => objectId === analyst.objectId)?.usage.observationCount,
     ).toBe(0);
     expect(
-        built.records.find(({ objectId }) => objectId === reviewer.objectId)
-            ?.usage.observationCount
+        built.records.find(({ objectId }) => objectId === reviewer.objectId)?.usage
+            .observationCount,
     ).toBe(3);
 });
 
@@ -248,7 +251,7 @@ test('observed activity removes a conservative dormant finding', () => {
         {
             healthStatus: 'dormant',
             abandonmentConfidence: 70,
-        }
+        },
     );
     const finding: ContentFinding = {
         findingId: 'static-needs-review',
@@ -273,7 +276,7 @@ test('observed activity removes a conservative dormant finding', () => {
                 }),
             },
         ],
-        inventoryScanId
+        inventoryScanId,
     );
 
     expect(applied.objects[0]).toMatchObject({
@@ -285,11 +288,7 @@ test('observed activity removes a conservative dormant finding', () => {
 });
 
 test('zero observations change classification only for a complete current window', () => {
-    const object = contentObject(
-        'dashboard::search::operations',
-        'operations',
-        'Dashboard'
-    );
+    const object = contentObject('dashboard::search::operations', 'operations', 'Dashboard');
     const complete = applyUsageEvidence(
         [object],
         [],
@@ -303,7 +302,7 @@ test('zero observations change classification only for a complete current window
                 }),
             },
         ],
-        inventoryScanId
+        inventoryScanId,
     );
     expect(complete.objects[0].healthStatus).toBe('dormant');
     expect(complete.objects[0].abandonmentConfidence).toBe(65);
@@ -326,18 +325,14 @@ test('zero observations change classification only for a complete current window
                 }),
             },
         ],
-        inventoryScanId
+        inventoryScanId,
     );
     expect(partial.objects[0].healthStatus).toBe('unknown');
     expect(partial.findings).toHaveLength(0);
 });
 
 test('evidence from an earlier inventory remains visible but does not rescore', () => {
-    const object = contentObject(
-        'dashboard::search::operations',
-        'operations',
-        'Dashboard'
-    );
+    const object = contentObject('dashboard::search::operations', 'operations', 'Dashboard');
     const applied = applyUsageEvidence(
         [object],
         [],
@@ -349,13 +344,11 @@ test('evidence from an earlier inventory remains visible but does not rescore', 
                 }),
             },
         ],
-        inventoryScanId
+        inventoryScanId,
     );
 
     expect(applied.objects[0].healthStatus).toBe('unknown');
     expect(applied.objects[0].usageEvidence).not.toBeNull();
-    expect(applied.objects[0].evidence.join(' ')).toContain(
-        'predates the current object snapshot'
-    );
+    expect(applied.objects[0].evidence.join(' ')).toContain('predates the current object snapshot');
     expect(applied.findings).toHaveLength(0);
 });

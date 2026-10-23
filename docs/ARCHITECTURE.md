@@ -44,9 +44,10 @@ each content collector to 100 records. Complete mode requests 200 records per
 page and stops at 10,000 records per collector, marking the result incomplete
 when the visible total exceeds that cap.
 
-Object identities incorporate type, app namespace, name, and user namespace
-when needed. Stable keys prevent same-name private objects from overwriting one
-another.
+Logical object identities incorporate resource family, app namespace, and name.
+Saved Search, Report, and Alert share one saved-search identity so schedule
+changes do not detach reviews. Snapshot storage keys additionally include the
+scan ID. Private user-namespace objects are excluded from the shared cache.
 
 ## Dependency analysis
 
@@ -58,6 +59,13 @@ evidence, source location, resolution state, and scan provenance.
 Dynamic or wildcard names are not declared broken. Command-like text inside SPL
 string literals is ignored. An absent sourcetype is not treated as proof of a
 broken reference because the visible catalog may not be authoritative.
+
+The lexer preserves quoted strings, comments, command context, subsearches, and
+macro argument counts. Dashboard JSON is parsed before extracting queries;
+Simple XML uses structured elements. Unsupported and malformed sources retain
+per-object diagnostics. Exact-name indexes apply same-app and global-export
+visibility rules rather than guessing at foreign app-scoped targets. Explicit
+lookup-filename and app-membership relationships use `uses_file` and `belongs_to`.
 
 ## Usage evidence
 
@@ -77,7 +85,9 @@ unavailable or partial.
 The overlay can lower abandonment confidence when current activity is observed.
 It can increase confidence or produce a dormant review finding only for a
 complete window associated with the current inventory and an object that was
-not modified after collection. Zero observations are always described as
+not modified after the observation window. Evidence is current for at most
+seven days after its window ends; one validity function drives classification,
+filters, details, readiness, and exports. Zero observations are always described as
 review evidence rather than proof of non-use.
 
 ### Removal-impact derivation
@@ -100,8 +110,9 @@ content.
 
 Scan lifecycle state and a recoverable lock are written before collection.
 Objects, edges, findings, and owners are prepared under a new scan identifier;
-the latest successful or partial snapshot is then read consistently by every
-view. Usage evidence is persisted under its own run identifier and overlaid
+counts, uniqueness, and endpoints are verified before a manifest is published.
+The complete baseline is retained across bounded or incomplete checks. Usage
+evidence is persisted under its own run identifier and overlaid
 conservatively at read time. Review records remain independent from snapshot
 replacement, snapshot current usage provenance when saved, and survive when an
 object is no longer visible.
@@ -110,6 +121,15 @@ JSON Schemas in [`schemas/`](../schemas/) document the normalized records.
 
 ## Frontend
 
+Six standard Simple XML dashboards provide only a mount point and native
+Splunk chrome, not searches or custom Mako templates. The entry waits for
+Simple XML readiness and mounts one React root. Chunk URLs use Splunk's
+locale/proxy/build-aware static URL helper rather than inferred script locations.
+The native theme API is loaded through AMD under Simple XML (or the standard
+helper outside AMD), preserving the signed-in user's preference. Host CSS is
+scoped to this workspace's canvas and heading inheritance; native navigation
+remains owned by Splunk.
+
 The source is a Yarn 1 workspace:
 
 - `app/packages/overview`: reusable React application, pages, services, exports,
@@ -117,5 +137,14 @@ The source is a Yarn 1 workspace:
 - `app/packages/content-hygiene`: Splunk page entries, configuration resources,
   metadata, and production packaging
 
-Webpack emits one JavaScript entry for each Splunk view. Production source maps
-are disabled and generated staging output is not committed.
+Webpack emits one shared, cacheable shell and deferred view chunks, avoiding a
+full duplicate application entry per view. Summary pages do not download graph
+edges or owner records they do not use. REST reads have bounded timeouts and a
+single retry for transient status codes; writes are never automatically replayed.
+Production source maps are disabled and staging output is not committed.
+
+The relationship workspace uses indexed adjacency and a deterministic
+directional layout, rather than a full-estate force simulation. Hubs group by
+app/type, expand incrementally, and disclose the 60-card render budget. Graph
+inspection and center selection are separate. Related and affected-object
+tables paginate; impact traversal retains its independent 500-object safety cap.

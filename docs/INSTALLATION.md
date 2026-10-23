@@ -2,10 +2,28 @@
 
 ## Compatibility
 
-The `0.3.0-beta` package targets Splunk Enterprise 10.0.1. The release artifact
-has passed the local release gate and AppInspect precert mode, and has been
-installed and browser-smoke-tested on Splunk Enterprise 10.0.1. Broader Splunk
-Enterprise 10.x and Splunk Cloud certification remains pending.
+The `0.4.0-beta` hardening package requires Splunk Enterprise with KV Store.
+The current validation scope is deliberately specific:
+
+| Version | Validation |
+| --- | --- |
+| 10.2.8 | Installed; all six views, light/dark themes, real-data scan, review workflow, graph/impact, and exports |
+| 10.4.4 | Installed; all six native-navigation views, expanded/collapsed sidebar, home launcher and app-switcher icons, light/dark workspace, real-data graph/impact, app-local review workflow, and exports |
+| 10.0.1 | Earlier beta smoke test, not repeated for this host migration |
+
+This is not certification of every 10.x release, Splunk Cloud, or search-head
+clustering. The workspace now mounts in a standard Simple XML host and keeps
+Splunk's native chrome. It no longer packages a custom Mako template or needs
+a server-wide template exception. The empty dashboard header is collapsed only
+inside the app host; native Splunk navigation and account controls remain intact.
+Modern navigation uses visually verified 10.4-compatible semantic icons. See
+[Branding](BRANDING.md) for image placements and native asset-cache
+troubleshooting after installation or upgrades.
+
+Use a desktop viewport of at least 1024 pixels for full native Splunk navigation.
+The app workspace reflows at narrower widths, but classic Splunk's own navigation
+retains a wider minimum canvas. Narrow viewport checks do not substitute for
+manual browser/text-zoom accessibility acceptance.
 
 Install the beta on a non-production search head first. KV Store must be
 available.
@@ -24,7 +42,7 @@ The check must report `OK` before installation.
 
 1. Sign in as a Splunk administrator.
 2. Open **Apps > Manage Apps > Install app from file**.
-3. Upload `content_hygiene-0.3.0-beta.tar.gz`.
+3. Upload `content_hygiene-0.4.0-beta.tar.gz`.
 4. Restart Splunk only if the installation workflow requests it.
 5. Open **Splunk Content Hygiene > Settings & Scan Status**.
 6. Confirm that the app reports no cached data rather than sample results.
@@ -44,7 +62,11 @@ upgrade.
 
 Back up the Splunk deployment according to your normal change-control process
 before upgrading. Afterward, confirm the displayed app version, load the
-existing Review Library, and run a fresh bounded scan.
+existing Review Library, assign the appropriate hygiene roles, and run a fresh
+complete scan. Version 0.4 does not trust legacy mutable snapshots as a baseline.
+It rebuilds the derived cache without changing existing reviews. After a
+verified snapshot publishes, legacy derived evidence is retired. Export any
+old reports required for your retention policy before upgrading.
 
 ## Uninstall
 

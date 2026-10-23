@@ -1,8 +1,9 @@
 {
   "name": "@splunk/content-hygiene",
-  "version": "0.3.0-beta",
+  "version": "0.4.0-beta",
   "license": "MIT",
   "scripts": {
+    "test": "jest",
     "build": "node bin/build.js build && yarn types:build",
     "eslint": "eslint \"src/**/*.{ts,tsx,js,jsx}\"",
     "eslint:fix": "eslint \"src/**/*.{ts,tsx,js,jsx}\" --fix",
@@ -14,15 +15,17 @@
     "types:start": "yarn types:build --watch"
   },
   "dependencies": {
-    "@splunk/react-page": "^8.3.1",
     "@splunk/react-ui": "^5.11.1",
     "@splunk/splunk-utils": "^4.0.0",
     "@splunk/themes": "^1.8.0",
     "react": "^18.2.0",
     "styled-components": "^5.3.10",
-    "@splunk/overview": "0.3.0-beta"
+    "@splunk/overview": "0.4.0-beta"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "jest": "^30.1.3",
+    "jest-environment-jsdom": "^30.1.2",
     "@babel/core": "^7.28.0",
     "@babel/eslint-parser": "^7.28.0",
     "@eslint/js": "^9.39.4",

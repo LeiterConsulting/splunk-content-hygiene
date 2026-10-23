@@ -1,35 +1,21 @@
+import { ContentFinding, ContentObject, DependencyEdge, FindingType } from '../types';
 import {
-    ConfidenceLevel,
-    ContentFinding,
-    ContentObject,
-    DependencyEdge,
-    FindingType,
-} from '../types';
+    ParsedReference,
+    ReferenceTarget,
+    ParsedSource,
+    parseDashboard,
+    parseSpl,
+} from './dependencyParser';
 
-type ReferenceTarget =
-    | 'macro'
-    | 'lookup'
-    | 'saved_search'
-    | 'data_model'
-    | 'index'
-    | 'sourcetype';
-
-export interface ParsedReference {
-    targetType: ReferenceTarget;
-    targetName: string;
-    relation: string;
-    confidence: ConfidenceLevel;
-    evidence: string;
-    sourceLocation: string;
-}
+export { extractSplReferences, extractDashboardReferences } from './dependencyParser';
+export type { ParsedReference } from './dependencyParser';
 
 export interface RawAnalysisSource {
     objectId: string;
-    kind: 'spl' | 'dashboard';
+    kind: 'spl' | 'dashboard' | 'lookup';
     text: string;
     sourceLocation: string;
 }
-
 export interface AnalysisCompleteness {
     macros: boolean;
     lookup_definitions: boolean;
@@ -39,357 +25,30 @@ export interface AnalysisCompleteness {
     indexes: boolean;
     sourcetypes: boolean;
 }
-
 export interface InventoryAnalysis {
     objects: ContentObject[];
     edges: DependencyEdge[];
     findings: ContentFinding[];
     parserCounts: Record<string, number>;
+    parserWarnings: string[];
 }
-
 interface Resolution {
     object: ContentObject | null;
     ambiguous: boolean;
 }
-
-const dynamicReferencePattern = /\$[^$]+\$|\{[^{}]+\}|\*/;
-
-function normalizeText(value: string): string {
-    return value
-        .replace(/&quot;/gi, '"')
-        .replace(/&apos;/gi, "'")
-        .replace(/&lt;/gi, '<')
-        .replace(/&gt;/gi, '>')
-        .replace(/&amp;/gi, '&')
-        .replace(/\\"/g, '"')
-        .replace(/\\n/g, '\n');
-}
-
-function cleanTargetName(value: string): string {
-    return value.trim().replace(/^["']|["']$/g, '').replace(/[;,]$/, '');
-}
-
-function quotedRanges(value: string): Array<[number, number]> {
-    const ranges: Array<[number, number]> = [];
-    let quote: '"' | "'" | null = null;
-    let start = -1;
-    let escaped = false;
-
-    for (let index = 0; index < value.length; index += 1) {
-        const character = value[index];
-        if (escaped) {
-            escaped = false;
-        } else if (character === '\\') {
-            escaped = true;
-        } else if (quote) {
-            if (character === quote) {
-                ranges.push([start, index]);
-                quote = null;
-                start = -1;
-            }
-        } else if (character === '"' || character === "'") {
-            quote = character;
-            start = index;
-        }
-    }
-    if (quote && start >= 0) {
-        ranges.push([start, value.length]);
-    }
-    return ranges;
-}
-
-function isInsideQuotedRange(
-    index: number,
-    ranges: Array<[number, number]>
-): boolean {
-    let low = 0;
-    let high = ranges.length - 1;
-    while (low <= high) {
-        const middle = Math.floor((low + high) / 2);
-        const [start, end] = ranges[middle];
-        if (index < start) {
-            high = middle - 1;
-        } else if (index > end) {
-            low = middle + 1;
-        } else {
-            return true;
-        }
-    }
-    return false;
-}
-
-function addReference(
-    references: ParsedReference[],
-    seen: Set<string>,
-    reference: ParsedReference
-): void {
-    const targetName = cleanTargetName(reference.targetName);
-    if (!targetName || dynamicReferencePattern.test(targetName)) {
-        return;
-    }
-    const normalized = {
-        ...reference,
-        targetName,
-    };
-    const key = [
-        normalized.targetType,
-        normalized.targetName.toLowerCase(),
-        normalized.relation,
-        normalized.sourceLocation,
-    ].join('|');
-    if (!seen.has(key)) {
-        seen.add(key);
-        references.push(normalized);
-    }
-}
-
-/* eslint-disable no-cond-assign -- RegExp.exec loops retain capture groups without allocating intermediate match arrays. */
-export function extractSplReferences(
-    sourceText: string,
-    sourceLocation = 'search'
-): ParsedReference[] {
-    const text = normalizeText(sourceText);
-    const references: ParsedReference[] = [];
-    const seen = new Set<string>();
-    const stringRanges = quotedRanges(text);
-    let match: RegExpExecArray | null;
-
-    const macroPattern = /`([A-Za-z_][A-Za-z0-9_.:/-]*)(?:\([^`]*\))?`/g;
-    while ((match = macroPattern.exec(text)) !== null) {
-        addReference(references, seen, {
-            targetType: 'macro',
-            targetName: match[1],
-            relation: 'uses',
-            confidence: 'medium',
-            evidence: `SPL invokes macro \`${match[1]}\``,
-            sourceLocation,
-        });
-    }
-
-    const lookupPattern =
-        /(?:^|\|)\s*(inputlookup|outputlookup|lookup)\s+(?:(?:local|update|append|create_empty|override_if_empty|max|strict|allow_updates)\s*=\s*\S+\s+)*(?:"([^"]+)"|'([^']+)'|([A-Za-z0-9_.:/*${}-]+))/gi;
-    while ((match = lookupPattern.exec(text)) !== null) {
-        const command = match[1].toLowerCase();
-        const targetName = match[2] ?? match[3] ?? match[4];
-        addReference(references, seen, {
-            targetType: 'lookup',
-            targetName,
-            relation: command === 'outputlookup' ? 'writes' : 'reads',
-            confidence: 'medium',
-            evidence: `SPL ${command} command names lookup ${targetName}`,
-            sourceLocation,
-        });
-    }
-
-    const savedSearchPattern =
-        /(?:^|\|)\s*savedsearch\s+(?:"([^"]+)"|'([^']+)'|([^|\r\n]+?))(?=\s*(?:\||$))/gi;
-    while ((match = savedSearchPattern.exec(text)) !== null) {
-        const targetName = match[1] ?? match[2] ?? match[3];
-        addReference(references, seen, {
-            targetType: 'saved_search',
-            targetName,
-            relation: 'invokes',
-            confidence: 'medium',
-            evidence: `SPL savedsearch command names ${cleanTargetName(targetName)}`,
-            sourceLocation,
-        });
-    }
-
-    const dataModelCommandPattern =
-        /(?:^|\|)\s*datamodel\s+(?:"([^"]+)"|'([^']+)'|([A-Za-z0-9_.*${}:-]+))/gi;
-    while ((match = dataModelCommandPattern.exec(text)) !== null) {
-        const targetName = match[1] ?? match[2] ?? match[3];
-        addReference(references, seen, {
-            targetType: 'data_model',
-            targetName,
-            relation: 'uses',
-            confidence: 'medium',
-            evidence: `SPL datamodel command names ${targetName}`,
-            sourceLocation,
-        });
-    }
-
-    const fromDataModelPattern =
-        /(?:^|\|)\s*from\s+datamodel\s*:\s*([A-Za-z0-9_.*${}:-]+)/gi;
-    while ((match = fromDataModelPattern.exec(text)) !== null) {
-        addReference(references, seen, {
-            targetType: 'data_model',
-            targetName: match[1],
-            relation: 'uses',
-            confidence: 'medium',
-            evidence: `SPL from clause names data model ${match[1]}`,
-            sourceLocation,
-        });
-    }
-
-    const dataReferencePattern =
-        /\b(index|sourcetype)\s*=\s*(?:"([^"]+)"|'([^']+)'|([A-Za-z0-9_.:/*${}-]+))/gi;
-    while ((match = dataReferencePattern.exec(text)) !== null) {
-        if (!isInsideQuotedRange(match.index, stringRanges)) {
-            const targetType =
-                match[1].toLowerCase() === 'index' ? 'index' : 'sourcetype';
-            const targetName = match[2] ?? match[3] ?? match[4];
-            addReference(references, seen, {
-                targetType,
-                targetName,
-                relation: 'searches',
-                confidence: 'medium',
-                evidence: `SPL explicitly constrains ${targetType}=${targetName}`,
-                sourceLocation,
-            });
-        }
-    }
-
-    return references;
-}
-
-function collectJsonDashboardContent(
-    value: unknown,
-    path: string,
-    references: ParsedReference[],
-    seen: Set<string>,
-    inlineSearches: Array<{ text: string; path: string }>,
-    depth = 0
-): void {
-    if (depth > 24 || value === null || value === undefined) {
-        return;
-    }
-    if (Array.isArray(value)) {
-        value.forEach((item, index) =>
-            collectJsonDashboardContent(
-                item,
-                `${path}[${index}]`,
-                references,
-                seen,
-                inlineSearches,
-                depth + 1
-            )
-        );
-        return;
-    }
-    if (typeof value !== 'object') {
-        return;
-    }
-
-    const record = value as Record<string, unknown>;
-    const type = typeof record.type === 'string' ? record.type.toLowerCase() : '';
-    const options =
-        record.options &&
-        typeof record.options === 'object' &&
-        !Array.isArray(record.options)
-            ? (record.options as Record<string, unknown>)
-            : {};
-    if (
-        type.includes('savedsearch') &&
-        typeof options.ref === 'string'
-    ) {
-        addReference(references, seen, {
-            targetType: 'saved_search',
-            targetName: options.ref,
-            relation: 'references',
-            confidence: 'high',
-            evidence: `Dashboard data source explicitly references saved search ${options.ref}`,
-            sourceLocation: `${path}.options.ref`,
-        });
-    }
-
-    Object.entries(record).forEach(([key, child]) => {
-        const childPath = path ? `${path}.${key}` : key;
-        if (
-            (key === 'query' || key === 'search') &&
-            typeof child === 'string'
-        ) {
-            inlineSearches.push({ text: child, path: childPath });
-        }
-        collectJsonDashboardContent(
-            child,
-            childPath,
-            references,
-            seen,
-            inlineSearches,
-            depth + 1
-        );
-    });
-}
-
-export function extractDashboardReferences(
-    sourceText: string,
-    sourceLocation = 'dashboard'
-): ParsedReference[] {
-    const text = normalizeText(sourceText);
-    const references: ParsedReference[] = [];
-    const seen = new Set<string>();
-    const inlineSearches: Array<{ text: string; path: string }> = [];
-    let match: RegExpExecArray | null;
-
-    const searchRefPattern = /<search\b[^>]*\bref=["']([^"']+)["'][^>]*>/gi;
-    while ((match = searchRefPattern.exec(text)) !== null) {
-        addReference(references, seen, {
-            targetType: 'saved_search',
-            targetName: match[1],
-            relation: 'references',
-            confidence: 'high',
-            evidence: `Dashboard search element explicitly references saved search ${match[1]}`,
-            sourceLocation: `${sourceLocation}.search.ref`,
-        });
-    }
-
-    const savedSearchPattern = /<savedsearch>([^<]+)<\/savedsearch>/gi;
-    while ((match = savedSearchPattern.exec(text)) !== null) {
-        addReference(references, seen, {
-            targetType: 'saved_search',
-            targetName: match[1],
-            relation: 'references',
-            confidence: 'high',
-            evidence: `Dashboard XML explicitly names saved search ${match[1]}`,
-            sourceLocation: `${sourceLocation}.savedsearch`,
-        });
-    }
-
-    const queryPattern = /<query>([\s\S]*?)<\/query>/gi;
-    while ((match = queryPattern.exec(text)) !== null) {
-        inlineSearches.push({
-            text: match[1],
-            path: `${sourceLocation}.query`,
-        });
-    }
-
-    if (text.trim().startsWith('{') || text.trim().startsWith('[')) {
-        try {
-            collectJsonDashboardContent(
-                JSON.parse(text),
-                sourceLocation,
-                references,
-                seen,
-                inlineSearches
-            );
-        } catch {
-            // Malformed dashboard JSON remains unparsed and is reflected in scan warnings.
-        }
-    }
-
-    inlineSearches.forEach((inlineSearch) => {
-        extractSplReferences(inlineSearch.text, inlineSearch.path).forEach(
-            (reference) => addReference(references, seen, reference)
-        );
-    });
-
-    return references;
-}
-/* eslint-enable no-cond-assign */
+type ReferenceIndex = Map<string, ContentObject[]>;
 
 function objectGroup(objectType: string): ReferenceTarget | null {
     if (objectType === 'Macro') {
         return 'macro';
     }
-    if (objectType === 'Lookup Definition' || objectType === 'Lookup File') {
+    if (objectType === 'Lookup Definition') {
         return 'lookup';
     }
-    if (
-        objectType === 'Saved Search' ||
-        objectType === 'Report' ||
-        objectType === 'Alert'
-    ) {
+    if (objectType === 'Lookup File') {
+        return 'lookup_file';
+    }
+    if (objectType === 'Saved Search' || objectType === 'Report' || objectType === 'Alert') {
         return 'saved_search';
     }
     if (objectType === 'Data Model') {
@@ -404,85 +63,98 @@ function objectGroup(objectType: string): ReferenceTarget | null {
     return null;
 }
 
-function comparableName(
-    targetType: ReferenceTarget,
-    value: string
-): string {
-    const normalized = cleanTargetName(value).toLowerCase();
-    return targetType === 'macro'
-        ? normalized.replace(/\(\d+\)$/, '')
-        : normalized;
+function referenceKey(type: ReferenceTarget, name: string, arity = 0): string {
+    return type === 'macro'
+        ? `macro::${name.replace(/\(\d+\)$/, '')}::${arity}`
+        : `${type}::${name}`;
+}
+
+function buildReferenceIndex(objects: ContentObject[]): ReferenceIndex {
+    const index: ReferenceIndex = new Map();
+    objects.forEach((contentObject) => {
+        const group = objectGroup(contentObject.objectType);
+        if (!group) {
+            return;
+        }
+        const arity = Number(contentObject.canonicalName.match(/\((\d+)\)$/)?.[1] ?? 0);
+        const key = referenceKey(group, contentObject.canonicalName, arity);
+        const matches = index.get(key) ?? [];
+        matches.push(contentObject);
+        index.set(key, matches);
+    });
+    return index;
 }
 
 function resolveReference(
     reference: ParsedReference,
     source: ContentObject,
-    objects: ContentObject[]
+    index: ReferenceIndex,
 ): Resolution {
-    const targetName = comparableName(
-        reference.targetType,
-        reference.targetName
-    );
-    const candidates = objects.filter(
-        (contentObject) =>
-            objectGroup(contentObject.objectType) === reference.targetType &&
-            comparableName(reference.targetType, contentObject.canonicalName) ===
-                targetName
-    );
-    const sameApp = candidates.filter(
-        (contentObject) =>
-            contentObject.app.toLowerCase() === source.app.toLowerCase()
-    );
-    const sameOwnerPrivate = source.owner
-        ? sameApp.filter(
-              (contentObject) =>
-                  contentObject.sharing === 'user' &&
-                  contentObject.owner === source.owner
-          )
+    const primary =
+        index.get(referenceKey(reference.targetType, reference.targetName, reference.macroArity)) ??
+        [];
+    // SPL accepts a CSV file or a same-named definition. Do not guess if both apply.
+    const alternatives =
+        reference.targetType === 'lookup_file' && reference.relation !== 'uses_file'
+            ? (index.get(referenceKey('lookup', reference.targetName)) ?? [])
+            : [];
+    const candidates = [...primary, ...alternatives];
+    const sameApp = candidates.filter((item) => item.app === source.app);
+    const privateMatches = source.owner
+        ? sameApp.filter((item) => item.sharing === 'user' && item.owner === source.owner)
         : [];
-    if (sameOwnerPrivate.length === 1) {
-        return { object: sameOwnerPrivate[0], ambiguous: false };
-    }
-    if (sameOwnerPrivate.length > 1) {
-        return { object: null, ambiguous: true };
-    }
-
-    const sameAppShared = sameApp.filter(
-        (contentObject) =>
-            contentObject.sharing === 'app' ||
-            contentObject.sharing === 'global'
+    const shared = sameApp.filter((item) => item.sharing === 'app' || item.sharing === 'global');
+    const exported = candidates.filter(
+        (item) =>
+            item.sharing === 'global' ||
+            (['index', 'sourcetype'].includes(reference.targetType) && item.sharing !== 'user'),
     );
-    if (sameAppShared.length === 1) {
-        return { object: sameAppShared[0], ambiguous: false };
+    let applicable = exported;
+    if (shared.length) {
+        applicable = shared;
     }
-    if (sameAppShared.length > 1) {
-        return { object: null, ambiguous: true };
+    if (privateMatches.length) {
+        applicable = privateMatches;
     }
+    return {
+        object: applicable.length === 1 ? applicable[0] : null,
+        ambiguous: applicable.length > 1 || (applicable.length === 0 && candidates.length > 0),
+    };
+}
 
-    const globallyShared = candidates.filter(
-        (contentObject) => contentObject.sharing === 'global'
-    );
-    if (globallyShared.length === 1) {
-        return { object: globallyShared[0], ambiguous: false };
+function parseSource(source: RawAnalysisSource): ParsedSource {
+    if (source.kind === 'lookup') {
+        return {
+            warnings: [],
+            references: [
+                {
+                    targetType: 'lookup_file',
+                    targetName: source.text,
+                    relation: 'uses_file',
+                    confidence: 'high',
+                    evidence: `Lookup definition explicitly names backing file ${source.text}`,
+                    sourceLocation: source.sourceLocation,
+                },
+            ],
+        };
     }
-    if (
-        candidates.length === 1 &&
-        candidates[0].sharing !== 'user'
-    ) {
-        return { object: candidates[0], ambiguous: false };
-    }
-    return { object: null, ambiguous: candidates.length > 0 };
+    return source.kind === 'dashboard'
+        ? parseDashboard(source.text, source.sourceLocation)
+        : parseSpl(source.text, source.sourceLocation);
 }
 
 function targetCoverageComplete(
     targetType: ReferenceTarget,
-    completeness: AnalysisCompleteness
+    completeness: AnalysisCompleteness,
 ): boolean {
     if (targetType === 'lookup') {
-        return completeness.lookup_definitions && completeness.lookup_files;
+        return completeness.lookup_definitions;
+    }
+    if (targetType === 'lookup_file') {
+        return completeness.lookup_files;
     }
     const collectorByTarget: Record<
-        Exclude<ReferenceTarget, 'lookup'>,
+        Exclude<ReferenceTarget, 'lookup' | 'lookup_file'>,
         keyof AnalysisCompleteness
     > = {
         macro: 'macros',
@@ -494,12 +166,8 @@ function targetCoverageComplete(
     return completeness[collectorByTarget[targetType]];
 }
 
-function missingTargetId(
-    targetType: ReferenceTarget,
-    app: string,
-    targetName: string
-): string {
-    return `missing::${targetType}::${app}::${cleanTargetName(targetName)}`;
+function missingTargetId(targetType: ReferenceTarget, app: string, targetName: string): string {
+    return `missing::${targetType}::${app}::${targetName.trim()}`;
 }
 
 function clampScore(value: number, maximum = 100): number {
@@ -518,10 +186,7 @@ function daysSince(value: string | null): number | null {
 }
 
 function ownerIsMissing(contentObject: ContentObject): boolean {
-    return (
-        contentObject.owner === null &&
-        contentObject.sharing === 'user'
-    );
+    return contentObject.owner === null && contentObject.sharing === 'user';
 }
 
 function uniqueEvidence(values: string[]): string[] {
@@ -534,7 +199,7 @@ function finding(
     abandonmentConfidence: number | null,
     removalImpact: number | null,
     reasons: string[],
-    suggestedAction: string
+    suggestedAction: string,
 ): ContentFinding {
     return {
         findingId: `finding::${objectId}::${findingType}`,
@@ -551,18 +216,18 @@ function finding(
 export function analyzeInventory(
     inputObjects: ContentObject[],
     sources: RawAnalysisSource[],
-    completeness: AnalysisCompleteness
+    completeness: AnalysisCompleteness,
+    parsedSources?: Map<RawAnalysisSource, ParsedSource>,
 ): InventoryAnalysis {
     const objects = inputObjects.map((contentObject) => ({
         ...contentObject,
         evidence: [...contentObject.evidence],
     }));
     const objectById = new Map(
-        objects.map((contentObject) => [
-            contentObject.objectId,
-            contentObject,
-        ])
+        objects.map((contentObject) => [contentObject.objectId, contentObject]),
     );
+    const referenceIndex = buildReferenceIndex(objects);
+    const parserWarnings: string[] = [];
     const edgeByKey = new Map<string, DependencyEdge>();
     const assertedMissingBySource = new Map<string, string[]>();
     const dynamicSources = new Set<string>();
@@ -577,30 +242,32 @@ export function analyzeInventory(
         if (!sourceObject || !source.text.trim()) {
             return;
         }
-        if (dynamicReferencePattern.test(source.text)) {
+        const parsed = parsedSources?.get(source) ?? parseSource(source);
+        const { references } = parsed;
+        if (parsed.warnings.length) {
             dynamicSources.add(source.objectId);
+            sourceObject.analysisWarnings = [
+                ...(sourceObject.analysisWarnings ?? []),
+                ...parsed.warnings,
+            ];
+            parserWarnings.push(
+                ...parsed.warnings.map((warning) => `${sourceObject.name}: ${warning}`),
+            );
         }
-        const references =
-            source.kind === 'dashboard'
-                ? extractDashboardReferences(source.text, source.sourceLocation)
-                : extractSplReferences(source.text, source.sourceLocation);
-        parserCounts[source.kind] += references.length;
+        parserCounts[source.kind] = (parserCounts[source.kind] ?? 0) + references.length;
 
         references.forEach((reference) => {
-            const resolution = resolveReference(reference, sourceObject, objects);
-            const targetId = resolution.object?.objectId ??
-                missingTargetId(
-                    reference.targetType,
-                    sourceObject.app,
-                    reference.targetName
-                );
+            const resolution = resolveReference(reference, sourceObject, referenceIndex);
+            const targetId =
+                resolution.object?.objectId ??
+                missingTargetId(reference.targetType, sourceObject.app, reference.targetName);
             const resolved = Boolean(resolution.object);
-            const coverageComplete = targetCoverageComplete(
-                reference.targetType,
-                completeness
-            );
-            const canAssertMissing =
-                !resolved && !resolution.ambiguous && coverageComplete;
+            const coverageComplete =
+                targetCoverageComplete(reference.targetType, completeness) &&
+                (reference.targetType !== 'lookup_file' ||
+                    reference.relation === 'uses_file' ||
+                    completeness.lookup_definitions);
+            const canAssertMissing = !resolved && !resolution.ambiguous && coverageComplete;
             let { confidence } = reference;
             if (resolution.ambiguous || (!resolved && !coverageComplete)) {
                 confidence = 'unknown';
@@ -619,7 +286,7 @@ export function analyzeInventory(
                 reasons.push(evidence);
                 assertedMissingBySource.set(source.objectId, reasons);
             } else if (!resolved && resolution.ambiguous) {
-                evidence = `${evidence}; multiple namespace candidates prevent deterministic resolution`;
+                evidence = `${evidence}; namespace visibility or multiple candidates prevent deterministic resolution`;
             } else if (!resolved) {
                 evidence = `${evidence}; target inventory is incomplete or non-authoritative, so absence cannot be asserted`;
             }
@@ -634,11 +301,15 @@ export function analyzeInventory(
                 sourceLocation: reference.sourceLocation,
                 resolved,
             };
-            const edgeKey = [
-                edge.sourceId,
-                edge.targetId,
-                edge.relation,
-            ].join('|');
+            const edgeKey = [edge.sourceId, edge.targetId, edge.relation].join('|');
+            const previous = edgeByKey.get(edgeKey);
+            if (previous) {
+                edge.evidence = uniqueEvidence([previous.evidence, edge.evidence]).join('; ');
+                edge.sourceLocation = uniqueEvidence([
+                    ...(previous.sourceLocation ?? '').split('; '),
+                    edge.sourceLocation ?? '',
+                ]).join('; ');
+            }
             edgeByKey.set(edgeKey, edge);
             if (!resolved) {
                 parserCounts.unresolved += 1;
@@ -646,19 +317,36 @@ export function analyzeInventory(
         });
     });
 
+    const appByName = new Map(
+        objects
+            .filter((item) => item.objectType === 'App')
+            .map((item) => [item.canonicalName, item]),
+    );
+    objects.forEach((contentObject) => {
+        const app = appByName.get(contentObject.app);
+        if (!app || contentObject.objectType === 'App') {
+            return;
+        }
+        const edgeId = `edge::${contentObject.objectId}::belongs_to::${app.objectId}`;
+        edgeByKey.set(edgeId, {
+            edgeId,
+            sourceId: contentObject.objectId,
+            targetId: app.objectId,
+            relation: 'belongs_to',
+            confidence: 'high',
+            resolved: true,
+            evidence: `REST namespace places this object in app ${contentObject.app}`,
+            sourceLocation: 'eai:acl.app',
+        });
+    });
+
     const edges = Array.from(edgeByKey.values());
     const inboundCounts = new Map<string, number>();
     const outboundCounts = new Map<string, number>();
     edges.forEach((edge) => {
-        outboundCounts.set(
-            edge.sourceId,
-            (outboundCounts.get(edge.sourceId) ?? 0) + 1
-        );
+        outboundCounts.set(edge.sourceId, (outboundCounts.get(edge.sourceId) ?? 0) + 1);
         if (edge.resolved) {
-            inboundCounts.set(
-                edge.targetId,
-                (inboundCounts.get(edge.targetId) ?? 0) + 1
-            );
+            inboundCounts.set(edge.targetId, (inboundCounts.get(edge.targetId) ?? 0) + 1);
         }
     });
 
@@ -666,13 +354,11 @@ export function analyzeInventory(
     objects.forEach((contentObject) => {
         const inbound = inboundCounts.get(contentObject.objectId) ?? 0;
         const outbound = outboundCounts.get(contentObject.objectId) ?? 0;
-        const missingReasons =
-            assertedMissingBySource.get(contentObject.objectId) ?? [];
+        const missingReasons = assertedMissingBySource.get(contentObject.objectId) ?? [];
         const missingOwner = ownerIsMissing(contentObject);
         const ageDays = daysSince(contentObject.updated);
         const scheduledAndEnabled =
-            contentObject.scheduled === true &&
-            contentObject.enabled !== false;
+            contentObject.scheduled === true && contentObject.enabled !== false;
         const evidence = [...contentObject.evidence];
 
         if (contentObject.enabled === false) {
@@ -682,22 +368,18 @@ export function analyzeInventory(
             evidence.push('An enabled schedule is configured');
         }
         if (inbound > 0) {
-            evidence.push(
-                `${inbound} inbound relationship${inbound === 1 ? '' : 's'} resolved`
-            );
+            evidence.push(`${inbound} inbound relationship${inbound === 1 ? '' : 's'} resolved`);
         } else {
             evidence.push(
-                'No inbound relationships were produced by the supported parsers in this scan'
+                'No inbound relationships were produced by the supported parsers in this scan',
             );
         }
         if (outbound > 0) {
-            evidence.push(
-                `${outbound} outbound relationship${outbound === 1 ? '' : 's'} parsed`
-            );
+            evidence.push(`${outbound} outbound relationship${outbound === 1 ? '' : 's'} parsed`);
         }
         if (dynamicSources.has(contentObject.objectId)) {
             evidence.push(
-                'Dynamic reference syntax was detected; dependency coverage may be incomplete'
+                'Dependency extraction has declared limitations; inspect the source-specific diagnostics',
             );
         }
         evidence.push(...missingReasons);
@@ -753,8 +435,7 @@ export function analyzeInventory(
         impact = clampScore(impact);
 
         let healthStatus: ContentObject['healthStatus'] = 'unknown';
-        let suggestedAction =
-            'Collect usage evidence before making a cleanup decision';
+        let suggestedAction = 'Collect usage evidence before making a cleanup decision';
 
         if (missingReasons.length > 0) {
             healthStatus = 'broken';
@@ -767,17 +448,15 @@ export function analyzeInventory(
                     abandonment,
                     impact,
                     missingReasons,
-                    suggestedAction
-                )
+                    suggestedAction,
+                ),
             );
         } else if (scheduledAndEnabled) {
             healthStatus = 'active';
-            suggestedAction =
-                'Keep and validate execution history during usage analysis';
+            suggestedAction = 'Keep and validate execution history during usage analysis';
         } else if (missingOwner) {
             healthStatus = 'unowned';
-            suggestedAction =
-                'Assign an accountable reviewer before cleanup evaluation';
+            suggestedAction = 'Assign an accountable reviewer before cleanup evaluation';
             findings.push(
                 finding(
                     contentObject.objectId,
@@ -788,8 +467,8 @@ export function analyzeInventory(
                         'No owner was recorded for this user-scoped object',
                         'Usage telemetry has not established recent use',
                     ],
-                    suggestedAction
-                )
+                    suggestedAction,
+                ),
             );
         } else if (contentObject.enabled === false && inbound === 0) {
             healthStatus = 'dormant';
@@ -806,8 +485,8 @@ export function analyzeInventory(
                         'No inbound relationships were produced by supported parsers',
                         'Usage telemetry is unavailable, so confidence is capped',
                     ],
-                    suggestedAction
-                )
+                    suggestedAction,
+                ),
             );
         }
 
@@ -827,5 +506,26 @@ export function analyzeInventory(
         edges,
         findings,
         parserCounts,
+        parserWarnings,
     };
+}
+
+/** Parse large inventories cooperatively; the indexed resolution pass is linear. */
+export async function analyzeInventoryAsync(
+    objects: ContentObject[],
+    sources: RawAnalysisSource[],
+    completeness: AnalysisCompleteness,
+): Promise<InventoryAnalysis> {
+    const parsed = new Map<RawAnalysisSource, ParsedSource>();
+    for (let start = 0; start < sources.length; start += 40) {
+        sources
+            .slice(start, start + 40)
+            .forEach((source) => parsed.set(source, parseSource(source)));
+        // Yield between bounded parser batches so progress and navigation remain responsive.
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise<void>((resolve) => {
+            setTimeout(resolve, 0);
+        });
+    }
+    return analyzeInventory(objects, sources, completeness, parsed);
 }

@@ -26,15 +26,13 @@ function captureDownload(): {
     jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation();
     const createdAnchors: HTMLAnchorElement[] = [];
     const createElement = document.createElement.bind(document);
-    jest.spyOn(document, 'createElement').mockImplementation(
-        (tagName: string): HTMLElement => {
-            const element = createElement(tagName);
-            if (tagName === 'a') {
-                createdAnchors.push(element as HTMLAnchorElement);
-            }
-            return element;
+    jest.spyOn(document, 'createElement').mockImplementation((tagName: string): HTMLElement => {
+        const element = createElement(tagName);
+        if (tagName === 'a') {
+            createdAnchors.push(element as HTMLAnchorElement);
         }
-    );
+        return element;
+    });
     return { createObjectUrl, createdAnchors };
 }
 
@@ -45,18 +43,12 @@ afterEach(() => {
 test('creates an escaped CSV report download', async () => {
     const capture = captureDownload();
 
-    downloadCsv(
-        'candidates.csv',
-        ['Name', 'Evidence'],
-        [['Saved "Search"', 'owner, confirmed']]
-    );
+    downloadCsv('candidates.csv', ['Name', 'Evidence'], [['Saved "Search"', 'owner, confirmed']]);
 
     const blob = capture.createObjectUrl.mock.calls[0][0] as Blob;
     expect(capture.createdAnchors[0].download).toBe('candidates.csv');
     expect(blob.type).toBe('text/csv;charset=utf-8');
-    expect(await readBlob(blob)).toBe(
-        '"Name","Evidence"\n"Saved ""Search""","owner, confirmed"'
-    );
+    expect(await readBlob(blob)).toBe('"Name","Evidence"\n"Saved ""Search""","owner, confirmed"');
 });
 
 test('creates a formatted JSON report download', async () => {
@@ -70,7 +62,16 @@ test('creates a formatted JSON report download', async () => {
     const blob = capture.createObjectUrl.mock.calls[0][0] as Blob;
     expect(capture.createdAnchors[0].download).toBe('reviews.json');
     expect(blob.type).toBe('application/json;charset=utf-8');
-    expect(await readBlob(blob)).toBe(
-        '{\n  "stage": "confirmed_eligible",\n  "count": 1\n}\n'
+    expect(await readBlob(blob)).toBe('{\n  "stage": "confirmed_eligible",\n  "count": 1\n}\n');
+});
+
+test('CSV reports neutralize spreadsheet formulas without changing numeric values', async () => {
+    const capture = captureDownload();
+    downloadCsv(
+        'untrusted.csv',
+        ['Name', 'Note', 'Score', 'Plain'],
+        [['=HYPERLINK("bad")', '\t +CMD', -10, 'ordinary']],
     );
+    const blob = capture.createObjectUrl.mock.calls[0][0] as Blob;
+    expect(await readBlob(blob)).toContain('"\'=HYPERLINK(""bad"")","\'\t +CMD","-10","ordinary"');
 });

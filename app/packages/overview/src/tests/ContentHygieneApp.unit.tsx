@@ -1,8 +1,9 @@
 import React from 'react';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { getTheme, SplunkThemeProvider } from '@splunk/themes';
 
-import { ContentHygieneApp } from '../ContentHygieneApp';
+import { ContentHygieneApp, readableTheme } from '../ContentHygieneApp';
 import {
     InventoryClient,
     InventorySnapshot,
@@ -10,6 +11,49 @@ import {
     ReviewRecord,
     ScanSummary,
 } from '../types';
+
+async function selectChoice(
+    user: ReturnType<typeof userEvent.setup>,
+    label: string,
+    option: string,
+): Promise<void> {
+    const trigger = screen.getByRole('combobox', { name: label });
+    await user.click(trigger);
+    const filter = screen.queryByRole('combobox', { name: 'Filter' });
+    if (filter) {
+        expect(filter).not.toHaveAttribute('id', trigger.id);
+        expect(filter).toHaveAttribute('data-content-hygiene-filter', 'true');
+    }
+    await user.click(await screen.findByRole('option', { name: option }));
+    await waitFor(() => expect(screen.queryByRole('listbox')).not.toBeInTheDocument());
+}
+
+beforeEach(() => {
+    window.history.replaceState(null, '', '/');
+});
+
+test.each(['light', 'dark'] as const)(
+    'native selected-option descriptions use the strong readable foreground in %s mode',
+    (colorScheme) => {
+        const theme = getTheme({ family: 'enterprise', colorScheme });
+        const customized = readableTheme(theme);
+        expect(customized.contentColorDefault).toBe(theme.contentColorActive);
+        expect(customized.contentColorMuted).toBe(theme.contentColorActive);
+        // The real light-mode selected menu row is #e0e0e0. The ordinary
+        // default foreground is only 4.38:1 there; placeholders and secondary
+        // option descriptions must use the stronger native foreground.
+        if (colorScheme === 'light') {
+            const luminance = (hex: string): number => {
+                const channels = hex.match(/[a-f\d]{2}/gi)!.map((channel) => {
+                    const value = Number.parseInt(channel, 16) / 255;
+                    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+                });
+                return channels.reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index], 0);
+            };
+            expect((luminance('#e0e0e0') + 0.05) / (luminance(customized.contentColorMuted) + 0.05)).toBeGreaterThanOrEqual(4.5);
+        }
+    },
+);
 
 const liveScan: ScanSummary = {
     scanId: 'scan-live-test',
@@ -187,9 +231,7 @@ const usageSnapshot: InventorySnapshot = {
                 usageRunId: 'scan-usage-live',
                 inventoryScanId: liveScan.scanId,
                 sourceId: observed ? 'search_audit' : 'dashboard_access',
-                sourceLabel: observed
-                    ? 'Splunk search audit'
-                    : 'Splunk Web access log',
+                sourceLabel: observed ? 'Splunk search audit' : 'Splunk Web access log',
                 activityKind: observed
                     ? ('saved_search_execution' as const)
                     : ('dashboard_view' as const),
@@ -306,14 +348,10 @@ function mutableReviewClient(): {
                 app: input.object.app,
                 owner: input.object.owner,
                 healthStatusAtReview: input.object.healthStatus,
-                usageCoverageAtReview:
-                    input.object.usageEvidence?.coverage ?? null,
-                usageLastObservedAtReview:
-                    input.object.usageEvidence?.lastObserved ?? null,
-                usageObservationCountAtReview:
-                    input.object.usageEvidence?.observationCount ?? null,
-                usageRunIdAtReview:
-                    input.object.usageEvidence?.usageRunId ?? null,
+                usageCoverageAtReview: input.object.usageEvidence?.coverage ?? null,
+                usageLastObservedAtReview: input.object.usageEvidence?.lastObserved ?? null,
+                usageObservationCountAtReview: input.object.usageEvidence?.observationCount ?? null,
+                usageRunIdAtReview: input.object.usageEvidence?.usageRunId ?? null,
                 stage: input.stage,
                 note: input.note,
                 assignedTo: input.assignedTo,
@@ -343,7 +381,9 @@ function mutableReviewClient(): {
 test('renders an evidence-backed live overview without unsafe claims', async () => {
     render(<ContentHygieneApp page="overview" inventoryClient={clientWithSnapshot()} />);
 
-    expect(screen.getByRole('heading', { name: 'Environment Overview' })).toBeInTheDocument();
+    expect(
+        await screen.findByRole('heading', { name: 'Environment Overview' }),
+    ).toBeInTheDocument();
     expect(await screen.findByText('Live inventory cache ready')).toBeInTheDocument();
     expect(screen.getByText('Retired Host Report')).toBeInTheDocument();
     expect(screen.queryByText(/safe to delete/i)).not.toBeInTheDocument();
@@ -370,7 +410,7 @@ test('sorts, paginates, searches, and expands live inventory by app', async () =
     expect(screen.getByTitle('View cleanup candidates for juliet')).toBeInTheDocument();
     expect(screen.getByTitle('View cleanup candidates for kilo')).toBeInTheDocument();
 
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Sort by' }), 'app');
+    await selectChoice(user, 'Sort by', 'App name');
     expect(pagination).toHaveTextContent('1–10 of 12 apps · Page 1 of 2');
     expect(screen.getAllByTitle(/^View cleanup candidates for /)[0]).toHaveTextContent(
         'alpha_tools',
@@ -379,10 +419,10 @@ test('sorts, paginates, searches, and expands live inventory by app', async () =
     await user.click(screen.getByRole('button', { name: 'Sort direction: A–Z' }));
     expect(screen.getAllByTitle(/^View cleanup candidates for /)[0]).toHaveTextContent('zeta');
 
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Rows' }), '5');
+    await selectChoice(user, 'Rows', '5');
     expect(pagination).toHaveTextContent('1–5 of 12 apps · Page 1 of 3');
 
-    const appSearch = screen.getByRole('searchbox', { name: 'Find app' });
+    const appSearch = screen.getByRole('textbox', { name: 'Find app' });
     await user.type(appSearch, 'alpha tools');
     expect(pagination).toHaveTextContent('1–1 of 1 apps · Page 1 of 1');
     expect(screen.queryByTitle('View cleanup candidates for zeta')).not.toBeInTheDocument();
@@ -409,7 +449,7 @@ test('filters live candidates and shows recorded finding evidence', async () => 
     render(<ContentHygieneApp page="cleanup-candidates" inventoryClient={clientWithSnapshot()} />);
 
     await screen.findByText('Live inventory cache ready');
-    const search = screen.getByRole('searchbox', { name: 'Search' });
+    const search = screen.getByRole('textbox', { name: 'Search' });
     await user.type(search, 'retired host');
 
     expect(screen.getByRole('button', { name: 'Retired Host Report' })).toBeInTheDocument();
@@ -420,19 +460,37 @@ test('filters live candidates and shows recorded finding evidence', async () => 
     expect(screen.queryByRole('button', { name: /disable/i })).not.toBeInTheDocument();
 });
 
+test.each(['RETired_host-report', 'retired host report', 'content-admin'])(
+    'candidate search matches technical names and readable separators: %s',
+    async (query) => {
+        const user = userEvent.setup();
+        const snapshot = {
+            ...liveSnapshot,
+            objects: liveSnapshot.objects.map((object) => object.healthStatus === 'dormant'
+                ? { ...object, name: 'retired_host-report', app: 'content-admin' } : object),
+        };
+        render(<ContentHygieneApp page="cleanup-candidates" inventoryClient={clientWithSnapshot(snapshot)} />);
+        await screen.findByText('Live inventory cache ready');
+        await user.type(screen.getByRole('textbox', { name: 'Search' }), query);
+        expect(screen.getByRole('button', { name: 'retired_host-report' })).toBeInTheDocument();
+    },
+);
+
 test('keeps abandonment confidence and removal impact separate', async () => {
     render(<ContentHygieneApp page="dependency-explorer" inventoryClient={clientWithSnapshot()} />);
 
     expect(await screen.findByText('Live inventory cache ready')).toBeInTheDocument();
     expect(screen.getByText('Abandonment confidence')).toBeInTheDocument();
-    expect(screen.getByText('Removal impact')).toBeInTheDocument();
+    expect(screen.getAllByText('Removal impact')).toHaveLength(2);
     expect(screen.queryByText(/^Risk score$/i)).not.toBeInTheDocument();
 });
 
 test('explains removal blast radius and recommends a non-destructive sequence', async () => {
+    const user = userEvent.setup();
     render(<ContentHygieneApp page="dependency-explorer" inventoryClient={clientWithSnapshot()} />);
 
     await screen.findByText('Live inventory cache ready');
+    await user.click(await screen.findByRole('tab', { name: 'Removal impact' }));
     expect(screen.getByRole('heading', { name: 'Impact of removal' })).toBeInTheDocument();
     expect(
         screen.getByText('Address 1 known direct dependent before considering removal.'),
@@ -453,7 +511,7 @@ test('explains removal blast radius and recommends a non-destructive sequence', 
     ).not.toBeInTheDocument();
 });
 
-test('shows an honest empty state when no live snapshot exists', () => {
+test('shows an honest empty state when no live snapshot exists', async () => {
     const unavailableClient: InventoryClient = {
         isAvailable: () => false,
         getLatestSnapshot: async () => null,
@@ -464,7 +522,7 @@ test('shows an honest empty state when no live snapshot exists', () => {
     render(<ContentHygieneApp page="overview" inventoryClient={unavailableClient} />);
 
     expect(screen.getByText('No live inventory cached')).toBeInTheDocument();
-    expect(screen.getByText('No live inventory is cached')).toBeInTheDocument();
+    expect(await screen.findByText('No live inventory is cached')).toBeInTheDocument();
     expect(screen.queryByText(/demo data/i)).not.toBeInTheDocument();
 });
 
@@ -496,6 +554,9 @@ test('runs a bounded live inventory from Settings and exposes its provenance', a
     expect(screen.getAllByText('Live Splunk data')).toHaveLength(2);
     expect(screen.getByText('Live inventory cache ready')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Run complete live scan' })).toBeEnabled();
+    expect(
+        screen.getByText('Splunk Enterprise 10.2.8 and 10.4.4 (browser-validated)')
+    ).toBeInTheDocument();
 });
 
 test('collects a selected usage window and displays source provenance', async () => {
@@ -508,10 +569,7 @@ test('collects a selected usage window and displays source provenance', async ()
 
     render(<ContentHygieneApp page="settings" inventoryClient={inventoryClient} />);
     await screen.findByText('scan-live-test');
-    await user.selectOptions(
-        screen.getByRole('combobox', { name: 'Usage observation window' }),
-        '180',
-    );
+    await selectChoice(user, 'Observation window', '180 days');
     await user.click(screen.getByRole('button', { name: 'Collect usage evidence' }));
 
     expect(runUsageScan).toHaveBeenCalledWith(180, expect.any(Function));
@@ -530,10 +588,7 @@ test('filters candidates by defensible usage-evidence state', async () => {
     );
 
     await screen.findByText('Live inventory cache ready');
-    await user.selectOptions(
-        screen.getByRole('combobox', { name: 'Usage evidence' }),
-        'no_observations_complete',
-    );
+    await selectChoice(user, 'Usage evidence', 'No activity, complete window');
 
     expect(screen.getAllByText('Retired Host Report')).toHaveLength(2);
     expect(
@@ -554,7 +609,7 @@ test('persists candidate confirmation workflow records in the app-local review l
     );
 
     await screen.findByText('Live inventory cache ready');
-    await user.selectOptions(screen.getByLabelText('Confirmation stage'), 'investigating');
+    await selectChoice(user, 'Confirmation stage', 'Investigating');
     await user.type(screen.getByRole('textbox', { name: 'Assigned reviewer' }), 'platform-team');
     await user.type(
         screen.getByRole('textbox', { name: 'Investigation note' }),
@@ -583,9 +638,9 @@ test('persists candidate confirmation workflow records in the app-local review l
 
     expect(await screen.findByRole('heading', { name: 'Review Library' })).toBeInTheDocument();
     expect(await screen.findByText('platform-team')).toBeInTheDocument();
-    expect(
-        screen.getByDisplayValue('Confirm the dashboard reference with its owner.'),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Investigation note' })).toHaveValue(
+        'Confirm the dashboard reference with its owner.',
+    );
 });
 
 test('broadens center scope when drilling to a related object outside the review group', async () => {
@@ -624,10 +679,10 @@ test('broadens center scope when drilling to a related object outside the review
     const centerGroup = screen.getByRole('combobox', {
         name: 'Center group',
     });
-    await user.selectOptions(centerGroup, 'investigating');
+    await selectChoice(user, 'Center group', 'Review stage: Investigating');
     await user.click(screen.getByRole('button', { name: 'Drill in' }));
 
-    expect(centerGroup).toHaveValue('all');
+    expect(centerGroup).toHaveTextContent('All inventory objects');
     expect(
         screen.getByRole('heading', { name: 'Daily Error Review', level: 2 }),
     ).toBeInTheDocument();
@@ -635,3 +690,51 @@ test('broadens center scope when drilling to a related object outside the review
         'Retired Host Report',
     );
 });
+
+test.each(['light', 'dark'] as const)(
+    'link-style graph and table buttons retain an untinted surface when focused in %s mode',
+    async (colorScheme) => {
+        const user = userEvent.setup();
+        render(
+            <SplunkThemeProvider family="enterprise" colorScheme={colorScheme}>
+                <ContentHygieneApp
+                    page="dependency-explorer"
+                    inventoryClient={clientWithSnapshot()}
+                />
+            </SplunkThemeProvider>,
+        );
+        const graphButton = (await screen.findAllByRole('button', { name: /^Inspect / }))[0];
+        await user.click(graphButton);
+        expect(graphButton).toHaveFocus();
+        expect(window.getComputedStyle(graphButton).backgroundColor).toBe('rgba(0, 0, 0, 0)');
+        expect(
+            window.getComputedStyle(within(graphButton).getByText('Saved Search')).whiteSpace,
+        ).toBe('nowrap');
+        const rowButton = screen.getByRole('button', { name: 'Retired Host Report' });
+        await user.click(rowButton);
+        expect(rowButton).toHaveFocus();
+        expect(window.getComputedStyle(rowButton).backgroundColor).toBe('rgba(0, 0, 0, 0)');
+    },
+);
+
+test.each(['light', 'dark'] as const)(
+    'empty dependency scope remains recoverable in %s mode',
+    async (colorScheme) => {
+        const user = userEvent.setup();
+        render(
+            <SplunkThemeProvider family="enterprise" colorScheme={colorScheme}>
+                <ContentHygieneApp
+                    page="dependency-explorer"
+                    inventoryClient={clientWithSnapshot()}
+                />
+            </SplunkThemeProvider>,
+        );
+        await screen.findByText('Live inventory cache ready');
+        await selectChoice(user, 'Center group', 'Candidate group: unowned');
+        expect(screen.getByText('No objects match this center group')).toBeInTheDocument();
+        expect(screen.getByRole('combobox', { name: 'Center group' })).toBeEnabled();
+        await user.click(screen.getByRole('button', { name: 'Reset dependency scope' }));
+        expect(screen.getByRole('tab', { name: /Relationships/ })).toBeInTheDocument();
+        expect(window.location.search).toContain('group=all');
+    },
+);

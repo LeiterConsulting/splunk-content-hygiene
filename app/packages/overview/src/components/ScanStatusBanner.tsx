@@ -1,4 +1,5 @@
 import React from 'react';
+import WaitSpinner from '@splunk/react-ui/WaitSpinner';
 import { ScanBanner, ScanMeta, SourceBadge } from '../AppStyles';
 import { ScanSummary } from '../types';
 
@@ -34,9 +35,7 @@ function emptyScanTitle(isLoading: boolean, loadError: string | null): string {
     if (isLoading) {
         return 'Loading live inventory';
     }
-    return loadError
-        ? 'Live inventory unavailable'
-        : 'No live inventory cached';
+    return loadError ? 'Live inventory unavailable' : 'No live inventory cached';
 }
 
 function emptyScanMessage(isLoading: boolean, loadError: string | null): string {
@@ -59,17 +58,20 @@ export function ScanStatusBanner({
             <ScanBanner aria-label="Scan status">
                 <div>
                     <strong>{scanTitle(scan.status)}</strong>
+                    {scan.retainedBaseline ? (
+                        <div>
+                            A verified full-scan baseline is retained; a newer bounded or partial
+                            check did not replace it.
+                        </div>
+                    ) : null}
                     <ScanMeta>
                         <span>
-                            {numberFormatter.format(scan.objectCount)} cached
-                            inventory objects
+                            {numberFormatter.format(scan.objectCount)} cached inventory objects
                         </span>
                         <span aria-hidden="true">•</span>
                         <span>{scan.warningCount} collector warnings</span>
                         <span aria-hidden="true">•</span>
-                        <span>
-                            Analysis {scan.analysisStatus.replace(/_/g, ' ')}
-                        </span>
+                        <span>Analysis {scan.analysisStatus.replace(/_/g, ' ')}</span>
                     </ScanMeta>
                 </div>
                 <ScanMeta>
@@ -83,6 +85,7 @@ export function ScanStatusBanner({
     return (
         <ScanBanner aria-label="Scan status">
             <div>
+                {isLoading ? <WaitSpinner screenReaderText="Loading verified inventory" /> : null}
                 <strong>{emptyScanTitle(isLoading, loadError)}</strong>
                 <ScanMeta>
                     <span>{emptyScanMessage(isLoading, loadError)}</span>

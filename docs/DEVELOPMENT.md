@@ -21,12 +21,13 @@ yarn validate
 
 The validation sequence runs:
 
-1. Jest component and service tests
-2. ESLint and Stylelint
-3. TypeScript compilation
-4. Production webpack builds
-5. `.tar.gz` package creation
-6. Package-policy verification
+1. Reproducible branding verification
+2. Jest component, host/theme, and service tests
+3. ESLint and Stylelint
+4. TypeScript compilation
+5. Production webpack builds
+6. `.tar.gz` package creation
+7. Package-policy verification, including native hosts and PNG placement/dimensions
 
 The verifier requires a single `content_hygiene/` top-level directory and
 rejects dependencies, repository metadata, local Splunk configuration, tests,

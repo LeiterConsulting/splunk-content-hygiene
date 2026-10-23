@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import TabLayout from '@splunk/react-ui/TabLayout';
 import {
     Breadcrumbs,
     ButtonRow,
     Card,
+    CardBody,
     CardHeader,
     CardTitle,
     DefinitionList,
@@ -13,26 +15,28 @@ import {
     EmptyState,
     FilterBar,
     FilterField,
-    GraphCanvas,
-    GraphSvg,
     InlineNotice,
     Input,
     RowButton,
     Select,
+    SmallText,
     SpacedBlock,
     StyledButton,
     Table,
     TableScroller,
 } from '../AppStyles';
+import { DependencyGraph } from '../components/DependencyGraph';
+import { ResultPagination } from '../components/ResultPagination';
 import { PageHeader } from '../components/PageHeader';
 import { RemovalImpactPanel } from '../components/RemovalImpactPanel';
 import { ReviewEditor } from '../components/ReviewEditor';
 import { ReviewStageBadge } from '../components/ReviewStageBadge';
 import { StatusBadge } from '../components/StatusBadge';
 import { UsageEvidencePanel } from '../components/UsageEvidencePanel';
+import { buildDependencyIndex } from '../services/dependencyGraph';
 import { RemovalImpactAnalysis, analyzeRemovalImpact } from '../services/removalImpact';
 import { reviewStageOptions } from '../services/reviews';
-import { usageEvidenceState } from '../services/usage';
+import { usageEvidenceState, usageValidity } from '../services/usage';
 import {
     ContentObject,
     DependencyEdge,
@@ -45,16 +49,6 @@ import { downloadCsv } from '../utils/downloadCsv';
 import { downloadJson } from '../utils/downloadJson';
 import { navigateToView, readQueryParam } from '../utils/navigation';
 
-const nodeStatusColors = {
-    active: '#4fae58',
-    dormant: '#e5a632',
-    orphaned: '#db584c',
-    broken: '#d83b3b',
-    unowned: '#4f8ed8',
-    protected: '#6c8ebf',
-    unknown: '#8b949e',
-} as const;
-const GRAPH_EDGE_LIMIT = 16;
 const candidateFindingTypes = new Set([
     'cleanup_candidate',
     'broken_reference',
@@ -81,10 +75,6 @@ interface RelatedNode {
     healthStatus: HealthStatus;
     contentObject: ContentObject | null;
     direction: 'inbound' | 'outbound';
-}
-
-function truncate(value: string, length = 24): string {
-    return value.length > length ? `${value.slice(0, length - 1)}…` : value;
 }
 
 function formatScore(value: number | null): string {
@@ -128,6 +118,9 @@ function matchesGroup(
     if (group === 'all') {
         return true;
     }
+    if (group === 'parser_gaps') {
+        return Boolean(contentObject.analysisWarnings?.length);
+    }
     if (group === 'candidates') {
         return candidateIds.has(contentObject.objectId);
     }
@@ -138,14 +131,11 @@ function matchesGroup(
         return usageEvidenceState(contentObject) === 'observed';
     }
     if (group === 'usage_no_observations_complete') {
-        return (
-            usageEvidenceState(contentObject) ===
-            'no_observations_complete'
-        );
+        return usageEvidenceState(contentObject) === 'no_observations_complete';
     }
     if (group === 'usage_incomplete') {
-        return ['partial', 'unavailable', 'not_measured'].includes(
-            usageEvidenceState(contentObject)
+        return ['partial', 'unavailable', 'not_measured', 'historical', 'unsupported'].includes(
+            usageEvidenceState(contentObject),
         );
     }
     const review = reviewByObject.get(contentObject.objectId);
@@ -164,6 +154,7 @@ function exportRelationships(
         `content-hygiene-dependencies-${selected.name}.csv`,
         [
             'Center object ID',
+            'Inventory scan ID',
             'Center object',
             'Direction',
             'Related object ID',
@@ -172,6 +163,8 @@ function exportRelationships(
             'Related health',
             'Related review stage',
             'Related usage coverage',
+            'Related usage validity',
+            'Related usage window ended',
             'Related usage observations',
             'Related last observed',
             'Relation',
@@ -182,6 +175,7 @@ function exportRelationships(
         ],
         rows.map((row) => [
             selected.objectId,
+            selected.inventoryScanId ?? '',
             selected.name,
             row.direction,
             row.objectId,
@@ -190,6 +184,8 @@ function exportRelationships(
             row.healthStatus,
             reviewByObject.get(row.objectId)?.stage ?? '',
             row.contentObject?.usageEvidence?.coverage ?? 'not measured',
+            row.contentObject ? usageValidity(row.contentObject) : 'not_applicable',
+            row.contentObject?.usageEvidence?.windowEnd ?? '',
             row.contentObject?.usageEvidence?.observationCount ?? '',
             row.contentObject?.lastUsed ?? '',
             row.edge.relation,
@@ -207,6 +203,9 @@ function exportRemovalImpact(selected: ContentObject, analysis: RemovalImpactAna
         `content-hygiene-removal-impact-${selected.name}.csv`,
         [
             'Selected object ID',
+            'Inventory scan ID',
+            'Selected usage validity',
+            'Selected usage window ended',
             'Selected object',
             'Impact level',
             'Impact score',
@@ -229,6 +228,9 @@ function exportRemovalImpact(selected: ContentObject, analysis: RemovalImpactAna
         ],
         rows.map((affected) => [
             selected.objectId,
+            selected.inventoryScanId ?? '',
+            usageValidity(selected),
+            selected.usageEvidence?.windowEnd ?? '',
             selected.name,
             analysis.impactLevel,
             analysis.impactScore,
@@ -252,6 +254,32 @@ function exportRemovalImpact(selected: ContentObject, analysis: RemovalImpactAna
     );
 }
 
+function groupOptions(allLabel: string): React.ReactNode {
+    return (
+        <>
+            <option value="all">{allLabel}</option>
+            <option value="parser_gaps">Objects with parser/coverage gaps</option>
+            <option value="candidates">All cleanup candidates</option>
+            {candidateStatuses.map((status) => (
+                <option key={status} value={status}>
+                    Candidate group: {status}
+                </option>
+            ))}
+            <option value="in_library">Any review-library record</option>
+            <option value="usage_observed">Usage: activity observed</option>
+            <option value="usage_no_observations_complete">
+                Usage: no activity, complete window
+            </option>
+            <option value="usage_incomplete">Usage: incomplete, historical, or not measured</option>
+            {reviewStageOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                    Review stage: {option.label}
+                </option>
+            ))}
+        </>
+    );
+}
+
 export function DependencyPage({
     snapshot,
     isLoading,
@@ -260,204 +288,221 @@ export function DependencyPage({
     onSaveReview,
     onDeleteReview,
 }: DependencyPageProps): React.ReactElement {
-    const [selectedId, setSelectedId] = useState(readQueryParam('object'));
-    const [query, setQuery] = useState(readQueryParam('query'));
-    const [direction, setDirection] = useState(readQueryParam('direction') || 'all');
-    const [centerGroup, setCenterGroup] = useState(readQueryParam('group') || 'all');
-    const [relatedGroup, setRelatedGroup] = useState('all');
+    const [selectedId, setSelectedId] = useState(() => readQueryParam('object'));
+    const [inspectedId, setInspectedId] = useState('');
+    const [query, setQuery] = useState(() => readQueryParam('query'));
+    const [direction, setDirection] = useState(() => readQueryParam('direction') || 'all');
+    const [centerGroup, setCenterGroup] = useState(() => readQueryParam('group') || 'all');
+    const [relatedGroup, setRelatedGroup] = useState(() => readQueryParam('related') || 'all');
+    const [tab, setTab] = useState(() =>
+        readQueryParam('tab') === 'impact' ? 'impact' : 'relationships',
+    );
     const [impactDepth, setImpactDepth] = useState(3);
+    const [page, setPage] = useState(0);
     const [trail, setTrail] = useState<string[]>([]);
-    const objects = snapshot?.objects ?? [];
-    const edges = snapshot?.edges ?? [];
-    const reviewByObject = new Map(reviews.map((review) => [review.objectId, review]));
-    const candidateIds = new Set(
-        (snapshot?.findings ?? [])
-            .filter((finding) => candidateFindingTypes.has(finding.findingType))
-            .map((finding) => finding.objectId),
+    const objects = snapshot?.objects ?? EMPTY_OBJECTS;
+    const edges = snapshot?.edges ?? EMPTY_EDGES;
+    const index = useMemo(() => buildDependencyIndex(objects, edges), [objects, edges]);
+    const reviewByObject = useMemo(
+        () => new Map(reviews.map((review) => [review.objectId, review])),
+        [reviews],
     );
-    objects.forEach((contentObject) => {
-        if (candidateStatuses.includes(contentObject.healthStatus)) {
-            candidateIds.add(contentObject.objectId);
-        }
-    });
-    const objectById = new Map(
-        objects.map((contentObject) => [contentObject.objectId, contentObject]),
-    );
-    const eligibleCenterObjects = objects.filter((contentObject) =>
-        matchesGroup(contentObject, centerGroup, candidateIds, reviewByObject),
-    );
-    const defaultObject =
-        eligibleCenterObjects.find((contentObject) =>
-            edges.some(
-                (edge) =>
-                    edge.sourceId === contentObject.objectId ||
-                    edge.targetId === contentObject.objectId,
-            ),
-        ) ?? eligibleCenterObjects[0];
-    const selectedFromId = objectById.get(selectedId);
-    const selected =
-        selectedFromId && matchesGroup(selectedFromId, centerGroup, candidateIds, reviewByObject)
-            ? selectedFromId
-            : defaultObject;
-    const normalizedQuery = query.trim().toLowerCase();
-    const matchingObjects = eligibleCenterObjects
-        .filter((contentObject) => {
-            if (!normalizedQuery) {
-                return true;
+    const candidateIds = useMemo(() => {
+        const ids = new Set(
+            (snapshot?.findings ?? [])
+                .filter((finding) => candidateFindingTypes.has(finding.findingType))
+                .map((finding) => finding.objectId),
+        );
+        objects.forEach((item) => {
+            if (candidateStatuses.includes(item.healthStatus)) {
+                ids.add(item.objectId);
             }
-            return [
-                contentObject.name,
-                contentObject.canonicalName,
-                contentObject.app,
-                contentObject.objectType,
-            ].some((value) => value.toLowerCase().includes(normalizedQuery));
-        })
-        .slice(0, 200);
-    const objectOptions =
-        selected &&
-        !matchingObjects.some((contentObject) => contentObject.objectId === selected.objectId)
-            ? [selected, ...matchingObjects]
-            : matchingObjects;
-    const directionalEdges = selected
-        ? edges.filter(
-              (edge) =>
-                  (direction === 'all' &&
-                      (edge.sourceId === selected.objectId ||
-                          edge.targetId === selected.objectId)) ||
-                  (direction === 'outbound' && edge.sourceId === selected.objectId) ||
-                  (direction === 'inbound' && edge.targetId === selected.objectId),
-          )
-        : [];
-    const relatedRows: RelatedNode[] = selected
-        ? directionalEdges
-              .map((edge) => {
-                  const selectedIsSource = edge.sourceId === selected.objectId;
-                  const relatedId = selectedIsSource ? edge.targetId : edge.sourceId;
-                  const relatedObject = objectById.get(relatedId);
-                  const rowDirection: RelatedNode['direction'] = selectedIsSource
-                      ? 'outbound'
-                      : 'inbound';
-                  return relatedObject
-                      ? {
-                            edge,
-                            objectId: relatedObject.objectId,
-                            name: relatedObject.name,
-                            objectType: relatedObject.objectType,
-                            healthStatus: relatedObject.healthStatus,
-                            contentObject: relatedObject,
-                            direction: rowDirection,
-                        }
-                      : unresolvedNode(edge, relatedId, rowDirection);
-              })
-              .filter(
-                  (row) =>
-                      relatedGroup === 'all' ||
-                      (row.contentObject
-                          ? matchesGroup(
-                                row.contentObject,
-                                relatedGroup,
-                                candidateIds,
-                                reviewByObject,
-                            )
-                          : relatedGroup === 'broken'),
-              )
-        : [];
-    const graphRows = relatedRows.slice(0, GRAPH_EDGE_LIMIT);
-    const selectedReview = selected ? (reviewByObject.get(selected.objectId) ?? null) : null;
-    const removalImpact =
-        selected && snapshot
-            ? analyzeRemovalImpact(selected, objects, edges, reviews, snapshot.scan, impactDepth)
-            : null;
-    let emptyTitle = 'No live inventory is cached';
-    if (isLoading) {
-        emptyTitle = 'Loading live inventory…';
-    } else if (centerGroup !== 'all') {
-        emptyTitle = 'No objects match this center group';
+        });
+        return ids;
+    }, [snapshot, objects]);
+    const eligible = useMemo(
+        () =>
+            objects.filter((item) => matchesGroup(item, centerGroup, candidateIds, reviewByObject)),
+        [objects, centerGroup, candidateIds, reviewByObject],
+    );
+    const selectedFromId = index.objects.get(selectedId);
+    const selected =
+        selectedFromId && eligible.includes(selectedFromId)
+            ? selectedFromId
+            : (eligible.find(
+                  (item) => index.inbound.has(item.objectId) || index.outbound.has(item.objectId),
+              ) ?? eligible[0]);
+    const matches = useMemo(() => {
+        const normalized = query.trim().toLowerCase().replace(/[_-]+/g, ' ');
+        return eligible
+            .filter((item) =>
+                [item.name, item.canonicalName, item.app, item.objectType].some((value) =>
+                    value.toLowerCase().replace(/[_-]+/g, ' ').includes(normalized),
+                ),
+            )
+            .sort((a, b) => a.name.localeCompare(b.name) || a.objectId.localeCompare(b.objectId));
+    }, [eligible, query]);
+    const options = matches.slice(0, 200);
+    if (selected && !options.includes(selected)) {
+        options.unshift(selected);
     }
+    const allows = useCallback(
+        (id: string, edge: DependencyEdge) => {
+            const item = index.objects.get(id);
+            return (
+                relatedGroup === 'all' ||
+                (item
+                    ? matchesGroup(item, relatedGroup, candidateIds, reviewByObject)
+                    : relatedGroup === 'broken' && edge.confidence !== 'unknown')
+            );
+        },
+        [index, relatedGroup, candidateIds, reviewByObject],
+    );
+    const relatedRows = useMemo<RelatedNode[]>(() => {
+        if (!selected) {
+            return [];
+        }
+        const adjacent = [
+            ...(direction !== 'outbound' ? (index.inbound.get(selected.objectId) ?? []) : []),
+            ...(direction !== 'inbound' ? (index.outbound.get(selected.objectId) ?? []) : []),
+        ];
+        return Array.from(new Map(adjacent.map((edge) => [edge.edgeId, edge])).values())
+            .map((edge) => {
+                const outbound = edge.sourceId === selected.objectId;
+                const id = outbound ? edge.targetId : edge.sourceId;
+                const item = index.objects.get(id);
+                return item
+                    ? {
+                          edge,
+                          objectId: id,
+                          name: item.name,
+                          objectType: item.objectType,
+                          healthStatus: item.healthStatus,
+                          contentObject: item,
+                          direction: outbound ? ('outbound' as const) : ('inbound' as const),
+                      }
+                    : unresolvedNode(edge, id, outbound ? 'outbound' : 'inbound');
+            })
+            .filter((row) => allows(row.objectId, row.edge))
+            .sort(
+                (a, b) =>
+                    a.direction.localeCompare(b.direction) ||
+                    a.name.localeCompare(b.name) ||
+                    a.edge.edgeId.localeCompare(b.edge.edgeId),
+            );
+    }, [selected, index, direction, allows]);
+    const graphEdges = useMemo(() => relatedRows.map((row) => row.edge), [relatedRows]);
+    const scan = snapshot?.scan;
+    const emptyTitle = snapshot
+        ? 'No objects match this center group'
+        : 'No verified inventory is cached';
+    const impact = useMemo(
+        () =>
+            selected && scan
+                ? analyzeRemovalImpact(selected, objects, edges, reviews, scan, impactDepth)
+                : null,
+        [selected, objects, edges, reviews, scan, impactDepth],
+    );
+    const detailId = inspectedId || selected?.objectId || '';
+    const detail = index.objects.get(detailId);
+    const unresolvedEvidence = index.inbound.get(detailId) ?? [];
+    const unresolved =
+        !detail && unresolvedEvidence[0]
+            ? unresolvedNode(unresolvedEvidence[0], detailId, 'outbound')
+            : null;
+    const detailReview = detail ? (reviewByObject.get(detail.objectId) ?? null) : null;
+    const currentPage = Math.min(page, Math.max(0, Math.ceil(relatedRows.length / 25) - 1));
+    const pageRows = relatedRows.slice(currentPage * 25, currentPage * 25 + 25);
 
-    const drillTo = (objectId: string): void => {
-        const nextObject = objectById.get(objectId);
-        if (!selected || !nextObject) {
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const values = {
+            object: selected?.objectId ?? '',
+            query,
+            direction,
+            group: centerGroup,
+            related: relatedGroup,
+            tab,
+        };
+        Object.entries(values).forEach(([key, value]) => {
+            if (value) {
+                params.set(key, value);
+            } else {
+                params.delete(key);
+            }
+        });
+        window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+    }, [selected?.objectId, query, direction, centerGroup, relatedGroup, tab]);
+
+    const drillTo = (id: string): void => {
+        const item = index.objects.get(id);
+        if (!item) {
             return;
         }
-        if (!matchesGroup(nextObject, centerGroup, candidateIds, reviewByObject)) {
+        if (selected) {
+            setTrail((current) => [...current, selected.objectId]);
+        }
+        if (!matchesGroup(item, centerGroup, candidateIds, reviewByObject)) {
             setCenterGroup('all');
         }
-        setTrail((current) => [...current, selected.objectId]);
-        setSelectedId(objectId);
+        setSelectedId(id);
+        setInspectedId('');
         setQuery('');
+        setPage(0);
     };
-
-    const drillBack = (index: number): void => {
-        const targetId = trail[index];
-        setSelectedId(targetId);
-        setTrail((current) => current.slice(0, index));
+    const clear = (): void => {
+        setCenterGroup('all');
+        setRelatedGroup('all');
+        setDirection('all');
+        setQuery('');
+        setPage(0);
     };
-
     return (
         <>
             <PageHeader
                 title="Dependency Explorer"
-                subtitle="Trace live relationships, simulate removal impact, and build an evidence-backed remediation plan without changing Splunk content."
+                subtitle="Explore consumers and dependencies, inspect the evidence, and assess removal impact."
                 actions={
-                    selected && removalImpact ? (
+                    selected && impact ? (
                         <ButtonRow>
                             <StyledButton
-                                type="button"
                                 onClick={() =>
                                     exportRelationships(selected, relatedRows, reviewByObject)
                                 }
-                                disabled={relatedRows.length === 0}
+                                disabled={!relatedRows.length}
                             >
                                 Export relationships CSV
                             </StyledButton>
                             <StyledButton
-                                type="button"
                                 onClick={() =>
-                                    downloadJson(
-                                        `content-hygiene-dependencies-${selected.name}.json`,
-                                        {
-                                            exportedAt: new Date().toISOString(),
-                                            scanId: snapshot?.scan.scanId ?? null,
-                                            centerObject: selected,
-                                            centerReview: selectedReview,
-                                            removalImpact,
-                                            relationships: relatedRows.map((row) => ({
-                                                edge: row.edge,
-                                                direction: row.direction,
-                                                relatedObject: row.contentObject,
-                                                unresolvedObjectId: row.contentObject
-                                                    ? null
-                                                    : row.objectId,
-                                                relatedReview:
-                                                    reviewByObject.get(row.objectId) ?? null,
-                                            })),
-                                        },
-                                    )
+                                    downloadJson('content-hygiene-dependencies.json', {
+                                        exportedAt: new Date().toISOString(),
+                                        scanId: snapshot?.scan.scanId,
+                                        centerObject: selected,
+                                        relationships: relatedRows.map((row) => ({
+                                            ...row,
+                                            usageValidity: row.contentObject
+                                                ? usageValidity(row.contentObject)
+                                                : 'not_applicable',
+                                        })),
+                                    })
                                 }
-                                disabled={relatedRows.length === 0}
+                                disabled={!relatedRows.length}
                             >
                                 Export relationships JSON
                             </StyledButton>
-                            <StyledButton
-                                type="button"
-                                onClick={() => exportRemovalImpact(selected, removalImpact)}
-                            >
+                            <StyledButton onClick={() => exportRemovalImpact(selected, impact)}>
                                 Export impact CSV
                             </StyledButton>
                             <StyledButton
-                                type="button"
                                 onClick={() =>
-                                    downloadJson(
-                                        `content-hygiene-removal-impact-${selected.name}.json`,
-                                        {
-                                            exportedAt: new Date().toISOString(),
-                                            scanId: snapshot?.scan.scanId ?? null,
-                                            selectedObject: selected,
-                                            selectedReview,
-                                            analysis: removalImpact,
-                                        },
-                                    )
+                                    downloadJson('content-hygiene-impact.json', {
+                                        exportedAt: new Date().toISOString(),
+                                        scanId: snapshot?.scan.scanId,
+                                        selectedObject: selected,
+                                        usageValidity: usageValidity(selected),
+                                        analysis: impact,
+                                    })
                                 }
                             >
                                 Export impact JSON
@@ -466,158 +511,141 @@ export function DependencyPage({
                     ) : undefined
                 }
             />
-
-            {selected ? (
-                <>
-                    {trail.length > 0 ? (
-                        <Breadcrumbs aria-label="Dependency drill path">
-                            {trail.map((objectId, index) => (
-                                <React.Fragment key={`${objectId}-${index.toString()}`}>
-                                    <RowButton type="button" onClick={() => drillBack(index)}>
-                                        {objectById.get(objectId)?.name ?? objectId}
-                                    </RowButton>
-                                    <span aria-hidden="true">›</span>
-                                </React.Fragment>
-                            ))}
-                            <strong>{selected.name}</strong>
-                            <StyledButton
-                                type="button"
+            {trail.length ? (
+                <Breadcrumbs aria-label="Dependency drill path">
+                    {trail.map((id, i) => (
+                        <React.Fragment key={trail.slice(0, i + 1).join('>')}>
+                            <RowButton
                                 onClick={() => {
-                                    setTrail([]);
-                                    setSelectedId('');
+                                    setCenterGroup('all');
+                                    setSelectedId(id);
+                                    setInspectedId('');
+                                    setTrail((current) => current.slice(0, i));
+                                    setPage(0);
                                 }}
                             >
-                                Reset path
-                            </StyledButton>
-                        </Breadcrumbs>
-                    ) : null}
-
-                    <FilterBar
-                        aria-label="Dependency explorer controls"
-                        onSubmit={(event) => event.preventDefault()}
+                                {index.objects.get(id)?.name ?? id}
+                            </RowButton>
+                            <span aria-hidden="true">›</span>
+                        </React.Fragment>
+                    ))}
+                    <strong>{selected?.name}</strong>
+                    <StyledButton onClick={() => setTrail([])}>Reset path</StyledButton>
+                </Breadcrumbs>
+            ) : null}
+            <FilterBar
+                aria-label="Dependency explorer controls"
+                onSubmit={(event) => event.preventDefault()}
+            >
+                <FilterField>
+                    Center group
+                    <Select
+                        value={centerGroup}
+                        onChange={(event) => {
+                            setCenterGroup(event.currentTarget.value);
+                            setSelectedId('');
+                            setInspectedId('');
+                            setTrail([]);
+                            setPage(0);
+                        }}
                     >
-                        <FilterField>
-                            Center group
-                            <Select
-                                value={centerGroup}
-                                onChange={(event) => {
-                                    setCenterGroup(event.currentTarget.value);
-                                    setSelectedId('');
-                                    setTrail([]);
-                                }}
+                        {groupOptions('All inventory objects')}
+                    </Select>
+                </FilterField>
+                <FilterField>
+                    Find center object
+                    <Input
+                        type="search"
+                        placeholder="Name, app, or type"
+                        value={query}
+                        onChange={(event) => setQuery(event.currentTarget.value)}
+                    />
+                </FilterField>
+                <FilterField className="center-object-picker">
+                    Selected object
+                    <Select
+                        disabled={!options.length}
+                        value={selected?.objectId ?? ''}
+                        onChange={(event) => {
+                            setSelectedId(event.currentTarget.value);
+                            setInspectedId('');
+                            setTrail([]);
+                            setPage(0);
+                        }}
+                        footerMessage={
+                            matches.length > 200
+                                ? `Showing 200 of ${matches.length} matches. Refine Find center object to select any other object.`
+                                : undefined
+                        }
+                    >
+                        {options.map((item) => (
+                            <option
+                                key={item.objectId}
+                                value={item.objectId}
+                                data-description={`${item.objectType} · ${item.app}`}
                             >
-                                <option value="all">All inventory objects</option>
-                                <option value="candidates">All cleanup candidates</option>
-                                {candidateStatuses.map((status) => (
-                                    <option key={status} value={status}>
-                                        Candidate group: {status}
-                                    </option>
-                                ))}
-                                <option value="in_library">Any review-library record</option>
-                                <option value="usage_observed">Usage: activity observed</option>
-                                <option value="usage_no_observations_complete">
-                                    Usage: no activity, complete window
-                                </option>
-                                <option value="usage_incomplete">
-                                    Usage: incomplete or not measured
-                                </option>
-                                {reviewStageOptions.map((option) => (
-                                    <option key={option.value} value={option.value}>
-                                        Review stage: {option.label}
-                                    </option>
-                                ))}
-                            </Select>
-                        </FilterField>
-                        <FilterField>
-                            Find center object
-                            <Input
-                                type="search"
-                                value={query}
-                                placeholder="Name, app, or type"
-                                onChange={(event) => setQuery(event.currentTarget.value)}
-                            />
-                        </FilterField>
-                        <FilterField>
-                            Selected object
-                            <Select
-                                value={selected.objectId}
-                                onChange={(event) => {
-                                    setSelectedId(event.currentTarget.value);
-                                    setTrail([]);
-                                }}
+                                {item.name}
+                            </option>
+                        ))}
+                    </Select>
+                </FilterField>
+                <FilterField>
+                    Direction
+                    <Select
+                        value={direction}
+                        onChange={(event) => {
+                            setDirection(event.currentTarget.value);
+                            setPage(0);
+                        }}
+                    >
+                        <option value="all">Inbound and outbound</option>
+                        <option value="inbound">Inbound only</option>
+                        <option value="outbound">Outbound only</option>
+                    </Select>
+                </FilterField>
+                <FilterField>
+                    Related-object group
+                    <Select
+                        value={relatedGroup}
+                        onChange={(event) => {
+                            setRelatedGroup(event.currentTarget.value);
+                            setPage(0);
+                        }}
+                    >
+                        {groupOptions('All related results')}
+                    </Select>
+                </FilterField>
+                <StyledButton onClick={clear}>Clear filters</StyledButton>
+            </FilterBar>
+            {!selected ? (
+                <Card>
+                    <EmptyState>
+                        <div>
+                            <strong>{isLoading ? 'Loading live inventory…' : emptyTitle}</strong>
+                            <p>
+                                {snapshot
+                                    ? 'Clear filters or choose a broader group to continue.'
+                                    : 'Run a complete live scan from Settings to establish a verified baseline.'}
+                            </p>
+                            <StyledButton onClick={clear}>Reset dependency scope</StyledButton>
+                        </div>
+                    </EmptyState>
+                </Card>
+            ) : (
+                <DetailLayout>
+                    <div>
+                        <TabLayout
+                            activePanelId={tab}
+                            onChange={(_event, data) =>
+                                setTab(data.activePanelId ?? 'relationships')
+                            }
+                        >
+                            <TabLayout.Panel
+                                panelId="relationships"
+                                label="Relationships"
+                                count={relatedRows.length}
+                                inset={false}
                             >
-                                {objectOptions.map((contentObject) => (
-                                    <option
-                                        value={contentObject.objectId}
-                                        key={contentObject.objectId}
-                                    >
-                                        {contentObject.name} — {contentObject.objectType}
-                                    </option>
-                                ))}
-                            </Select>
-                        </FilterField>
-                        <FilterField>
-                            Direction
-                            <Select
-                                value={direction}
-                                onChange={(event) => setDirection(event.currentTarget.value)}
-                            >
-                                <option value="all">Inbound and outbound</option>
-                                <option value="inbound">Inbound only</option>
-                                <option value="outbound">Outbound only</option>
-                            </Select>
-                        </FilterField>
-                        <FilterField>
-                            Related-object group
-                            <Select
-                                value={relatedGroup}
-                                onChange={(event) => setRelatedGroup(event.currentTarget.value)}
-                            >
-                                <option value="all">All related results</option>
-                                <option value="candidates">Cleanup candidates only</option>
-                                {candidateStatuses.map((status) => (
-                                    <option key={status} value={status}>
-                                        Candidate group: {status}
-                                    </option>
-                                ))}
-                                <option value="in_library">Review library only</option>
-                                <option value="usage_observed">Usage: activity observed</option>
-                                <option value="usage_no_observations_complete">
-                                    Usage: no activity, complete window
-                                </option>
-                                <option value="usage_incomplete">
-                                    Usage: incomplete or not measured
-                                </option>
-                                {reviewStageOptions.map((option) => (
-                                    <option key={option.value} value={option.value}>
-                                        Review stage: {option.label}
-                                    </option>
-                                ))}
-                            </Select>
-                        </FilterField>
-                    </FilterBar>
-
-                    <InlineNotice>
-                        The graph shows up to {GRAPH_EDGE_LIMIT} matching relationships. The table
-                        and exports include all {relatedRows.length}. Unresolved references remain
-                        visible as evidence but cannot be drilled into.
-                    </InlineNotice>
-
-                    {removalImpact ? (
-                        <SpacedBlock>
-                            <RemovalImpactPanel
-                                selected={selected}
-                                analysis={removalImpact}
-                                depth={impactDepth}
-                                onDepthChange={setImpactDepth}
-                                onDrillTo={drillTo}
-                            />
-                        </SpacedBlock>
-                    ) : null}
-
-                    <SpacedBlock>
-                        <DetailLayout>
-                            <div>
                                 <Card>
                                     <CardHeader>
                                         <CardTitle>
@@ -625,295 +653,220 @@ export function DependencyPage({
                                             {relatedRows.length === 1 ? '' : 's'}
                                         </CardTitle>
                                     </CardHeader>
-                                    {relatedRows.length === 0 ? (
-                                        <EmptyState>
-                                            <div>
-                                                <strong>No relationships match this scope</strong>
-                                                <p>
-                                                    Clear the related-object group or direction
-                                                    filter to broaden the graph.
-                                                </p>
-                                            </div>
-                                        </EmptyState>
-                                    ) : (
-                                        <GraphCanvas>
-                                            <GraphSvg
-                                                viewBox="0 0 760 440"
-                                                role="img"
-                                                aria-label={`Dependency graph centered on ${selected.name}`}
-                                            >
-                                                <defs>
-                                                    <marker
-                                                        id="arrow"
-                                                        markerWidth="8"
-                                                        markerHeight="8"
-                                                        refX="7"
-                                                        refY="4"
-                                                        orient="auto"
-                                                    >
-                                                        <path
-                                                            d="M0,0 L8,4 L0,8 z"
-                                                            fill="currentColor"
-                                                        />
-                                                    </marker>
-                                                </defs>
-
-                                                {graphRows.map((row, index) => {
-                                                    const angle =
-                                                        (Math.PI * 2 * index) /
-                                                            Math.max(graphRows.length, 1) -
-                                                        Math.PI / 2;
-                                                    const relatedX = 380 + Math.cos(angle) * 265;
-                                                    const relatedY = 210 + Math.sin(angle) * 155;
-                                                    const outbound = row.direction === 'outbound';
-                                                    return (
-                                                        <g key={row.edge.edgeId}>
-                                                            <line
-                                                                className={
-                                                                    row.edge.confidence === 'low'
-                                                                        ? 'edge edge-warning'
-                                                                        : 'edge'
-                                                                }
-                                                                x1={outbound ? 380 : relatedX}
-                                                                y1={outbound ? 210 : relatedY}
-                                                                x2={outbound ? relatedX : 380}
-                                                                y2={outbound ? relatedY : 210}
-                                                                markerEnd="url(#arrow)"
-                                                            />
-                                                            <text
-                                                                x={(380 + relatedX) / 2}
-                                                                y={(210 + relatedY) / 2 - 8}
-                                                                fontSize="12"
-                                                                textAnchor="middle"
-                                                            >
-                                                                {row.edge.relation}
-                                                            </text>
-                                                        </g>
-                                                    );
-                                                })}
-
-                                                {graphRows.map((row, index) => {
-                                                    const angle =
-                                                        (Math.PI * 2 * index) /
-                                                            Math.max(graphRows.length, 1) -
-                                                        Math.PI / 2;
-                                                    const x = 380 + Math.cos(angle) * 265;
-                                                    const y = 210 + Math.sin(angle) * 155;
-                                                    return (
-                                                        <g
-                                                            key={row.edge.edgeId}
-                                                            transform={`translate(${x - 80} ${y - 32})`}
-                                                        >
-                                                            <rect
-                                                                className="node"
-                                                                width="160"
-                                                                height="64"
-                                                                rx="5"
-                                                            />
-                                                            <circle
-                                                                cx="14"
-                                                                cy="17"
-                                                                r="5"
-                                                                fill={
-                                                                    nodeStatusColors[
-                                                                        row.healthStatus
-                                                                    ]
-                                                                }
-                                                            />
-                                                            <text x="26" y="21" fontSize="13">
-                                                                {truncate(row.name)}
-                                                            </text>
-                                                            <text x="14" y="45" fontSize="11">
-                                                                {row.objectType}
-                                                            </text>
-                                                        </g>
-                                                    );
-                                                })}
-
-                                                <g transform="translate(280 166)">
-                                                    <rect
-                                                        className="node node-selected"
-                                                        width="200"
-                                                        height="88"
-                                                        rx="6"
-                                                    />
-                                                    <circle
-                                                        cx="18"
-                                                        cy="22"
-                                                        r="6"
-                                                        fill={
-                                                            nodeStatusColors[selected.healthStatus]
-                                                        }
-                                                    />
-                                                    <text
-                                                        x="32"
-                                                        y="27"
-                                                        fontSize="16"
-                                                        fontWeight="600"
-                                                    >
-                                                        {truncate(selected.name, 27)}
-                                                    </text>
-                                                    <text x="18" y="52" fontSize="12">
-                                                        {selected.objectType}
-                                                    </text>
-                                                    <text x="18" y="72" fontSize="11">
-                                                        {selected.app}
-                                                    </text>
-                                                </g>
-                                            </GraphSvg>
-                                        </GraphCanvas>
-                                    )}
+                                    <CardBody>
+                                        {relatedRows.length ? (
+                                            <DependencyGraph
+                                                key={selected.objectId}
+                                                center={selected}
+                                                index={index}
+                                                edges={graphEdges}
+                                                inspectedId={detailId}
+                                                onInspect={setInspectedId}
+                                                allows={allows}
+                                            />
+                                        ) : (
+                                            <EmptyState>
+                                                <div>
+                                                    <strong>
+                                                        No relationships match this scope
+                                                    </strong>
+                                                    <p>
+                                                        Broaden the direction or related-object
+                                                        group. This is not proof of zero impact.
+                                                    </p>
+                                                    <StyledButton onClick={clear}>
+                                                        Broaden relationship scope
+                                                    </StyledButton>
+                                                </div>
+                                            </EmptyState>
+                                        )}
+                                    </CardBody>
                                 </Card>
-
-                                {relatedRows.length > 0 ? (
-                                    <Card>
-                                        <CardHeader>
-                                            <CardTitle>
-                                                Relationship evidence and drill-down
-                                            </CardTitle>
-                                        </CardHeader>
-                                        <TableScroller>
-                                            <Table>
-                                                <thead>
-                                                    <tr>
-                                                        <th scope="col">Related object</th>
-                                                        <th scope="col">Direction</th>
-                                                        <th scope="col">Relation</th>
-                                                        <th scope="col">Confidence</th>
-                                                        <th scope="col">Status</th>
-                                                        <th scope="col">Review</th>
-                                                        <th scope="col">Evidence</th>
-                                                        <th scope="col">Action</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {relatedRows.map((row) => (
-                                                        <tr key={row.edge.edgeId}>
-                                                            <td>
-                                                                {row.contentObject ? (
+                                {relatedRows.length ? (
+                                    <SpacedBlock>
+                                        <Card>
+                                            <CardHeader>
+                                                <CardTitle>
+                                                    Relationship evidence and drill-down
+                                                </CardTitle>
+                                                <ResultPagination
+                                                    page={currentPage}
+                                                    pageSize={25}
+                                                    total={relatedRows.length}
+                                                    onChange={setPage}
+                                                />
+                                            </CardHeader>
+                                            <SmallText>
+                                                All matching relationships are included in exports.
+                                                The table shows 25 at a time.
+                                            </SmallText>
+                                            <TableScroller>
+                                                <Table>
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Related object</th>
+                                                            <th>Direction / relation</th>
+                                                            <th>Confidence</th>
+                                                            <th>Evidence</th>
+                                                            <th>Action</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {pageRows.map((row) => (
+                                                            <tr key={row.edge.edgeId}>
+                                                                <td>
                                                                     <RowButton
-                                                                        type="button"
                                                                         onClick={() =>
-                                                                            drillTo(row.objectId)
+                                                                            setInspectedId(
+                                                                                row.objectId,
+                                                                            )
                                                                         }
                                                                     >
                                                                         {row.name}
                                                                     </RowButton>
-                                                                ) : (
-                                                                    row.name
-                                                                )}
-                                                                <div>{row.objectType}</div>
-                                                            </td>
-                                                            <td>{row.direction}</td>
-                                                            <td>{row.edge.relation}</td>
-                                                            <td>{row.edge.confidence}</td>
-                                                            <td>
-                                                                <StatusBadge
-                                                                    status={row.healthStatus}
-                                                                />
-                                                            </td>
-                                                            <td>
-                                                                {reviewByObject.has(
-                                                                    row.objectId,
-                                                                ) ? (
-                                                                    <ReviewStageBadge
-                                                                        stage={
-                                                                            reviewByObject.get(
-                                                                                row.objectId,
-                                                                            )!.stage
-                                                                        }
+                                                                    <div>
+                                                                        {row.objectType} ·{' '}
+                                                                        {row.contentObject?.app ??
+                                                                            'Unresolved target'}
+                                                                    </div>
+                                                                </td>
+                                                                <td>
+                                                                    {row.direction}
+                                                                    <div>
+                                                                        {row.edge.relation.replace(
+                                                                            /_/g,
+                                                                            ' ',
+                                                                        )}
+                                                                    </div>
+                                                                </td>
+                                                                <td>
+                                                                    {row.edge.confidence}
+                                                                    <StatusBadge
+                                                                        status={row.healthStatus}
                                                                     />
-                                                                ) : (
-                                                                    '—'
-                                                                )}
-                                                            </td>
-                                                            <td>
-                                                                {row.edge.evidence}
-                                                                {row.edge.sourceLocation
-                                                                    ? ` [${row.edge.sourceLocation}]`
-                                                                    : ''}
-                                                            </td>
-                                                            <td>
-                                                                <StyledButton
-                                                                    type="button"
-                                                                    disabled={!row.contentObject}
-                                                                    onClick={() =>
-                                                                        drillTo(row.objectId)
-                                                                    }
-                                                                >
-                                                                    Drill in
-                                                                </StyledButton>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </Table>
-                                        </TableScroller>
-                                    </Card>
+                                                                </td>
+                                                                <td>
+                                                                    {row.edge.evidence}
+                                                                    <SmallText>
+                                                                        {row.edge.sourceLocation}
+                                                                    </SmallText>
+                                                                </td>
+                                                                <td>
+                                                                    <StyledButton
+                                                                        onClick={() =>
+                                                                            drillTo(row.objectId)
+                                                                        }
+                                                                        disabled={
+                                                                            !row.contentObject
+                                                                        }
+                                                                    >
+                                                                        Drill in
+                                                                    </StyledButton>
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </Table>
+                                            </TableScroller>
+                                        </Card>
+                                    </SpacedBlock>
                                 ) : null}
-                            </div>
-
-                            <DetailPanel aria-label={`Details for ${selected.name}`}>
-                                <DetailSection>
-                                    <DetailTitle>{selected.name}</DetailTitle>
-                                    <ButtonRow>
-                                        <StatusBadge status={selected.healthStatus} />
-                                        {selectedReview ? (
-                                            <ReviewStageBadge stage={selectedReview.stage} />
-                                        ) : null}
-                                    </ButtonRow>
-                                </DetailSection>
+                            </TabLayout.Panel>
+                            <TabLayout.Panel panelId="impact" label="Removal impact" inset={false}>
+                                {impact ? (
+                                    <RemovalImpactPanel
+                                        key={selected.objectId}
+                                        selected={selected}
+                                        analysis={impact}
+                                        depth={impactDepth}
+                                        onDepthChange={setImpactDepth}
+                                        onDrillTo={drillTo}
+                                    />
+                                ) : null}
+                            </TabLayout.Panel>
+                        </TabLayout>
+                    </div>
+                    <DetailPanel
+                        aria-label={`Details for ${detail?.name ?? unresolved?.name ?? detailId}`}
+                    >
+                        <DetailSection>
+                            <DetailTitle>
+                                {detail?.name ?? unresolved?.name ?? detailId}
+                            </DetailTitle>
+                            <SmallText>
+                                {detailId === selected.objectId
+                                    ? 'Center object'
+                                    : `Selected for inspection · graph center remains ${selected.name}`}
+                            </SmallText>
+                            {detail ? (
+                                <ButtonRow>
+                                    <StatusBadge status={detail.healthStatus} />
+                                    {detailReview ? (
+                                        <ReviewStageBadge stage={detailReview.stage} />
+                                    ) : null}
+                                    {detailId !== selected.objectId ? (
+                                        <StyledButton onClick={() => drillTo(detailId)}>
+                                            Center on this object
+                                        </StyledButton>
+                                    ) : null}
+                                </ButtonRow>
+                            ) : (
+                                <InlineNotice>
+                                    This target is unresolved. Inspect the namespace, collector
+                                    coverage, and source evidence before calling it missing.
+                                </InlineNotice>
+                            )}
+                        </DetailSection>
+                        {detail ? (
+                            <>
                                 <DetailSection>
                                     <DefinitionList>
                                         <dt>Type</dt>
-                                        <dd>{selected.objectType}</dd>
+                                        <dd>{detail.objectType}</dd>
                                         <dt>App</dt>
-                                        <dd>{selected.app}</dd>
+                                        <dd>{detail.app}</dd>
                                         <dt>Owner</dt>
-                                        <dd>{ownerLabel(selected)}</dd>
+                                        <dd>{ownerLabel(detail)}</dd>
                                         <dt>All inbound refs</dt>
-                                        <dd>{selected.inboundReferences}</dd>
+                                        <dd>{detail.inboundReferences}</dd>
                                         <dt>All outbound refs</dt>
-                                        <dd>{selected.outboundReferences}</dd>
-                                        <dt>Visible after filters</dt>
-                                        <dd>{relatedRows.length}</dd>
-                                    </DefinitionList>
-                                </DetailSection>
-                                <DetailSection>
-                                    <UsageEvidencePanel contentObject={selected} />
-                                </DetailSection>
-                                <DetailSection>
-                                    <strong>Impact context</strong>
-                                    <DefinitionList>
+                                        <dd>{detail.outboundReferences}</dd>
                                         <dt>Abandonment confidence</dt>
-                                        <dd>{formatScore(selected.abandonmentConfidence)}</dd>
+                                        <dd>{formatScore(detail.abandonmentConfidence)}</dd>
                                         <dt>Removal impact</dt>
-                                        <dd>{formatScore(selected.removalImpact)}</dd>
-                                        <dt>Impact readiness</dt>
-                                        <dd>{removalImpact?.readinessLabel ?? 'Unknown'}</dd>
-                                        <dt>Known affected</dt>
-                                        <dd>{removalImpact?.affectedObjects.length ?? 0}</dd>
+                                        <dd>{formatScore(detail.removalImpact)}</dd>
                                     </DefinitionList>
+                                    {detail.analysisWarnings?.length ? (
+                                        <InlineNotice>
+                                            {detail.analysisWarnings.join('; ')}
+                                        </InlineNotice>
+                                    ) : null}
                                 </DetailSection>
                                 <DetailSection>
+                                    <UsageEvidencePanel contentObject={detail} />
+                                </DetailSection>
+                                <DetailSection>
+                                    <strong>Recorded evidence</strong>
+                                    <ul>
+                                        {detail.evidence.map((item) => (
+                                            <li key={item}>{item}</li>
+                                        ))}
+                                    </ul>
                                     <ButtonRow>
                                         <StyledButton
-                                            type="button"
                                             onClick={() =>
                                                 navigateToView('candidates', {
-                                                    object: selected.objectId,
+                                                    object: detail.objectId,
                                                 })
                                             }
-                                            disabled={!candidateIds.has(selected.objectId)}
                                         >
                                             View candidate evidence
                                         </StyledButton>
-                                        {selectedReview ? (
+                                        {detailReview ? (
                                             <StyledButton
-                                                type="button"
                                                 onClick={() =>
                                                     navigateToView('reviews', {
-                                                        object: selected.objectId,
+                                                        object: detail.objectId,
                                                     })
                                                 }
                                             >
@@ -924,32 +877,39 @@ export function DependencyPage({
                                 </DetailSection>
                                 <DetailSection>
                                     <ReviewEditor
-                                        contentObject={selected}
-                                        review={selectedReview}
+                                        contentObject={detail}
+                                        review={detailReview}
                                         scanId={snapshot?.scan.scanId ?? ''}
                                         canWrite={canWriteReviews}
                                         onSave={onSaveReview}
                                         onDelete={onDeleteReview}
                                     />
                                 </DetailSection>
-                            </DetailPanel>
-                        </DetailLayout>
-                    </SpacedBlock>
-                </>
-            ) : (
-                <Card>
-                    <EmptyState>
-                        <div>
-                            <strong>{emptyTitle}</strong>
-                            <p>
-                                {centerGroup === 'all'
-                                    ? 'Run a bounded live scan from Settings before exploring dependencies.'
-                                    : 'Choose a broader center group to continue.'}
-                            </p>
-                        </div>
-                    </EmptyState>
-                </Card>
+                            </>
+                        ) : (
+                            <DetailSection>
+                                <DefinitionList>
+                                    <dt>Target identity</dt>
+                                    <dd>{detailId}</dd>
+                                </DefinitionList>
+                                <ul>
+                                    {unresolvedEvidence.slice(0, 25).map((edge) => (
+                                        <li key={edge.edgeId}>
+                                            {edge.evidence} [{edge.sourceLocation}]
+                                        </li>
+                                    ))}
+                                </ul>
+                                <SmallText>
+                                    {unresolvedEvidence.length} captured references. Relationship
+                                    exports retain the complete evidence.
+                                </SmallText>
+                            </DetailSection>
+                        )}
+                    </DetailPanel>
+                </DetailLayout>
             )}
         </>
     );
 }
+const EMPTY_OBJECTS: ContentObject[] = [];
+const EMPTY_EDGES: DependencyEdge[] = [];

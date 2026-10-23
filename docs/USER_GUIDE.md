@@ -11,6 +11,12 @@ Keep the browser tab open while a scan runs. If any collector is incomplete,
 the scan and every page retain a visible warning. The app does not substitute
 sample data for missing results.
 
+A complete baseline remains in use after a bounded or incomplete check; the
+scan banner explains when it is being retained. Cancel stops further collection
+without replacing that baseline. Private objects are excluded from the shared
+hygiene inventory. Your assigned hygiene role determines whether collection
+and review controls are available.
+
 ## Collect usage evidence
 
 After an inventory scan, choose a 30, 90, or 180-day window in **Settings &
@@ -37,6 +43,11 @@ Every supported object receives one of these evidence states:
 - **Partial window** — visible telemetry does not span the requested period.
 - **Unavailable** — the source was empty, inaccessible, or the search failed.
 - **Not measured** — no applicable usage run exists for the object.
+- **Historical** — the inventory differs, the object changed after the window,
+  or the window ended more than seven days ago. Counts remain context, not
+  current decision evidence.
+- **Unsupported** — this resource type has no directly attributable telemetry
+  source; it is not reported as unused.
 
 Only a complete current window with zero observations can increase abandonment
 confidence. Observed activity can lower abandonment confidence. Partial,
@@ -94,9 +105,19 @@ Review Library stage. Select a resolved related object to continue the
 investigation as a multi-step drill-through. Cross-view links preserve the
 selected object context.
 
+The **Relationships** tab puts consumers on the left and dependencies on the
+right. Inspect a card to update its details without changing the center. Use
+**Center on this object** or table **Drill in** to continue the path. High-degree
+relationships group by app or type; expand groups in batches of twelve or
+choose individual objects. Zoom, fit the center, and scroll/keyboard-pan inside
+the contained map. The map discloses represented and omitted counts; the
+paginated evidence table and full filtered exports remain available. The center
+picker shows up to 200 matches; refine its search to reach any other object.
+Filters and the reset action remain available even when a group is empty.
+
 ### Impact of removal
 
-For the selected center object, **Impact of removal** analyzes the complete
+In the **Removal impact** tab, **Impact of removal** analyzes the complete
 unfiltered relationship snapshot even when the visible graph is filtered. Its
 depth control follows known dependents for one, two, three, or five hops.
 
@@ -156,3 +177,6 @@ the browser from the current live snapshot and active filters. Candidate,
 dependency, review, environment, and scan exports include applicable usage
 coverage and observations. Review exported files before sharing because object
 names, apps, owners, notes, and evidence may be sensitive.
+Object evidence exports include validity and observation-window provenance.
+CSV strings that could execute as spreadsheet formulas are neutralized; JSON
+retains original strings.

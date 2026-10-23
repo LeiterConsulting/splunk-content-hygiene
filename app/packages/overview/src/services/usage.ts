@@ -40,7 +40,45 @@ export type UsageEvidenceState =
     | 'no_observations_complete'
     | 'partial'
     | 'unavailable'
-    | 'not_measured';
+    | 'not_measured'
+    | 'historical'
+    | 'unsupported';
+
+export const EVIDENCE_MAX_AGE_DAYS = 7;
+export type UsageValidity =
+    'current' | 'historical' | 'modified' | 'expired' | 'not_measured' | 'unsupported';
+
+export function evidenceWindowFresh(windowEnd: string, now = Date.now()): boolean {
+    const end = Date.parse(windowEnd);
+    return (
+        Number.isFinite(end) && end <= now + 300000 && now - end <= EVIDENCE_MAX_AGE_DAYS * 86400000
+    );
+}
+
+/** One policy for classification, filtering, exports, and planning. */
+export function usageValidity(
+    contentObject: ContentObject,
+    inventoryScanId = contentObject.inventoryScanId,
+    now = Date.now(),
+): UsageValidity {
+    if (!usageSourceForObject(contentObject)) {
+        return 'unsupported';
+    }
+    const usage = contentObject.usageEvidence;
+    if (!usage) {
+        return 'not_measured';
+    }
+    if (inventoryScanId && usage.inventoryScanId !== inventoryScanId) {
+        return 'historical';
+    }
+    if (contentObject.updated && Date.parse(contentObject.updated) > Date.parse(usage.windowEnd)) {
+        return 'modified';
+    }
+    if (!evidenceWindowFresh(usage.windowEnd, now)) {
+        return 'expired';
+    }
+    return 'current';
+}
 
 function timestamp(value: string | null): number | null {
     if (!value) {
@@ -58,9 +96,7 @@ function normalizedIdentity(app: string, name: string): string {
     return `${app.trim().toLowerCase()}::${name.trim().toLowerCase()}`;
 }
 
-export function usageSourceForObject(
-    contentObject: ContentObject
-): {
+export function usageSourceForObject(contentObject: ContentObject): {
     sourceId: string;
     sourceLabel: string;
     activityKind: UsageActivityKind;
@@ -91,7 +127,7 @@ export function sourceCoverageForWindow(
     coverageStart: string | null,
     coverageEnd: string | null,
     windowStart: string,
-    windowEnd: string
+    windowEnd: string,
 ): UsageCoverage {
     if (sourceEventCount <= 0) {
         return 'unavailable';
@@ -100,12 +136,7 @@ export function sourceCoverageForWindow(
     const last = timestamp(coverageEnd);
     const requestedStart = timestamp(windowStart);
     const requestedEnd = timestamp(windowEnd);
-    if (
-        first === null ||
-        last === null ||
-        requestedStart === null ||
-        requestedEnd === null
-    ) {
+    if (first === null || last === null || requestedStart === null || requestedEnd === null) {
         return 'partial';
     }
     return first <= requestedStart + COVERAGE_TOLERANCE_MS &&
@@ -116,7 +147,7 @@ export function sourceCoverageForWindow(
 
 function selectActivityObject(
     candidates: ContentObject[],
-    activity: UsageActivityAggregate
+    activity: UsageActivityAggregate,
 ): ContentObject | null {
     if (candidates.length === 1) {
         return candidates[0];
@@ -124,16 +155,13 @@ function selectActivityObject(
     if (activity.user) {
         const privateMatch = candidates.find(
             (contentObject) =>
-                contentObject.sharing === 'user' &&
-                contentObject.owner === activity.user
+                contentObject.sharing === 'user' && contentObject.owner === activity.user,
         );
         if (privateMatch) {
             return privateMatch;
         }
     }
-    const shared = candidates.filter(
-        (contentObject) => contentObject.sharing !== 'user'
-    );
+    const shared = candidates.filter((contentObject) => contentObject.sharing !== 'user');
     return shared.length === 1 ? shared[0] : null;
 }
 
@@ -141,14 +169,11 @@ function observationEvidence(
     activityKind: UsageActivityKind,
     observationCount: number,
     windowDays: UsageWindowDays,
-    lastObserved: string | null
+    lastObserved: string | null,
 ): string {
     let noun = 'saved-search executions';
     if (activityKind === 'dashboard_view') {
-        noun =
-            observationCount === 1
-                ? 'dashboard access'
-                : 'dashboard accesses';
+        noun = observationCount === 1 ? 'dashboard access' : 'dashboard accesses';
     } else if (observationCount === 1) {
         noun = 'saved-search execution';
     }
@@ -160,12 +185,10 @@ function observationEvidence(
 function noObservationEvidence(
     activityKind: UsageActivityKind,
     coverage: UsageCoverage,
-    windowDays: UsageWindowDays
+    windowDays: UsageWindowDays,
 ): string {
     const activity =
-        activityKind === 'dashboard_view'
-            ? 'dashboard access'
-            : 'saved-search execution';
+        activityKind === 'dashboard_view' ? 'dashboard access' : 'saved-search execution';
     if (coverage === 'complete') {
         return `No ${activity} was observed during the complete ${windowDays}-day source window; this is evidence for review, not proof that the object is unused`;
     }
@@ -182,7 +205,7 @@ export function buildUsageEvidence(
     windowDays: UsageWindowDays,
     windowStart: string,
     windowEnd: string,
-    collectedSources: CollectedUsageSource[]
+    collectedSources: CollectedUsageSource[],
 ): BuiltUsageEvidence {
     const eligibleBySourceAndIdentity = new Map<string, ContentObject[]>();
     objects.forEach((storedObject) => {
@@ -193,7 +216,7 @@ export function buildUsageEvidence(
         }
         const key = `${source.sourceId}::${normalizedIdentity(
             contentObject.app,
-            contentObject.canonicalName
+            contentObject.canonicalName,
         )}`;
         const existing = eligibleBySourceAndIdentity.get(key) ?? [];
         existing.push(contentObject);
@@ -208,16 +231,16 @@ export function buildUsageEvidence(
         source.activities.forEach((activity) => {
             const key = `${source.summary.sourceId}::${normalizedIdentity(
                 activity.app,
-                activity.name
+                activity.name,
             )}`;
             const match = selectActivityObject(
                 eligibleBySourceAndIdentity.get(key) ?? [],
-                activity
+                activity,
             );
             if (!match) {
                 ambiguousCounts.set(
                     source.summary.sourceId,
-                    (ambiguousCounts.get(source.summary.sourceId) ?? 0) + 1
+                    (ambiguousCounts.get(source.summary.sourceId) ?? 0) + 1,
                 );
                 return;
             }
@@ -226,26 +249,18 @@ export function buildUsageEvidence(
                 app: match.app,
                 name: match.canonicalName,
                 user: null,
-                observationCount:
-                    (previous?.observationCount ?? 0) +
-                    activity.observationCount,
-                successfulCount:
-                    (previous?.successfulCount ?? 0) +
-                    activity.successfulCount,
-                failedCount:
-                    (previous?.failedCount ?? 0) + activity.failedCount,
-                skippedCount:
-                    (previous?.skippedCount ?? 0) + activity.skippedCount,
+                observationCount: (previous?.observationCount ?? 0) + activity.observationCount,
+                successfulCount: (previous?.successfulCount ?? 0) + activity.successfulCount,
+                failedCount: (previous?.failedCount ?? 0) + activity.failedCount,
+                skippedCount: (previous?.skippedCount ?? 0) + activity.skippedCount,
                 lastObserved:
                     !previous?.lastObserved ||
-                    (activity.lastObserved &&
-                        activity.lastObserved > previous.lastObserved)
+                    (activity.lastObserved && activity.lastObserved > previous.lastObserved)
                         ? activity.lastObserved
                         : previous.lastObserved,
             });
             const matched =
-                matchedObjectIdsBySource.get(source.summary.sourceId) ??
-                new Set<string>();
+                matchedObjectIdsBySource.get(source.summary.sourceId) ?? new Set<string>();
             matched.add(match.objectId);
             matchedObjectIdsBySource.set(source.summary.sourceId, matched);
         });
@@ -263,49 +278,40 @@ export function buildUsageEvidence(
         ].filter((value): value is string => Boolean(value));
         return {
             ...source.summary,
-            matchedObjectCount:
-                matchedObjectIdsBySource.get(source.summary.sourceId)?.size ?? 0,
+            matchedObjectCount: matchedObjectIdsBySource.get(source.summary.sourceId)?.size ?? 0,
             warning: warningParts.length > 0 ? warningParts.join(' ') : null,
         };
     });
 
-    const records = objects.reduce<
-        Array<{ objectId: string; usage: UsageEvidence }>
-    >((builtRecords, contentObject) => {
-        const sourceDescriptor = usageSourceForObject(contentObject);
-        if (!sourceDescriptor) {
-            return builtRecords;
-        }
-        const summary = sources.find(
-            ({ sourceId }) => sourceId === sourceDescriptor.sourceId
-        );
-        const activity = activityByObject.get(contentObject.objectId);
-        const coverage = summary?.coverage ?? 'unavailable';
-        const observationCount = activity?.observationCount ?? 0;
-        const evidence = [
-            observationCount > 0
-                ? observationEvidence(
-                      sourceDescriptor.activityKind,
-                      observationCount,
-                      windowDays,
-                      activity?.lastObserved ?? null
-                  )
-                : noObservationEvidence(
-                      sourceDescriptor.activityKind,
-                      coverage,
-                      windowDays
-                  ),
-            `Usage provenance: ${sourceDescriptor.sourceLabel}; requested window ${windowStart} through ${windowEnd}`,
-        ];
-        if (summary?.coverageStart || summary?.coverageEnd) {
-            evidence.push(
-                `Observed source coverage: ${
-                    summary.coverageStart ?? 'unknown'
-                } through ${summary.coverageEnd ?? 'unknown'}`
-            );
-        }
-        builtRecords.push(
-            {
+    const records = objects.reduce<Array<{ objectId: string; usage: UsageEvidence }>>(
+        (builtRecords, contentObject) => {
+            const sourceDescriptor = usageSourceForObject(contentObject);
+            if (!sourceDescriptor) {
+                return builtRecords;
+            }
+            const summary = sources.find(({ sourceId }) => sourceId === sourceDescriptor.sourceId);
+            const activity = activityByObject.get(contentObject.objectId);
+            const coverage = summary?.coverage ?? 'unavailable';
+            const observationCount = activity?.observationCount ?? 0;
+            const evidence = [
+                observationCount > 0
+                    ? observationEvidence(
+                          sourceDescriptor.activityKind,
+                          observationCount,
+                          windowDays,
+                          activity?.lastObserved ?? null,
+                      )
+                    : noObservationEvidence(sourceDescriptor.activityKind, coverage, windowDays),
+                `Usage provenance: ${sourceDescriptor.sourceLabel}; requested window ${windowStart} through ${windowEnd}`,
+            ];
+            if (summary?.coverageStart || summary?.coverageEnd) {
+                evidence.push(
+                    `Observed source coverage: ${
+                        summary.coverageStart ?? 'unknown'
+                    } through ${summary.coverageEnd ?? 'unknown'}`,
+                );
+            }
+            builtRecords.push({
                 objectId: contentObject.objectId,
                 usage: {
                     usageRunId,
@@ -327,10 +333,11 @@ export function buildUsageEvidence(
                     lastObserved: activity?.lastObserved ?? null,
                     evidence,
                 },
-            },
-        );
-        return builtRecords;
-    }, []);
+            });
+            return builtRecords;
+        },
+        [],
+    );
 
     return {
         records,
@@ -357,7 +364,7 @@ function usageFinding(
     contentObject: ContentObject,
     usage: UsageEvidence,
     abandonmentConfidence: number,
-    scheduledGap: boolean
+    scheduledGap: boolean,
 ): ContentFinding {
     const reasons = [
         usage.evidence[0],
@@ -384,18 +391,17 @@ export function applyUsageEvidence(
     inputObjects: ContentObject[],
     inputFindings: ContentFinding[],
     evidenceRecords: Array<{ objectId: string; usage: UsageEvidence }>,
-    currentInventoryScanId: string
+    currentInventoryScanId: string,
 ): { objects: ContentObject[]; findings: ContentFinding[] } {
-    const usageByObject = new Map(
-        evidenceRecords.map(({ objectId, usage }) => [objectId, usage])
-    );
+    const usageByObject = new Map(evidenceRecords.map(({ objectId, usage }) => [objectId, usage]));
     const objects = inputObjects.map((contentObject) => ({
         ...contentObject,
         evidence: [...contentObject.evidence],
         usageEvidence: usageByObject.get(contentObject.objectId) ?? null,
+        inventoryScanId: currentInventoryScanId,
     }));
     let findings = inputFindings.filter(
-        (finding) => !finding.findingId.startsWith('usage-no-observation::')
+        (finding) => !finding.findingId.startsWith('usage-no-observation::'),
     );
 
     objects.forEach((storedObject) => {
@@ -404,34 +410,30 @@ export function applyUsageEvidence(
         if (!usage) {
             return;
         }
-        contentObject.evidence = unique([
-            ...contentObject.evidence,
-            ...usage.evidence,
-        ]);
+        contentObject.evidence = unique([...contentObject.evidence, ...usage.evidence]);
         if (usage.lastObserved) {
             contentObject.lastUsed = usage.lastObserved;
         }
 
-        const matchesInventory =
-            usage.inventoryScanId === currentInventoryScanId;
-        const objectUpdatedAfterWindow =
-            contentObject.updated !== null &&
-            contentObject.updated > usage.windowEnd;
-        if (!matchesInventory || objectUpdatedAfterWindow) {
+        if (usageValidity(contentObject, currentInventoryScanId) !== 'current') {
             contentObject.evidence = unique([
                 ...contentObject.evidence,
-                'Usage evidence predates the current object snapshot or its latest modification, so it did not change classification',
+                'Usage evidence predates the current object snapshot or its latest modification, or has expired; it cannot change current classification or readiness',
             ]);
+            return;
+        }
+
+        // Retain observed evidence, but protected resources have no cleanup score.
+        if (contentObject.protected) {
             return;
         }
 
         if (usage.observationCount > 0 && usage.lastObserved) {
             const ageDays = daysBetween(usage.windowEnd, usage.lastObserved);
-            const confidenceCeiling =
-                ageDays !== null && ageDays <= 30 ? 5 : 20;
+            const confidenceCeiling = ageDays !== null && ageDays <= 30 ? 5 : 20;
             contentObject.abandonmentConfidence = Math.min(
                 contentObject.abandonmentConfidence ?? 100,
-                confidenceCeiling
+                confidenceCeiling,
             );
             if (
                 contentObject.healthStatus === 'unknown' ||
@@ -441,7 +443,7 @@ export function applyUsageEvidence(
                 findings = findings.filter(
                     (finding) =>
                         finding.objectId !== contentObject.objectId ||
-                        finding.findingType !== 'needs_review'
+                        finding.findingType !== 'needs_review',
                 );
             }
             contentObject.suggestedAction =
@@ -453,9 +455,7 @@ export function applyUsageEvidence(
             return;
         }
 
-        const scheduledGap =
-            contentObject.scheduled === true &&
-            contentObject.enabled !== false;
+        const scheduledGap = contentObject.scheduled === true && contentObject.enabled !== false;
         if (
             !contentObject.protected &&
             contentObject.healthStatus !== 'broken' &&
@@ -464,13 +464,10 @@ export function applyUsageEvidence(
         ) {
             contentObject.healthStatus = 'dormant';
         }
-        const evidenceConfidence = Math.min(
-            80,
-            50 + Math.round(usage.windowDays / 6)
-        );
+        const evidenceConfidence = Math.min(80, 50 + Math.round(usage.windowDays / 6));
         contentObject.abandonmentConfidence = Math.max(
             contentObject.abandonmentConfidence ?? 0,
-            evidenceConfidence
+            evidenceConfidence,
         );
         if (
             !contentObject.protected &&
@@ -481,13 +478,13 @@ export function applyUsageEvidence(
             findings = findings.filter(
                 (finding) =>
                     finding.objectId !== contentObject.objectId ||
-                    finding.findingType !== 'needs_review'
+                    finding.findingType !== 'needs_review',
             );
             const finding = usageFinding(
                 contentObject,
                 usage,
                 contentObject.abandonmentConfidence,
-                scheduledGap
+                scheduledGap,
             );
             findings.push(finding);
             contentObject.suggestedAction = finding.suggestedAction;
@@ -497,10 +494,15 @@ export function applyUsageEvidence(
     return { objects, findings };
 }
 
-export function usageEvidenceState(
-    contentObject: ContentObject
-): UsageEvidenceState {
+export function usageEvidenceState(contentObject: ContentObject): UsageEvidenceState {
     const usage = contentObject.usageEvidence;
+    const validity = usageValidity(contentObject);
+    if (validity === 'unsupported') {
+        return 'unsupported';
+    }
+    if (['historical', 'modified', 'expired'].includes(validity)) {
+        return 'historical';
+    }
     if (!usage) {
         return 'not_measured';
     }

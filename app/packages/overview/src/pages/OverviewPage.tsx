@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { evidenceWindowFresh } from '../services/usage';
 import {
     ButtonRow,
     Card,
@@ -168,6 +169,10 @@ export function OverviewPage({
     const [selectedAppName, setSelectedAppName] = useState<string | null>(null);
     const objects = snapshot?.objects ?? [];
     const findings = snapshot?.findings ?? [];
+    const currentUsage =
+        snapshot?.usage?.matchesCurrentInventory && evidenceWindowFresh(snapshot.usage.windowEnd)
+            ? snapshot.usage
+            : null;
     const fullAppComposition = buildAppComposition(objects);
     const normalizedAppQuery = normalizeAppSearch(appQuery.trim());
     const filteredAppComposition = fullAppComposition.filter((app) =>
@@ -214,6 +219,11 @@ export function OverviewPage({
         (contentObject) => contentObject.owner === null && contentObject.sharing === 'user',
     ).length;
 
+    const noCurrentUsageValue = snapshot?.usage ? 'Historical' : 'Not measured';
+    const noCurrentUsageHint = snapshot?.usage
+        ? `Earlier evidence ended ${new Date(snapshot.usage.windowEnd).toLocaleDateString()}; collect a fresh window`
+        : 'Collect a bounded usage window from Settings';
+
     return (
         <>
             <PageHeader
@@ -259,7 +269,7 @@ export function OverviewPage({
                                     usage: snapshot?.usage ?? null,
                                     summary: {
                                         objectCount: objects.length,
-                                        relationshipCount: snapshot?.edges.length ?? 0,
+                                        relationshipCount: snapshot?.scan.edgeCount ?? 0,
                                         findingCount: findings.length,
                                         ownershipGapCount,
                                         protectedCount,
@@ -302,7 +312,7 @@ export function OverviewPage({
                 />
                 <SummaryMetric
                     label="Relationships"
-                    value={snapshot ? numberFormatter.format(snapshot.edges.length) : '—'}
+                    value={snapshot ? numberFormatter.format(snapshot.scan.edgeCount) : '—'}
                     hint="Directional dependency edges found by analysis"
                     accent="info"
                 />
@@ -321,20 +331,18 @@ export function OverviewPage({
                 <SummaryMetric
                     label="Usage evidence"
                     value={
-                        snapshot?.usage
+                        currentUsage
                             ? `${numberFormatter.format(
-                                  snapshot.usage.observedObjectCount,
-                              )}/${numberFormatter.format(
-                                  snapshot.usage.eligibleObjectCount,
-                              )}`
-                            : 'Not measured'
+                                  currentUsage.observedObjectCount,
+                              )}/${numberFormatter.format(currentUsage.eligibleObjectCount)}`
+                            : noCurrentUsageValue
                     }
                     hint={
-                        snapshot?.usage
-                            ? `${snapshot.usage.coverage} ${snapshot.usage.windowDays}-day source window; observed/eligible objects`
-                            : 'Collect a bounded usage window from Settings'
+                        currentUsage
+                            ? `${currentUsage.coverage} ${currentUsage.windowDays}-day source window; observed/eligible objects`
+                            : noCurrentUsageHint
                     }
-                    accent={snapshot?.usage?.coverage === 'complete' ? 'positive' : 'warning'}
+                    accent={currentUsage?.coverage === 'complete' ? 'positive' : 'warning'}
                 />
                 <SummaryMetric
                     label="Awaiting analysis"
@@ -595,9 +603,7 @@ export function OverviewPage({
                                                 type="button"
                                                 disabled={currentAppPage === 0}
                                                 onClick={() => {
-                                                    setAppPage(
-                                                        Math.max(0, currentAppPage - 1),
-                                                    );
+                                                    setAppPage(Math.max(0, currentAppPage - 1));
                                                     setSelectedAppName(null);
                                                 }}
                                             >

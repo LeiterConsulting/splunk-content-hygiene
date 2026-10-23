@@ -1,4 +1,3 @@
-const fs = require('fs');
 const path = require('path');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 const { merge: webpackMerge } = require('webpack-merge');
@@ -6,20 +5,15 @@ const baseConfig = require('@splunk/webpack-configs/base.config').default;
 
 const DEBUG = process.env.NODE_ENV !== 'production';
 
-// Set up an entry config by iterating over the files in the pages directory.
-const entries = fs
-    .readdirSync(path.join(__dirname, 'src/main/webapp/pages'))
-    .filter((pageFile) => !/^\./.test(pageFile))
-    .reduce((accum, page) => {
-        accum[page] = path.join(__dirname, 'src/main/webapp/pages', page);
-        return accum;
-    }, {});
-
 module.exports = webpackMerge(baseConfig, {
-    entry: entries,
+    // One cacheable shell; each view loads its own deferred page chunk.
+    entry: { ContentHygiene: path.join(__dirname, 'src/main/webapp/bootstrap.ts') },
     output: {
         path: path.join(__dirname, 'stage/appserver/static/pages/'),
         filename: '[name].js',
+        // publicPath.ts establishes the native, cache-busted app URL before
+        // any deferred page import. Do not infer it from native/CDN scripts.
+        publicPath: '',
     },
     plugins: [
         new CopyWebpackPlugin({

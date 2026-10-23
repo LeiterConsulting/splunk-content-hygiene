@@ -29,8 +29,8 @@ sets `COPYFILE_DISABLE=1`, removes `.DS_Store`, AppleDouble `._*`, and
 Inspect the archive before signing off:
 
 ```bash
-tar -tzf app/dist/content_hygiene-0.3.0-beta.tar.gz
-shasum -a 256 app/dist/content_hygiene-0.3.0-beta.tar.gz
+tar -tzf app/dist/content_hygiene-0.4.0-beta.tar.gz
+shasum -a 256 app/dist/content_hygiene-0.4.0-beta.tar.gz
 ```
 
 It must have exactly one top-level `content_hygiene/` directory and must not
@@ -51,11 +51,18 @@ state contains no temporary review records and that no customer object changed.
 ## Stage the GitHub release
 
 1. Commit and push the validated source and checksum.
-2. Create a draft prerelease tag named `v<version>` from the validated commit.
+2. Create a draft release tagged `v<version>` from the validated commit.
 3. Attach the `.tar.gz` and `SHA256SUMS`.
 4. Include compatibility, validation results, known limitations, and the exact
    SHA-256 in the release notes.
 5. Review the draft before publishing it.
+
+For a beta explicitly requested as GitHub's **Latest** release, retain `beta`
+in the version, title, and notes, following this repository's existing release
+convention. GitHub's formal prerelease flag cannot be combined with its Latest
+badge. If a formal GitHub prerelease is requested instead, set that flag and
+do not mark it Latest. See the
+[GitHub release API rules](https://docs.github.com/en/rest/releases/releases#create-a-release).
 
 Release archives and local validation reports remain untracked; GitHub release
 assets are the distribution channel.

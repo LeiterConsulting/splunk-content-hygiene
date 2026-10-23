@@ -12,12 +12,7 @@ import {
     WorkflowForm,
 } from '../AppStyles';
 import { reviewStageOptions } from '../services/reviews';
-import {
-    ContentObject,
-    ReviewInput,
-    ReviewRecord,
-    ReviewStage,
-} from '../types';
+import { ContentObject, ReviewInput, ReviewRecord, ReviewStage } from '../types';
 import { ReviewStageBadge } from './ReviewStageBadge';
 
 interface ReviewEditorProps {
@@ -45,9 +40,7 @@ export function ReviewEditor({
     onSave,
     onDelete,
 }: ReviewEditorProps): React.ReactElement {
-    const [stage, setStage] = useState<ReviewStage>(
-        review?.stage ?? 'triage'
-    );
+    const [stage, setStage] = useState<ReviewStage>(review?.stage ?? 'triage');
     const [note, setNote] = useState(review?.note ?? '');
     const [assignedTo, setAssignedTo] = useState(review?.assignedTo ?? '');
     const [isSaving, setIsSaving] = useState(false);
@@ -85,7 +78,7 @@ export function ReviewEditor({
             setError(
                 saveError instanceof Error
                     ? saveError.message
-                    : 'Unable to save this review record.'
+                    : 'Unable to save this review record.',
             );
         } finally {
             setIsSaving(false);
@@ -102,13 +95,13 @@ export function ReviewEditor({
             setNote('');
             setAssignedTo('');
             setMessage(
-                'Removed from the app-local review library. The Splunk object was not changed.'
+                'Removed from the app-local review library. The Splunk object was not changed.',
             );
         } catch (deleteError) {
             setError(
                 deleteError instanceof Error
                     ? deleteError.message
-                    : 'Unable to remove this review record.'
+                    : 'Unable to remove this review record.',
             );
         } finally {
             setIsSaving(false);
@@ -131,16 +124,13 @@ export function ReviewEditor({
                     </dd>
                     <dt>Last updated</dt>
                     <dd>
-                        {dateFormatter.format(new Date(review.updatedAt))} by{' '}
-                        {review.updatedBy}
+                        {dateFormatter.format(new Date(review.updatedAt))} by {review.updatedBy}
                     </dd>
                     <dt>Source scan</dt>
                     <dd>{review.scanId}</dd>
                 </DefinitionList>
             ) : (
-                <SmallText>
-                    This object is not yet in the review library.
-                </SmallText>
+                <SmallText>This object is not yet in the review library.</SmallText>
             )}
 
             <WorkflowForm
@@ -154,9 +144,7 @@ export function ReviewEditor({
                     <Select
                         value={stage}
                         disabled={!canWrite || isSaving}
-                        onChange={(event) =>
-                            setStage(event.currentTarget.value as ReviewStage)
-                        }
+                        onChange={(event) => setStage(event.currentTarget.value as ReviewStage)}
                     >
                         {reviewStageOptions.map((option) => (
                             <option value={option.value} key={option.value}>
@@ -172,9 +160,7 @@ export function ReviewEditor({
                         maxLength={256}
                         disabled={!canWrite || isSaving}
                         placeholder="Splunk user or team"
-                        onChange={(event) =>
-                            setAssignedTo(event.currentTarget.value)
-                        }
+                        onChange={(event) => setAssignedTo(event.currentTarget.value)}
                     />
                 </FilterField>
                 <FilterField>
@@ -183,29 +169,26 @@ export function ReviewEditor({
                         value={note}
                         maxLength={4000}
                         disabled={!canWrite || isSaving}
-                        placeholder="Record evidence checked, owner response, blockers, or decision rationale."
                         onChange={(event) => setNote(event.currentTarget.value)}
                     />
                 </FilterField>
                 <SmallText>
-                    Saves only an app-local workflow record. It does not modify,
-                    disable, or remove this Splunk object.
+                    Record evidence checked, the owner response, blockers, or the decision
+                    rationale.
+                </SmallText>
+                <SmallText>
+                    Saves only an app-local workflow record. It does not modify, disable, or remove
+                    this Splunk object.
                 </SmallText>
                 <ButtonRow>
-                    <StyledButton
-                        type="submit"
-                        $primary
-                        disabled={!canWrite || isSaving}
-                    >
+                    <StyledButton type="submit" $primary disabled={!canWrite || isSaving}>
                         {saveLabel}
                     </StyledButton>
                     {review ? (
                         <StyledButton
                             type="button"
                             disabled={!canWrite || isSaving}
-                            onClick={() =>
-                                handleDelete().catch(() => undefined)
-                            }
+                            onClick={() => handleDelete().catch(() => undefined)}
                         >
                             Remove library record
                         </StyledButton>
@@ -213,9 +196,7 @@ export function ReviewEditor({
                 </ButtonRow>
             </WorkflowForm>
             {(message || error) && (
-                <InlineNotice role={error ? 'alert' : 'status'}>
-                    {error ?? message}
-                </InlineNotice>
+                <InlineNotice role={error ? 'alert' : 'status'}>{error ?? message}</InlineNotice>
             )}
         </>
     );

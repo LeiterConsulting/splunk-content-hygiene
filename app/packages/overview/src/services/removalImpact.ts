@@ -7,6 +7,7 @@ import {
     ReviewStage,
     ScanSummary,
 } from '../types';
+import { evidenceWindowFresh, usageSourceForObject, usageValidity } from './usage';
 
 export type RemovalImpactLevel = 'critical' | 'high' | 'medium' | 'low' | 'unknown';
 
@@ -117,6 +118,10 @@ function likelyOutcome(
     }
 
     switch (edge.relation) {
+        case 'belongs_to':
+            return `${dependentLabel} belongs to the selected app. Removing the app package can remove its bundled configuration and make this object unavailable. Local overrides, data, and external integrations still require separate review.`;
+        case 'uses_file':
+            return `${dependentLabel} would lose its backing lookup file; readers and writers using the definition can fail or lose enrichment.`;
         case 'references':
         case 'invokes':
             return `${dependentLabel} may fail to load or execute when its ${dependencyType} reference is no longer available.`;
@@ -342,7 +347,8 @@ export function analyzeRemovalImpact(
     const analysisComplete =
         scan.analysisStatus === 'complete' &&
         scan.status === 'succeeded' &&
-        scan.warningCount === 0;
+        evidenceWindowFresh(scan.completedAt ?? scan.startedAt) &&
+        !selected.analysisWarnings?.length;
     const highConfidenceDirect = directDependents.filter(
         ({ confidence }) => confidence === 'high',
     ).length;
@@ -367,14 +373,14 @@ export function analyzeRemovalImpact(
     const reviewBlocksRemoval =
         selectedReview?.stage === 'retain' || selectedReview?.stage === 'blocked';
     const selectedUsage = selected.usageEvidence;
-    const usageMatchesInventory =
-        selectedUsage?.inventoryScanId === scan.scanId;
-    const completeUsageWindow =
-        usageMatchesInventory && selectedUsage?.coverage === 'complete';
-    const observedUsage =
-        usageMatchesInventory && (selectedUsage?.observationCount ?? 0) > 0;
+    const usageMatchesInventory = usageValidity(selected, scan.scanId) === 'current';
+    const completeUsageWindow = usageMatchesInventory && selectedUsage?.coverage === 'complete';
+    const observedUsage = usageMatchesInventory && (selectedUsage?.observationCount ?? 0) > 0;
     const usageSupportsPlanning =
-        completeUsageWindow && !observedUsage;
+        (completeUsageWindow && !observedUsage) ||
+        (!usageSourceForObject(selected) &&
+            selectedReview?.stage === 'confirmed_eligible' &&
+            Boolean(selectedReview.note?.trim()));
     const unresolvedDependencyCount = dependencyFollowUps.filter(({ objectId }) =>
         objectId.startsWith('missing::'),
     ).length;
@@ -520,9 +526,7 @@ export function analyzeRemovalImpact(
         );
     }
     if (!selectedUsage) {
-        caveats.push(
-            'No usage-evidence window has been measured for the selected object.',
-        );
+        caveats.push('No usage-evidence window has been measured for the selected object.');
     } else if (!usageMatchesInventory) {
         caveats.push(
             'The available usage evidence was collected against an earlier inventory snapshot and cannot satisfy current removal-readiness prerequisites.',
@@ -554,9 +558,7 @@ export function analyzeRemovalImpact(
                 ? 'The current complete usage window contains no attributable activity. Record the accountable owner, intended disposition, business context, and confirmed-eligible review stage in the app-local Review Library.'
                 : 'Establish a complete current usage window, reconcile any observed activity, and record the accountable owner, intended disposition, business context, and review stage in the app-local Review Library.',
             objectIds: [selected.objectId],
-            blocking:
-                selectedReview?.stage !== 'confirmed_eligible' ||
-                !usageSupportsPlanning,
+            blocking: selectedReview?.stage !== 'confirmed_eligible' || !usageSupportsPlanning,
         },
         {
             sequence: 3,
