@@ -12,6 +12,7 @@ import {
     UsageCoverage,
 } from '../types';
 import { stableRecordKey } from './inventory';
+import { parseReviewBaseline } from './reviewEvidence';
 
 const APP_ID = 'content_hygiene';
 const COLLECTION = 'ch_reviews';
@@ -154,6 +155,10 @@ export function reviewRecordFromKv(record: KvReviewRecord): ReviewRecord {
         createdAt: stringValue(record.created_at),
         updatedAt: stringValue(record.updated_at),
         updatedBy: stringValue(record.updated_by, 'unknown'),
+        evidenceBaseline: parseReviewBaseline(record.evidence_baseline),
+        evidenceHistory: Array.isArray(record.evidence_history)
+            ? record.evidence_history.map(parseReviewBaseline)
+                .filter((item): item is NonNullable<typeof item> => item !== null) : [],
     };
 }
 
@@ -225,26 +230,47 @@ async function listReviews(): Promise<ReviewRecord[]> {
 async function upsertReview(input: ReviewInput): Promise<ReviewRecord> {
     const now = new Date().toISOString();
     const existing = await getReviewRecord(input.object.objectId);
+    if (input.expectedUpdatedAt !== undefined &&
+        (existing?.updated_at ?? null) !== input.expectedUpdatedAt) {
+        throw new Error('This review changed in another session. Reload the library before saving so its decision and evidence are not overwritten.');
+    }
+    if (input.captureEvidence && (!input.evidence ||
+        input.evidence.objectId !== canonicalReviewId(input.object.objectId) ||
+        input.evidence.scanId !== input.scanId)) {
+        throw new Error('A current inventory fingerprint is required to capture review evidence. Run a complete scan first.');
+    }
+    const prior = parseReviewBaseline(existing?.evidence_baseline);
+    const priorHistory = Array.isArray(existing?.evidence_history)
+        ? existing.evidence_history.map(parseReviewBaseline)
+            .filter((item): item is NonNullable<typeof item> => item !== null) : [];
+    const history = input.captureEvidence && prior ? [...priorHistory, prior] : priorHistory;
+    // Retain the first capture plus the four most recent prior captures.
+    const retainedHistory = history.length > 5 ? [history[0], ...history.slice(-4)] : history;
     const record: KvReviewRecord = {
         _key: existing?._key ?? recordKey(canonicalReviewId(input.object.objectId)),
         object_id: canonicalReviewId(input.object.objectId),
-        object_name: input.object.name,
-        canonical_name: input.object.canonicalName,
-        object_type: input.object.objectType,
-        app: input.object.app,
-        owner: input.object.owner,
-        health_status_at_review: input.object.healthStatus,
-        usage_coverage_at_review: input.object.usageEvidence?.coverage ?? null,
-        usage_last_observed_at_review: input.object.usageEvidence?.lastObserved ?? null,
-        usage_observation_count_at_review: input.object.usageEvidence?.observationCount ?? null,
-        usage_run_id_at_review: input.object.usageEvidence?.usageRunId ?? null,
+        object_name: existing?.object_name ?? input.object.name,
+        canonical_name: existing?.canonical_name ?? input.object.canonicalName,
+        object_type: existing?.object_type ?? input.object.objectType,
+        app: existing?.app ?? input.object.app,
+        owner: existing ? existing.owner : input.object.owner,
+        health_status_at_review: existing?.health_status_at_review ?? input.object.healthStatus,
+        usage_coverage_at_review: existing ? existing.usage_coverage_at_review : input.object.usageEvidence?.coverage ?? null,
+        usage_last_observed_at_review: existing ? existing.usage_last_observed_at_review : input.object.usageEvidence?.lastObserved ?? null,
+        usage_observation_count_at_review: existing ? existing.usage_observation_count_at_review : input.object.usageEvidence?.observationCount ?? null,
+        usage_run_id_at_review: existing ? existing.usage_run_id_at_review : input.object.usageEvidence?.usageRunId ?? null,
         stage: input.stage,
         note: input.note.trim().slice(0, 4000),
         assigned_to: input.assignedTo?.trim().slice(0, 256) || null,
-        scan_id: input.scanId,
+        scan_id: existing?.scan_id ?? input.scanId,
         created_at: existing?.created_at ?? now,
         updated_at: now,
         updated_by: username || 'unknown',
+        evidence_baseline: input.captureEvidence
+            ? { capturedAt: now, capturedBy: username || 'unknown', evidence: input.evidence,
+                usageAtCapture: input.object.usageEvidence }
+            : existing?.evidence_baseline ?? null,
+        evidence_history: input.captureEvidence ? retainedHistory : existing?.evidence_history ?? [],
     };
     const suffix = existing ? `/${encodeURIComponent(existing._key)}` : '';
     const updateFields: JsonRecord = {};

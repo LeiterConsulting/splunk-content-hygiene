@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
     ButtonRow,
     Card,
@@ -25,10 +25,13 @@ import { ResultPagination } from '../components/ResultPagination';
 import { PageHeader } from '../components/PageHeader';
 import { ReviewEditor } from '../components/ReviewEditor';
 import { ReviewStageBadge } from '../components/ReviewStageBadge';
+import { ReviewFreshnessBadge, ReviewFreshnessPanel } from '../components/ReviewFreshnessPanel';
+import { useEvidenceClock } from '../components/useEvidenceClock';
 import { StatusBadge } from '../components/StatusBadge';
 import { SummaryMetric } from '../components/SummaryMetric';
 import { UsageEvidencePanel } from '../components/UsageEvidencePanel';
 import { reviewStageOptions } from '../services/reviews';
+import { compareReviewEvidence, ReviewFreshness, reviewValidityLabels } from '../services/reviewEvidence';
 import { usageValidity } from '../services/usage';
 import { ContentObject, InventorySnapshot, ReviewInput, ReviewRecord } from '../types';
 import { downloadCsv } from '../utils/downloadCsv';
@@ -88,7 +91,12 @@ function formatDateTime(value: string): string {
           }).format(date);
 }
 
-function exportReviews(rows: ReviewRecord[], objectById: Map<string, ContentObject>): void {
+function exportReviews(rows: ReviewRecord[], objectById: Map<string, ContentObject>, freshness: Map<string, ReviewFreshness>, inventoryAvailable: boolean): void {
+    const presence = (id: string): string => {
+        if (!inventoryAvailable) { return 'unavailable'; }
+        return objectById.has(id) ? 'present' : 'not observed';
+    };
+    const missingUsage = inventoryAvailable ? 'not_in_inventory' : 'inventory_unavailable';
     downloadCsv(
         'content-hygiene-review-library.csv',
         [
@@ -98,6 +106,10 @@ function exportReviews(rows: ReviewRecord[], objectById: Map<string, ContentObje
             'App',
             'Owner',
             'Stage',
+            'Review evidence status',
+            'Changes since review',
+            'Verification limits',
+            'Evidence baseline scan',
             'Assigned to',
             'Note',
             'Current inventory status',
@@ -123,13 +135,17 @@ function exportReviews(rows: ReviewRecord[], objectById: Map<string, ContentObje
             review.app,
             review.owner,
             review.stage,
+            freshness.get(review.objectId)?.status ?? 'cannot_verify',
+            freshness.get(review.objectId)?.reasons.join('; ') ?? '',
+            freshness.get(review.objectId)?.limitations.join('; ') ?? '',
+            review.evidenceBaseline?.evidence.scanId ?? '',
             review.assignedTo,
             review.note,
-            objectById.has(review.objectId) ? 'present' : 'not present',
+            presence(review.objectId),
             review.healthStatusAtReview,
             objectById.has(review.objectId)
                 ? usageValidity(objectById.get(review.objectId)!)
-                : 'not_in_inventory',
+                : missingUsage,
             objectById.get(review.objectId)?.usageEvidence?.windowEnd ?? '',
             objectById.get(review.objectId)?.usageEvidence?.coverage ?? 'not measured',
             objectById.get(review.objectId)?.usageEvidence?.observationCount ?? '',
@@ -160,12 +176,16 @@ export function ReviewLibraryPage({
     const [appFilter, setAppFilter] = useState('all');
     const [typeFilter, setTypeFilter] = useState('all');
     const [presenceFilter, setPresenceFilter] = useState('all');
+    const [validityFilter, setValidityFilter] = useState(readQueryParam('validity') || 'all');
     const [selectedId, setSelectedId] = useState(readQueryParam('object'));
     const [page, setPage] = useState(0);
-    const objects = snapshot?.objects ?? [];
-    const objectById = new Map(
-        objects.map((contentObject) => [contentObject.objectId, contentObject]),
-    );
+    const evidenceNow = useEvidenceClock();
+    const objectById = useMemo(() => new Map(
+        (snapshot?.objects ?? []).map((contentObject) => [contentObject.objectId, contentObject]),
+    ), [snapshot]);
+    const freshness = useMemo(() => new Map(reviews.map((review) => [review.objectId,
+        compareReviewEvidence(review, objectById.get(review.objectId), snapshot?.scan, evidenceNow),
+    ])), [reviews, objectById, snapshot?.scan, evidenceNow]);
     const apps = Array.from(new Set(reviews.map((review) => review.app))).sort();
     const objectTypes = Array.from(new Set(reviews.map((review) => review.objectType))).sort();
     const normalizedQuery = query.trim().toLowerCase();
@@ -174,11 +194,12 @@ export function ReviewLibraryPage({
             const isPresent = objectById.has(review.objectId);
             return (
                 (stageFilter === 'all' || review.stage === stageFilter) &&
+                (validityFilter === 'all' || freshness.get(review.objectId)?.status === validityFilter) &&
                 (appFilter === 'all' || review.app === appFilter) &&
                 (typeFilter === 'all' || review.objectType === typeFilter) &&
                 (presenceFilter === 'all' ||
                     (presenceFilter === 'present' && isPresent) ||
-                    (presenceFilter === 'missing' && !isPresent)) &&
+                    (presenceFilter === 'missing' && Boolean(snapshot) && !isPresent)) &&
                 (!normalizedQuery ||
                     [
                         review.objectName,
@@ -207,6 +228,17 @@ export function ReviewLibraryPage({
         : null;
     const stageCount = (stage: ReviewRecord['stage']): number =>
         reviews.filter((review) => review.stage === stage).length;
+    const missingLabel = snapshot ? 'Not present' : 'Unavailable';
+
+    if (isLoading && !snapshot) {
+        return <>
+            <PageHeader title="Review Library" subtitle="Loading verified inventory and saved review evidence." />
+            <Card><EmptyState><div>
+                <strong>Loading review evidence…</strong>
+                <p>Saved decisions remain unchanged. Object presence is not yet known.</p>
+            </div></EmptyState></Card>
+        </>;
+    }
 
     return (
         <>
@@ -217,7 +249,7 @@ export function ReviewLibraryPage({
                     <ButtonRow>
                         <StyledButton
                             type="button"
-                            onClick={() => exportReviews(filteredReviews, objectById)}
+                            onClick={() => exportReviews(filteredReviews, objectById, freshness, Boolean(snapshot))}
                             disabled={filteredReviews.length === 0}
                         >
                             Export filtered CSV
@@ -231,6 +263,7 @@ export function ReviewLibraryPage({
                                     reviews: filteredReviews.map((review) => ({
                                         ...review,
                                         currentObject: objectById.get(review.objectId) ?? null,
+                                        reviewEvidenceStatus: freshness.get(review.objectId),
                                     })),
                                 })
                             }
@@ -271,7 +304,7 @@ export function ReviewLibraryPage({
                 <SummaryMetric
                     label="Confirmed eligible"
                     value={stageCount('confirmed_eligible').toLocaleString()}
-                    hint="Positively identified for a later cleanup process"
+                    hint="Saved decision; check current evidence before relying on it"
                     accent="positive"
                 />
                 <SummaryMetric
@@ -281,6 +314,13 @@ export function ReviewLibraryPage({
                     accent="neutral"
                 />
             </MetricGrid>
+            <ButtonRow aria-label="Review evidence summary">
+                {(['needs_review', 'cannot_verify', 'current'] as const).map((status) => (
+                    <StyledButton key={status} onClick={() => { setValidityFilter(status); setPage(0); }}>
+                        {reviewValidityLabels[status]}: {[...freshness.values()].filter((item) => item.status === status).length}
+                    </StyledButton>
+                ))}
+            </ButtonRow>
 
             {loadError ? <InlineNotice role="alert">{loadError}</InlineNotice> : null}
 
@@ -314,6 +354,17 @@ export function ReviewLibraryPage({
                             <option key={option.value} value={option.value}>
                                 {option.label}
                             </option>
+                        ))}
+                    </Select>
+                </FilterField>
+                <FilterField>
+                    Review evidence status
+                    <Select value={validityFilter} onChange={(event) => {
+                        setValidityFilter(event.currentTarget.value); setPage(0);
+                    }}>
+                        <option value="all">All evidence statuses</option>
+                        {(['needs_review', 'cannot_verify', 'current'] as const).map((status) => (
+                            <option key={status} value={status}>{reviewValidityLabels[status]}</option>
                         ))}
                     </Select>
                 </FilterField>
@@ -373,6 +424,7 @@ export function ReviewLibraryPage({
                         setAppFilter('all');
                         setTypeFilter('all');
                         setPresenceFilter('all');
+                        setValidityFilter('all');
                         setPage(0);
                     }}
                 >
@@ -418,6 +470,7 @@ export function ReviewLibraryPage({
                                         <th scope="col">Object</th>
                                         <th scope="col">Type</th>
                                         <th scope="col">Stage</th>
+                                        <th scope="col">Review evidence</th>
                                         <th scope="col">Assigned to</th>
                                         <th scope="col">Current health</th>
                                         <th scope="col">Updated</th>
@@ -447,6 +500,7 @@ export function ReviewLibraryPage({
                                                 <td>
                                                     <ReviewStageBadge stage={review.stage} />
                                                 </td>
+                                                <td><ReviewFreshnessBadge status={freshness.get(review.objectId)!.status} /></td>
                                                 <td>{review.assignedTo ?? 'Unassigned'}</td>
                                                 <td>
                                                     {currentObject ? (
@@ -454,7 +508,7 @@ export function ReviewLibraryPage({
                                                             status={currentObject.healthStatus}
                                                         />
                                                     ) : (
-                                                        'Not present'
+                                                        missingLabel
                                                     )}
                                                 </td>
                                                 <td>{formatDateTime(review.updatedAt)}</td>
@@ -477,6 +531,15 @@ export function ReviewLibraryPage({
                             </ButtonRow>
                         </DetailSection>
                         <DetailSection>
+                            <ReviewFreshnessPanel
+                                key={selectedReview.objectId}
+                                objectId={selectedReview.objectId}
+                                comparison={freshness.get(selectedReview.objectId)!}
+                                canDrillTo={(id) => objectById.has(id)}
+                                onDrillTo={(id) => navigateToView('dependencies', { object: id })}
+                            />
+                        </DetailSection>
+                        <DetailSection>
                             <DefinitionList>
                                 <dt>Type</dt>
                                 <dd>{selectedReview.objectType}</dd>
@@ -488,7 +551,7 @@ export function ReviewLibraryPage({
                                 <dd>
                                     {objectById.has(selectedReview.objectId)
                                         ? 'Present'
-                                        : 'Not present'}
+                                        : missingLabel}
                                 </dd>
                                 <dt>Inbound refs</dt>
                                 <dd>{selectedObject.inboundReferences}</dd>
@@ -515,8 +578,9 @@ export function ReviewLibraryPage({
                         {!objectById.has(selectedReview.objectId) ? (
                             <DetailSection>
                                 <InlineNotice>
-                                    This record remains in the library even though the object is not
-                                    visible in the latest cached scan.
+                                    {snapshot
+                                        ? 'This record remains in the library even though the object is not visible in the latest cached scan.'
+                                        : 'Inventory is unavailable. This saved review remains in the library; object presence is unknown.'}
                                 </InlineNotice>
                             </DetailSection>
                         ) : null}

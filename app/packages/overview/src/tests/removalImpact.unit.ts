@@ -1,4 +1,5 @@
 import { analyzeRemovalImpact } from '../services/removalImpact';
+import { attachReviewEvidence, configurationFingerprint } from '../services/reviewEvidence';
 import { ContentObject, DependencyEdge, ReviewRecord, ScanSummary } from '../types';
 
 const completeScan: ScanSummary = {
@@ -91,6 +92,9 @@ function confirmedReview(object: ContentObject): ReviewRecord {
         createdAt: '2026-07-28T12:06:00Z',
         updatedAt: '2026-07-28T12:06:00Z',
         updatedBy: 'reviewer',
+        evidenceBaseline: object.reviewEvidence ? {
+            capturedAt: '2026-07-28T12:06:00Z', capturedBy: 'reviewer', evidence: object.reviewEvidence,
+        } : null,
     };
 }
 
@@ -222,7 +226,7 @@ test('requires a complete scan even when the captured graph has no dependents', 
     expect(analysis.caveats.join(' ')).toContain('latest scan is partial');
 });
 
-test('allows controlled change planning only after graph and review prerequisites', () => {
+test('allows controlled change planning only after graph and review prerequisites', async () => {
     const selected = contentObject('dashboard::search::a', 'Dashboard A', 'Dashboard', {
         removalImpact: 0,
         usageEvidence: {
@@ -246,6 +250,11 @@ test('allows controlled change planning only after graph and review prerequisite
             evidence: ['No dashboard access observed in a complete window'],
         },
     });
+    selected.configurationFingerprint = configurationFingerprint({ 'eai:data': '<dashboard />' }, {});
+    [selected.reviewEvidence] = (await attachReviewEvidence([selected], [], {
+        scanId: completeScan.scanId, observedAt: completeScan.startedAt, principal: 'operator',
+        roles: ['operator'], mode: 'full', collectionComplete: true, analysisComplete: true, collectors: {},
+    })).map((item) => item.reviewEvidence);
     const analysis = analyzeRemovalImpact(
         selected,
         [selected],

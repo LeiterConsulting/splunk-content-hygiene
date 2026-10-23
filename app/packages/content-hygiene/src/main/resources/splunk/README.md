@@ -19,6 +19,14 @@ Review stages, notes, and assignees are persisted only in the app-local
 `ch_usage_evidence`; raw SPL and actor lists are not stored. Review records and
 usage scans do not change the referenced Splunk objects.
 
+Review evidence is tracked independently of saved decisions. Review Library
+and Dependency Explorer expose Current, Needs re-review, and Cannot verify
+states, explain observed changes, and export comparison evidence. Existing
+decisions are not rewritten by scans. After upgrading, run a complete scan for
+configuration/relationship fingerprints; explicitly capture or reaffirm review
+evidence after investigating it. Partial coverage cannot establish Current,
+and stale confirmations cannot qualify an object for change planning.
+
 ## Requirements
 
 - Splunk Enterprise with browser validation on 10.2.8 and 10.4.4, including

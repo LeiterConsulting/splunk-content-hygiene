@@ -20,6 +20,14 @@
     "updated_by"
   ],
   "properties": {
+    "evidence_baseline": {
+      "anyOf": [{ "$ref": "review-evidence.schema.json" }, { "type": "null" }]
+    },
+    "evidence_history": {
+      "type": "array",
+      "maxItems": 5,
+      "items": { "$ref": "review-evidence.schema.json" }
+    },
     "_key": {
       "type": "string",
       "minLength": 1

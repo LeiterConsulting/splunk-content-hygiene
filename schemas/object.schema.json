@@ -5,6 +5,8 @@
   "type": "object",
   "required": ["object_id", "name", "object_type", "app", "health_status", "protected", "evidence"],
   "properties": {
+    "configuration_fingerprint": { "$ref": "review-evidence.schema.json#/$defs/fingerprint" },
+    "review_evidence": { "$ref": "review-evidence.schema.json#/$defs/evidence" },
     "analysis_warnings": {
       "type": "array",
       "items": { "type": "string" }

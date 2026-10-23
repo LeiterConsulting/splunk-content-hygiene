@@ -13,7 +13,7 @@ jest.mock('@splunk/splunk-utils/url', () => ({
 type Row = Record<string, any>;
 const collections = new Map<string, Map<string, Row>>();
 let failEdges = false;
-let requests: Array<{ path: string; method: string; query?: string | null }> = [];
+let requests: Array<{ path: string; method: string; query?: string | null; fields?: string | null }> = [];
 const reply = (data: unknown, status = 200): Response =>
     ({ status, text: async () => JSON.stringify(data), json: async () => data }) as Response;
 function matches(row: Row, query: Row): boolean {
@@ -37,7 +37,7 @@ beforeEach(() => {
         }
         const url = new URL(String(input), 'https://lab.test');
         const method = init.method ?? 'GET';
-        requests.push({ path: url.pathname, method, query: url.searchParams.get('query') });
+        requests.push({ path: url.pathname, method, query: url.searchParams.get('query'), fields: url.searchParams.get('fields') });
         const kv = url.pathname.match(/\/storage\/collections\/data\/([^/]+)(.*)$/);
         if (kv) {
             const [, collection, suffix] = kv;
@@ -47,6 +47,12 @@ beforeEach(() => {
             if (method === 'POST') {
                 const body = JSON.parse(String(init.body));
                 if (suffix === '/batch_save') {
+                    const invalidKey = (value: unknown): boolean => {
+                        if (Array.isArray(value)) { return value.some(invalidKey); }
+                        return Boolean(value && typeof value === 'object' &&
+                            Object.entries(value).some(([field, item]) => /\.|^\$/.test(field) || invalidKey(item)));
+                    };
+                    if (invalidKey(body)) { return reply({ error: 'Invalid KV batch field name' }, 400); }
                     if (collection === 'ch_edges' && failEdges) {
                         failEdges = false;
                         throw new Error('KV write interrupted');
@@ -110,7 +116,7 @@ beforeEach(() => {
                 {
                     ...app,
                     name: 'Daily',
-                    content: { disabled: false, search: '| makeresults', is_scheduled: false },
+                    content: { disabled: false, search: '| makeresults', is_scheduled: false, 'dispatch.earliest_time': '-24h' },
                 },
                 {
                     ...app,
@@ -175,6 +181,12 @@ test('reads reject a corrupted published snapshot and summary pages skip graph a
     expect(overview?.scan.edgeCount).toBe(first.edges.length);
     expect(overview?.edges).toHaveLength(0);
     expect(requests.some((request) => /ch_edges|ch_owners/.test(request.path))).toBe(false);
+    expect(requests.find((request) => /ch_objects$/.test(request.path))?.fields)
+        .toBe('source:0,configuration_fingerprint:0,review_evidence:0');
+    requests = [];
+    await splunkInventoryClient.getLatestSnapshot('review-library');
+    expect(requests.find((request) => /ch_objects$/.test(request.path))?.fields)
+        .toBe('source:0,configuration_fingerprint:0');
     collections.get('ch_objects')!.delete(Array.from(collections.get('ch_objects')!.keys())[0]);
     await expect(splunkInventoryClient.getLatestSnapshot()).rejects.toThrow(
         'integrity verification',

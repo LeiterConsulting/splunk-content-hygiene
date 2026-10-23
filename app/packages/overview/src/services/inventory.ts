@@ -4,6 +4,7 @@ import { createRESTURL } from '@splunk/splunk-utils/url';
 import { splunkRequest, SplunkRequestError as RestRequestError } from './rest';
 
 import { AnalysisCompleteness, RawAnalysisSource, analyzeInventoryAsync } from './analysis';
+import { attachReviewEvidence, configurationFingerprint } from './reviewEvidence';
 import {
     CollectedUsageSource,
     DASHBOARD_ACCESS_SOURCE_ID,
@@ -53,6 +54,7 @@ interface RestAcl {
     app?: string;
     owner?: string;
     sharing?: string;
+    perms?: { read?: string[]; write?: string[] };
 }
 
 export interface SplunkRestEntry {
@@ -247,7 +249,7 @@ const objectCollectors: ObjectCollectorDefinition[] = [
     {
         id: 'macros',
         label: 'Macros',
-        endpoint: 'admin/macros',
+        endpoint: 'configs/conf-macros',
         namespace: { owner: '-', app: '-' },
         objectType: 'Macro',
     },
@@ -564,6 +566,7 @@ export function normalizeObjectEntry(
         suggested_action: protectedObject
             ? 'Protected from cleanup review'
             : 'Collect usage and dependency evidence before review',
+        configuration_fingerprint: configurationFingerprint(content, { ...acl }, collector.id),
         source: {
             collector: collector.id,
             endpoint: collector.endpoint,
@@ -1051,6 +1054,8 @@ function objectRecordToContentObject(record: KvObjectRecord): ContentObject {
         lastUsed: normalizeTimestamp(record.last_used),
         usageEvidence: null,
         inventoryScanId: record.scan_id,
+        configurationFingerprint: record.configuration_fingerprint as ContentObject['configurationFingerprint'],
+        reviewEvidence: record.review_evidence as ContentObject['reviewEvidence'],
         analysisWarnings: stringArray(record.analysis_warnings),
         healthStatus: isHealthStatus(healthStatus) ? healthStatus : 'unknown',
         abandonmentConfidence: nullableScore(record.abandonment_confidence),
@@ -1287,10 +1292,10 @@ async function getLatestInventoryScanRecord(): Promise<KvScanRecord | null> {
 
 async function verifySnapshot(record: KvScanRecord): Promise<void> {
     const [objects, edges, findings, owners] = await Promise.all([
-        getCollectionRecords<KvObjectRecord>('ch_objects', record.scan_id),
-        getCollectionRecords<KvEdgeRecord>('ch_edges', record.scan_id),
-        getCollectionRecords<KvFindingRecord>('ch_findings', record.scan_id),
-        getCollectionRecords<KvOwnerRecord>('ch_owners', record.scan_id),
+        getCollectionRecords<KvObjectRecord>('ch_objects', record.scan_id, 'object_id:1'),
+        getCollectionRecords<KvEdgeRecord>('ch_edges', record.scan_id, 'source_id:1,target_id:1,resolved:1'),
+        getCollectionRecords<KvFindingRecord>('ch_findings', record.scan_id, 'object_id:1'),
+        getCollectionRecords<KvOwnerRecord>('ch_owners', record.scan_id, 'owner:1'),
     ]);
     const identities = new Set(objects.map((item) => item.object_id));
     if (
@@ -1486,10 +1491,14 @@ async function loadSnapshot(
 ): Promise<InventorySnapshot> {
     const includeEdges = !page || page === 'dependency-explorer';
     const includeOwners = !page || page === 'ownership';
+    const includeReviewEvidence = !page || ['cleanup-candidates', 'dependency-explorer', 'review-library'].includes(page);
     const usageRecord = usageRecordOverride ?? (await getLatestUsageScanRecord());
     const [objectRecords, edgeRecords, findingRecords, ownerRecords, usageRecords] =
         await Promise.all([
-            getCollectionRecords<KvObjectRecord>('ch_objects', record.scan_id, 'source:0'),
+            // The manifest already contains its configuration fingerprint. Do
+            // not duplicate those hashes, or send review detail to summary pages.
+            getCollectionRecords<KvObjectRecord>('ch_objects', record.scan_id,
+                `source:0,configuration_fingerprint:0${includeReviewEvidence ? '' : ',review_evidence:0'}`),
             includeEdges
                 ? getCollectionRecords<KvEdgeRecord>('ch_edges', record.scan_id)
                 : Promise.resolve([]),
@@ -1612,6 +1621,7 @@ async function runInventoryScan(
     let scanRecordCreated = false;
     let didPublish = false;
     let collectionComplete = true;
+    let scanningRoles: string[] = [];
 
     await acquireScanLock(scanId);
     activeScanController = new AbortController();
@@ -1634,6 +1644,7 @@ async function runInventoryScan(
             rest_inventory: '0.2.0',
             dependency_analysis: '0.4.0',
             classification: '0.4.0',
+            review_evidence: '1.0.0',
         },
         scan_limit_per_collector:
             mode === 'bounded' ? BOUNDED_SCAN_LIMIT : FULL_SCAN_MAX_PER_COLLECTOR,
@@ -1726,6 +1737,7 @@ async function runInventoryScan(
             const ownerRecords = collected.entries.map((entry) =>
                 normalizeOwnerEntry(entry, scanId, collectedAt),
             );
+            scanningRoles = ownerRecords.find((owner) => owner.owner === username)?.roles ?? [];
             await batchSave('ch_owners', ownerRecords);
             collectorCounts.owners = ownerRecords.length;
             collectorTotals.owners = collected.total;
@@ -1771,12 +1783,25 @@ async function runInventoryScan(
                     `Dependency parsing: ${affectedCount} object(s) have ${analysis.parserWarnings.length} declared limitations. Use the Dependency Explorer parser-gaps group to inspect source diagnostics. Unsupported or dynamic sources are not treated as complete.`,
                 );
             }
+            const completeAnalysis =
+                collectionComplete &&
+                Object.values(completeness).every(Boolean) &&
+                analysis.parserWarnings.length === 0;
+            const evidenceObjects = await attachReviewEvidence(analysis.objects, analysis.edges, {
+                scanId, observedAt: new Date().toISOString(), principal: username || 'unknown',
+                roles: scanningRoles, mode,
+                collectionComplete, analysisComplete: completeAnalysis,
+                collectors: { ...completeness },
+            });
             const analyzedById = new Map(
-                analysis.objects.map((contentObject) => [contentObject.objectId, contentObject]),
+                evidenceObjects.map((contentObject) => [contentObject.objectId, contentObject]),
             );
             const analyzedRecords = allObjectRecords.map((record) => {
                 const analyzed = analyzedById.get(record.object_id);
-                return analyzed ? analyzedObjectToRecord(record, analyzed) : record;
+                return analyzed ? {
+                    ...analyzedObjectToRecord(record, analyzed),
+                    review_evidence: analyzed.reviewEvidence,
+                } : record;
             });
             const edgeRecords = analysis.edges.map((edge) => dependencyEdgeToRecord(edge, scanId));
             const findingRecords = analysis.findings.map((findingValue) =>
@@ -1789,10 +1814,6 @@ async function runInventoryScan(
             ]);
             edgeCount = edgeRecords.length;
             findingCount = findingRecords.length;
-            const completeAnalysis =
-                collectionComplete &&
-                Object.values(completeness).every(Boolean) &&
-                analysis.parserWarnings.length === 0;
             analysisStatus = completeAnalysis ? 'complete' : 'partial';
             await updateRecord('ch_scan_runs', scanId, {
                 edge_count: edgeCount,

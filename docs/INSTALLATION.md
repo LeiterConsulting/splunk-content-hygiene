@@ -2,7 +2,7 @@
 
 ## Compatibility
 
-The `0.4.0-beta` hardening package requires Splunk Enterprise with KV Store.
+The beta package requires Splunk Enterprise with KV Store.
 The current validation scope is deliberately specific:
 
 | Version | Validation |
@@ -42,7 +42,7 @@ The check must report `OK` before installation.
 
 1. Sign in as a Splunk administrator.
 2. Open **Apps > Manage Apps > Install app from file**.
-3. Upload `content_hygiene-0.4.0-beta.tar.gz`.
+3. Upload the versioned `content_hygiene-*.tar.gz` package.
 4. Restart Splunk only if the installation workflow requests it.
 5. Open **Splunk Content Hygiene > Settings & Scan Status**.
 6. Confirm that the app reports no cached data rather than sample results.
@@ -67,6 +67,12 @@ complete scan. Version 0.4 does not trust legacy mutable snapshots as a baseline
 It rebuilds the derived cache without changing existing reviews. After a
 verified snapshot publishes, legacy derived evidence is retired. Export any
 old reports required for your retention policy before upgrading.
+
+Version 0.5 adds review-evidence fingerprints to new scans. Old reviews remain
+unchanged and show Cannot verify until a reviewer explicitly captures a supported
+baseline. Reaffirmation does not make partial evidence complete. The native entry
+script has a build-specific filename, so upgrades do not require refreshing the
+server-wide static cache merely to obtain the matching app JavaScript.
 
 ## Uninstall
 

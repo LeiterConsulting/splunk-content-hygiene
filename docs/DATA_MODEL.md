@@ -16,6 +16,21 @@ types. Storage keys are qualified by scan ID. `inventoryScanId` and per-source
 `analysisWarnings` accompany normalized UI objects; JSON exports add the shared
 `usageValidity` result.
 
+New scans also persist versioned `configuration_fingerprint` and `review_evidence`
+fields in `ch_objects`. SHA-256 field digests cover returned non-operational
+configuration; a separate ACL digest includes owner, sharing, and sorted read/write
+role lists. Raw definitions and role lists are not retained by this feature.
+Equivalent macro boolean encodings and read-generated data-model editor
+`calculationID` values are normalized; calculation expressions, output fields,
+and other definition settings remain fingerprinted. Field names are stored as
+array values to meet KV Store batch-write restrictions.
+Evidence contains scan/time provenance, normalized metadata, a full sorted direct
+adjacency digest, at most 200 compact relationship rows, scanning identity/role and
+collector-scope digest, completeness, and explicit limitations. Adjacent-object
+configuration/access digests detect changed consumers even when edge identity is
+stable. Indexes are built once per scan; Library loading does not require the
+full edge collection.
+
 Supported health values are `active`, `dormant`, `orphaned`, `broken`,
 `unowned`, `protected`, and `unknown`.
 
@@ -90,6 +105,19 @@ time, and usage-run provenance at the time of review.
 Review stages are `triage`, `investigating`, `awaiting_owner`,
 `confirmed_eligible`, `retain`, and `blocked`. A review record does not
 represent or perform a mutation of its referenced Splunk object.
+
+Optional `evidence_baseline` contains capture time/actor, the versioned object
+evidence manifest, and usage evidence at capture. `evidence_history` retains the
+first capture plus the four most recent prior captures; the active baseline is
+separate. These fields belong to `ch_reviews`, independent of snapshot retirement.
+Normal edits preserve baselines and original at-review facts. Only explicit
+capture/reaffirmation changes the baseline. A pre-save timestamp check rejects
+known concurrent edits; it is not a transactional compare-and-swap guarantee.
+
+Review validity (`current`, `needs_review`, `cannot_verify`, `unreviewed`) is
+derived, never written into the decision stage. Unsupported/malformed evidence
+versions are unverified, not automatically upgraded. The evidence JSON Schema
+documents the camel-case manifest nested in the snake-case KV record.
 
 ## Derived removal-impact reports
 

@@ -14,6 +14,10 @@ const artifact = path.resolve(
     'dist',
     `content_hygiene-${version}.tar.gz`
 );
+const appBuild = (await readFile(path.join(workspaceDirectory, 'packages/content-hygiene/src/main/resources/splunk/default/app.conf'), 'utf8'))
+    .match(/^build\s*=\s*(\d+)\s*$/m)?.[1];
+if (!appBuild) throw new Error('An explicit app build is required.');
+const hostScript = `ContentHygiene.build${appBuild}.js`;
 
 await access(artifact);
 
@@ -55,8 +59,9 @@ if (entries.some((entry) => !entry.startsWith('content_hygiene/'))) {
 
 const requiredEntries = [
     'content_hygiene/LICENSE',
+    'content_hygiene/THIRD_PARTY_NOTICES.txt',
     'content_hygiene/default/app.conf',
-    'content_hygiene/appserver/static/pages/ContentHygiene.js',
+    `content_hygiene/appserver/static/pages/${hostScript}`,
     'content_hygiene/appserver/static/content-hygiene-host.css',
 ];
 const iconSizes = {
@@ -138,7 +143,7 @@ try {
     for (const view of views) {
         const xml = await readFile(path.join(inspectionDirectory, `content_hygiene/default/data/ui/views/${view}.xml`), 'utf8');
         if (!xml.includes('<dashboard version="1.1"') ||
-            !xml.includes('script="pages/ContentHygiene.js"') ||
+            !xml.includes(`script="pages/${hostScript}"`) ||
             !xml.includes('stylesheet="content-hygiene-host.css"') ||
             !xml.includes('hideChrome="false"') || !xml.includes('hideSplunkBar="false"') ||
             !xml.includes('hideAppBar="false"') || !xml.includes('id="content-hygiene-root"') ||

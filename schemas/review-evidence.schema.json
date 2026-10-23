@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/splunk-content-hygiene/review-evidence.schema.json",
+  "title": "Content Hygiene Review Evidence Baseline",
+  "type": "object",
+  "required": ["capturedAt", "capturedBy", "evidence"],
+  "properties": {
+    "capturedAt": { "type": "string", "format": "date-time" },
+    "capturedBy": { "type": "string" },
+    "evidence": { "$ref": "#/$defs/evidence" },
+    "usageAtCapture": { "type": ["object", "null"] }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "fingerprint": {
+      "type": "object",
+      "required": ["version", "digest", "fields", "accessDigest"],
+      "properties": {
+        "version": { "const": 1 },
+        "digest": { "$ref": "#/$defs/hash" },
+        "fields": { "type": "array", "items": { "type": "object", "required": ["name", "digest"], "properties": { "name": { "type": "string" }, "digest": { "$ref": "#/$defs/hash" } } } },
+        "accessDigest": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "relationship": {
+      "type": "object",
+      "required": ["key", "direction", "objectId", "name", "relation", "confidence", "resolved", "sourceLocation", "evidenceDigest", "neighborDigest"],
+      "properties": {
+        "key": { "$ref": "#/$defs/hash" },
+        "direction": { "enum": ["inbound", "outbound"] },
+        "objectId": { "type": "string" },
+        "name": { "type": "string" },
+        "relation": { "type": "string" },
+        "confidence": { "enum": ["high", "medium", "low", "unknown"] },
+        "resolved": { "type": "boolean" },
+        "sourceLocation": { "type": ["string", "null"] },
+        "evidenceDigest": { "$ref": "#/$defs/hash" },
+        "neighborDigest": { "anyOf": [{ "$ref": "#/$defs/hash" }, { "type": "null" }] }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["version", "objectId", "scanId", "observedAt", "configuration", "owner", "sharing", "objectType", "enabled", "scheduled", "protected", "relationshipDigest", "relationshipCount", "relationships", "relationshipsTruncated", "scopeDigest", "coverageComplete", "limitations"],
+      "properties": {
+        "version": { "const": 1 },
+        "objectId": { "type": "string" },
+        "scanId": { "type": "string" },
+        "observedAt": { "type": "string", "format": "date-time" },
+        "configuration": { "$ref": "#/$defs/fingerprint" },
+        "owner": { "type": ["string", "null"] },
+        "sharing": { "type": ["string", "null"] },
+        "objectType": { "type": "string" },
+        "enabled": { "type": ["boolean", "null"] },
+        "scheduled": { "type": ["boolean", "null"] },
+        "protected": { "type": "boolean" },
+        "relationshipDigest": { "$ref": "#/$defs/hash" },
+        "relationshipCount": { "type": "integer", "minimum": 0 },
+        "relationships": { "type": "array", "maxItems": 200, "items": { "$ref": "#/$defs/relationship" } },
+        "relationshipsTruncated": { "type": "boolean" },
+        "scopeDigest": { "$ref": "#/$defs/hash" },
+        "coverageComplete": { "type": "boolean" },
+        "limitations": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

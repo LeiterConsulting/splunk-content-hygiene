@@ -24,6 +24,10 @@ const buildApp = (command) => {
             path.resolve(__dirname, '../../../../LICENSE'),
             path.join(__dirname, '..', 'stage', 'LICENSE')
         );
+        fs.copyFileSync(
+            path.resolve(__dirname, '../../../../THIRD_PARTY_NOTICES.txt'),
+            path.join(__dirname, '..', 'stage', 'THIRD_PARTY_NOTICES.txt')
+        );
     }
     return result;
 };

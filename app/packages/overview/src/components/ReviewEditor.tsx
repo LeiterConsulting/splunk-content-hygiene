@@ -12,6 +12,7 @@ import {
     WorkflowForm,
 } from '../AppStyles';
 import { reviewStageOptions } from '../services/reviews';
+import { evidenceWindowFresh } from '../services/usage';
 import { ContentObject, ReviewInput, ReviewRecord, ReviewStage } from '../types';
 import { ReviewStageBadge } from './ReviewStageBadge';
 
@@ -58,7 +59,11 @@ export function ReviewEditor({
         setError(null);
     }, [contentObject.objectId]);
 
-    const handleSave = async (): Promise<void> => {
+    const canCapture = contentObject.reviewEvidence?.scanId === scanId &&
+        evidenceWindowFresh(contentObject.reviewEvidence.observedAt);
+    const hasUnsavedChanges = Boolean(review && (stage !== review.stage || note !== review.note ||
+        assignedTo !== (review.assignedTo ?? '')));
+    const handleSave = async (captureEvidence = false): Promise<void> => {
         setIsSaving(true);
         setMessage(null);
         setError(null);
@@ -69,11 +74,13 @@ export function ReviewEditor({
                 note,
                 assignedTo: assignedTo || null,
                 scanId,
+                captureEvidence: captureEvidence || (!review && canCapture),
+                expectedUpdatedAt: review?.updatedAt ?? null,
             });
             setStage(saved.stage);
             setNote(saved.note);
             setAssignedTo(saved.assignedTo ?? '');
-            setMessage('Review record saved to the app-local library.');
+            setMessage(captureEvidence ? 'Evidence baseline captured. The saved decision is unchanged; coverage limits still apply.' : 'Review record saved to the app-local library.');
         } catch (saveError) {
             setError(
                 saveError instanceof Error
@@ -180,10 +187,24 @@ export function ReviewEditor({
                     Saves only an app-local workflow record. It does not modify, disable, or remove
                     this Splunk object.
                 </SmallText>
+                <SmallText>
+                    {review
+                        ? 'Updating notes or stages does not reset the evidence baseline. After investigating changes, explicitly reaffirm evidence. Save form edits first.'
+                        : 'A new record captures the current evidence baseline when a recent fingerprint is available. Incomplete coverage remains unverified.'}
+                </SmallText>
                 <ButtonRow>
                     <StyledButton type="submit" $primary disabled={!canWrite || isSaving}>
                         {saveLabel}
                     </StyledButton>
+                    {review ? (
+                        <StyledButton
+                            type="button"
+                            disabled={!canWrite || isSaving || !canCapture || hasUnsavedChanges}
+                            onClick={() => handleSave(true).catch(() => undefined)}
+                        >
+                            {review.evidenceBaseline ? 'Reaffirm review evidence' : 'Capture review evidence'}
+                        </StyledButton>
+                    ) : null}
                     {review ? (
                         <StyledButton
                             type="button"

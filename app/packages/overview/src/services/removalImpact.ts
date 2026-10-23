@@ -8,6 +8,7 @@ import {
     ScanSummary,
 } from '../types';
 import { evidenceWindowFresh, usageSourceForObject, usageValidity } from './usage';
+import { compareReviewEvidence } from './reviewEvidence';
 
 export type RemovalImpactLevel = 'critical' | 'high' | 'medium' | 'low' | 'unknown';
 
@@ -190,6 +191,7 @@ export function analyzeRemovalImpact(
     reviews: ReviewRecord[],
     scan: ScanSummary,
     requestedMaxDepth = 3,
+    now = Date.now(),
 ): RemovalImpactAnalysis {
     const maxDepth = Math.max(1, Math.min(5, Math.round(requestedMaxDepth)));
     const objectById = new Map(
@@ -347,7 +349,7 @@ export function analyzeRemovalImpact(
     const analysisComplete =
         scan.analysisStatus === 'complete' &&
         scan.status === 'succeeded' &&
-        evidenceWindowFresh(scan.completedAt ?? scan.startedAt) &&
+        evidenceWindowFresh(scan.completedAt ?? scan.startedAt, now) &&
         !selected.analysisWarnings?.length;
     const highConfidenceDirect = directDependents.filter(
         ({ confidence }) => confidence === 'high',
@@ -369,17 +371,19 @@ export function analyzeRemovalImpact(
         analysisComplete,
     );
     const selectedReview = reviewByObject.get(selected.objectId);
+    const reviewEvidenceCurrent = compareReviewEvidence(selectedReview, selected, scan, now).status === 'current';
     const referenceCountMismatch = selected.inboundReferences > directDependents.length;
     const reviewBlocksRemoval =
         selectedReview?.stage === 'retain' || selectedReview?.stage === 'blocked';
     const selectedUsage = selected.usageEvidence;
-    const usageMatchesInventory = usageValidity(selected, scan.scanId) === 'current';
+    const usageMatchesInventory = usageValidity(selected, scan.scanId, now) === 'current';
     const completeUsageWindow = usageMatchesInventory && selectedUsage?.coverage === 'complete';
     const observedUsage = usageMatchesInventory && (selectedUsage?.observationCount ?? 0) > 0;
     const usageSupportsPlanning =
         (completeUsageWindow && !observedUsage) ||
         (!usageSourceForObject(selected) &&
             selectedReview?.stage === 'confirmed_eligible' &&
+            reviewEvidenceCurrent &&
             Boolean(selectedReview.note?.trim()));
     const unresolvedDependencyCount = dependencyFollowUps.filter(({ objectId }) =>
         objectId.startsWith('missing::'),
@@ -417,13 +421,16 @@ export function analyzeRemovalImpact(
         } before considering removal.`;
     } else if (
         selectedReview?.stage !== 'confirmed_eligible' ||
+        !reviewEvidenceCurrent ||
         referenceCountMismatch ||
         selected.removalImpact === null ||
         !usageSupportsPlanning
     ) {
         readiness = 'confirmation_required';
         readinessLabel = 'Confirmation still required';
-        if (observedUsage) {
+        if (selectedReview?.stage === 'confirmed_eligible' && !reviewEvidenceCurrent) {
+            summary = 'The saved confirmation has changed or unverifiable evidence. Investigate Changes since review and explicitly reaffirm evidence before change planning.';
+        } else if (observedUsage) {
             summary = `${selectedUsage?.observationCount.toLocaleString()} attributable usage observation${
                 selectedUsage?.observationCount === 1 ? '' : 's'
             } occurred in the current evidence window; confirm intent and replacement plans before considering removal.`;

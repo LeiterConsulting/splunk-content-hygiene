@@ -8,7 +8,7 @@
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "strict": true,
-    "types": ["@testing-library/jest-dom", "@testing-library/react", "jest", "webpack-env"],
+    "types": ["@testing-library/jest-dom", "@testing-library/react", "jest", "webpack-env", "node"],
     "rootDir": ".",
     "emitDeclarationOnly": true,
     "declaration": true,

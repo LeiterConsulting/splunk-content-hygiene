@@ -1,6 +1,6 @@
 {
   "name": "@splunk/overview",
-  "version": "0.4.0-beta",
+  "version": "0.5.0-beta",
   "license": "MIT",
   "scripts": {
     "build": "node bin/build.js build && yarn types:build",
@@ -16,6 +16,7 @@
   },
   "main": "src/index.ts",
   "dependencies": {
+    "@noble/hashes": "2.4.0",
     "@splunk/react-ui": "^5.11.1",
     "@splunk/themes": "^1.8.0",
     "@splunk/splunk-utils": "^4.0.0"

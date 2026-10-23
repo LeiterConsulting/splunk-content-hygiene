@@ -163,7 +163,10 @@ export function ContentHygieneApp({
     }, [reviewClient]);
 
     const handleSaveReview = async (input: ReviewInput): Promise<ReviewRecord> => {
-        const saved = await reviewClient.upsertReview(input);
+        const evidence = input.captureEvidence
+            ? snapshot?.objects.find((object) => object.objectId === input.object.objectId)?.reviewEvidence
+            : undefined;
+        const saved = await reviewClient.upsertReview({ ...input, evidence });
         setReviews((current) =>
             [...current.filter((review) => review.objectId !== saved.objectId), saved].sort(
                 (left, right) => right.updatedAt.localeCompare(left.updatedAt),
@@ -210,7 +213,7 @@ export function ContentHygieneApp({
                 <ReviewLibraryPage
                     snapshot={snapshot}
                     reviews={reviews}
-                    isLoading={isLoadingReviews}
+                    isLoading={isLoadingReviews || isLoadingSnapshot}
                     loadError={reviewLoadError}
                     canWriteReviews={reviewClient.isAvailable() && access.canReview}
                     onSaveReview={handleSaveReview}

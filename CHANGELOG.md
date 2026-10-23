@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.5.0-beta — 2026-10-23
+
+- Added independent Current / Needs re-review / Cannot verify evidence states
+  without rewriting saved stages, notes, or original at-review facts
+- Added versioned SHA-256 configuration/access and full direct-neighborhood
+  fingerprints, with bounded durable review manifests independent of scan retention
+- Added Library evidence-status filters, Explorer Changes since review,
+  relationship change drill-downs, explicit capture/reaffirmation, and CSV/JSON exports
+- Made changed, legacy, or unverifiable confirmations insufficient for removal
+  planning; retained full unfiltered impact calculations and conservative coverage gates
+- Added known concurrent-edit rejection and retained first/recent capture history
+- Qualified the native entry script by app build so upgrades load the matching
+  shell without a server-wide static-cache refresh
+- Used the supported macro configuration endpoint and normalized equivalent
+  macro booleans and read-generated data-model editor IDs to avoid false drift
+
 ## 0.4.0-beta — 2026-10-23
 
 - Added original vector-derived launcher/wordmark graphics, documented classic

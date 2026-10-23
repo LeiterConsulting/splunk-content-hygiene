@@ -16,7 +16,7 @@ Please allow maintainers time to investigate before public disclosure.
 
 ## Supported versions
 
-The `0.4.0-beta` hardening candidate receives best-effort security updates. It is
+The `0.5.0-beta` candidate receives best-effort security updates. It is
 not certified for production use, Splunk Cloud, or search-head clustering.
 
 ## Security boundaries

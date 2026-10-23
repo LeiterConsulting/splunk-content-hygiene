@@ -94,6 +94,56 @@ export interface ContentObject {
     suggestedAction: string;
     analysisWarnings?: string[];
     inventoryScanId?: string;
+    configurationFingerprint?: ConfigurationFingerprint;
+    reviewEvidence?: ObjectReviewEvidence;
+}
+
+export interface ConfigurationFingerprint {
+    version: 1;
+    digest: string;
+    fields: Array<{ name: string; digest: string }>;
+    accessDigest: string;
+}
+
+export interface ReviewRelationshipEvidence {
+    key: string;
+    direction: 'inbound' | 'outbound';
+    objectId: string;
+    name: string;
+    relation: string;
+    confidence: ConfidenceLevel;
+    resolved: boolean;
+    sourceLocation: string | null;
+    evidenceDigest: string;
+    neighborDigest: string | null;
+}
+
+export interface ObjectReviewEvidence {
+    version: 1;
+    objectId: string;
+    scanId: string;
+    observedAt: string;
+    configuration: ConfigurationFingerprint;
+    owner: string | null;
+    sharing: string | null;
+    objectType: string;
+    enabled: boolean | null;
+    scheduled: boolean | null;
+    protected: boolean;
+    relationshipDigest: string;
+    relationshipCount: number;
+    relationships: ReviewRelationshipEvidence[];
+    relationshipsTruncated: boolean;
+    scopeDigest: string;
+    coverageComplete: boolean;
+    limitations: string[];
+}
+
+export interface ReviewEvidenceBaseline {
+    capturedAt: string;
+    capturedBy: string;
+    evidence: ObjectReviewEvidence;
+    usageAtCapture?: UsageEvidence | null;
 }
 
 export interface DependencyEdge {
@@ -206,6 +256,8 @@ export interface ReviewRecord {
     createdAt: string;
     updatedAt: string;
     updatedBy: string;
+    evidenceBaseline?: ReviewEvidenceBaseline | null;
+    evidenceHistory?: ReviewEvidenceBaseline[];
 }
 
 export interface ReviewInput {
@@ -214,6 +266,9 @@ export interface ReviewInput {
     note: string;
     assignedTo: string | null;
     scanId: string;
+    captureEvidence?: boolean;
+    evidence?: ObjectReviewEvidence;
+    expectedUpdatedAt?: string | null;
 }
 
 export interface ReviewClient {

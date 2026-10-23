@@ -32,6 +32,9 @@ normalization + dependency analysis       coverage + attribution
   and `ch_reviews` workflow state.
 - Customer knowledge objects are never deleted, disabled, reassigned, or
   rewritten.
+- The packaged Simple XML hosts reference a build-qualified entry script;
+  deferred chunks are content-hashed. This keeps app upgrades independent of
+  server-wide static-cache refreshes and avoids mixing old shells with new chunks.
 - Usage collection creates only bounded, on-demand search jobs and persists
   derived evidence in app-local KV Store; it never dispatches the inventoried
   saved search or dashboard itself.
@@ -114,8 +117,26 @@ counts, uniqueness, and endpoints are verified before a manifest is published.
 The complete baseline is retained across bounded or incomplete checks. Usage
 evidence is persisted under its own run identifier and overlaid
 conservatively at read time. Review records remain independent from snapshot
-replacement, snapshot current usage provenance when saved, and survive when an
+replacement, snapshot current usage provenance when created, and survive when an
 object is no longer visible.
+
+### Change-aware review evidence
+
+Collectors fingerprint non-operational returned configuration before discarding
+raw definitions. Field names are values in compact arrays, not dotted/dollar
+document keys that KV `batch_save` rejects. Analysis builds one object/adjacency
+index and attaches full neighborhood digests plus bounded manifests in yielding
+chunks. Library loading can compare these per-object records without downloading
+the entire edge collection; Explorer retains its full graph for impact analysis.
+Snapshot publication verifies projected identities/endpoints rather than
+re-downloading complete evidence. Overview, Ownership, and Settings omit review
+manifests; review-capable views omit duplicate top-level configuration hashes.
+
+Saved decisions and explicit evidence baselines are independent. Comparison maps
+are memoized per snapshot/review set and refresh their time gates once a minute
+or on window focus, not on each filter keystroke. Known changes remain actionable
+even with partial coverage, but partial/old evidence cannot establish Current.
+Normal note/stage edits retain the baseline and original at-review facts.
 
 JSON Schemas in [`schemas/`](../schemas/) document the normalized records.
 

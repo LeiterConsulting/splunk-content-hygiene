@@ -31,11 +31,14 @@ import { PageHeader } from '../components/PageHeader';
 import { RemovalImpactPanel } from '../components/RemovalImpactPanel';
 import { ReviewEditor } from '../components/ReviewEditor';
 import { ReviewStageBadge } from '../components/ReviewStageBadge';
+import { ReviewFreshnessBadge, ReviewFreshnessPanel } from '../components/ReviewFreshnessPanel';
+import { useEvidenceClock } from '../components/useEvidenceClock';
 import { StatusBadge } from '../components/StatusBadge';
 import { UsageEvidencePanel } from '../components/UsageEvidencePanel';
 import { buildDependencyIndex } from '../services/dependencyGraph';
 import { RemovalImpactAnalysis, analyzeRemovalImpact } from '../services/removalImpact';
 import { reviewStageOptions } from '../services/reviews';
+import { compareReviewEvidence, ReviewFreshness } from '../services/reviewEvidence';
 import { usageEvidenceState, usageValidity } from '../services/usage';
 import {
     ContentObject,
@@ -114,9 +117,13 @@ function matchesGroup(
     group: string,
     candidateIds: Set<string>,
     reviewByObject: Map<string, ReviewRecord>,
+    freshness: Map<string, ReviewFreshness>,
 ): boolean {
     if (group === 'all') {
         return true;
+    }
+    if (group.startsWith('validity:')) {
+        return freshness.get(contentObject.objectId)?.status === group.slice(9);
     }
     if (group === 'parser_gaps') {
         return Boolean(contentObject.analysisWarnings?.length);
@@ -266,6 +273,9 @@ function groupOptions(allLabel: string): React.ReactNode {
                 </option>
             ))}
             <option value="in_library">Any review-library record</option>
+            <option value="validity:needs_review">Review evidence: needs re-review</option>
+            <option value="validity:cannot_verify">Review evidence: cannot verify</option>
+            <option value="validity:current">Review evidence: current</option>
             <option value="usage_observed">Usage: activity observed</option>
             <option value="usage_no_observations_complete">
                 Usage: no activity, complete window
@@ -295,11 +305,12 @@ export function DependencyPage({
     const [centerGroup, setCenterGroup] = useState(() => readQueryParam('group') || 'all');
     const [relatedGroup, setRelatedGroup] = useState(() => readQueryParam('related') || 'all');
     const [tab, setTab] = useState(() =>
-        readQueryParam('tab') === 'impact' ? 'impact' : 'relationships',
+        ['impact', 'changes'].includes(readQueryParam('tab')) ? readQueryParam('tab') : 'relationships',
     );
     const [impactDepth, setImpactDepth] = useState(3);
     const [page, setPage] = useState(0);
     const [trail, setTrail] = useState<string[]>([]);
+    const evidenceNow = useEvidenceClock();
     const objects = snapshot?.objects ?? EMPTY_OBJECTS;
     const edges = snapshot?.edges ?? EMPTY_EDGES;
     const index = useMemo(() => buildDependencyIndex(objects, edges), [objects, edges]);
@@ -307,6 +318,11 @@ export function DependencyPage({
         () => new Map(reviews.map((review) => [review.objectId, review])),
         [reviews],
     );
+    const freshness = useMemo(() => new Map(reviews.map((review) => [review.objectId,
+        compareReviewEvidence(review, index.objects.get(review.objectId), snapshot?.scan, evidenceNow),
+    ])), [reviews, index, snapshot?.scan, evidenceNow]);
+    const selectedFreshness = (id: string): ReviewFreshness => freshness.get(id) ??
+        compareReviewEvidence(null, index.objects.get(id), snapshot?.scan);
     const candidateIds = useMemo(() => {
         const ids = new Set(
             (snapshot?.findings ?? [])
@@ -322,8 +338,8 @@ export function DependencyPage({
     }, [snapshot, objects]);
     const eligible = useMemo(
         () =>
-            objects.filter((item) => matchesGroup(item, centerGroup, candidateIds, reviewByObject)),
-        [objects, centerGroup, candidateIds, reviewByObject],
+            objects.filter((item) => matchesGroup(item, centerGroup, candidateIds, reviewByObject, freshness)),
+        [objects, centerGroup, candidateIds, reviewByObject, freshness],
     );
     const selectedFromId = index.objects.get(selectedId);
     const selected =
@@ -352,11 +368,11 @@ export function DependencyPage({
             return (
                 relatedGroup === 'all' ||
                 (item
-                    ? matchesGroup(item, relatedGroup, candidateIds, reviewByObject)
+                    ? matchesGroup(item, relatedGroup, candidateIds, reviewByObject, freshness)
                     : relatedGroup === 'broken' && edge.confidence !== 'unknown')
             );
         },
-        [index, relatedGroup, candidateIds, reviewByObject],
+        [index, relatedGroup, candidateIds, reviewByObject, freshness],
     );
     const relatedRows = useMemo<RelatedNode[]>(() => {
         if (!selected) {
@@ -399,9 +415,9 @@ export function DependencyPage({
     const impact = useMemo(
         () =>
             selected && scan
-                ? analyzeRemovalImpact(selected, objects, edges, reviews, scan, impactDepth)
+                ? analyzeRemovalImpact(selected, objects, edges, reviews, scan, impactDepth, evidenceNow)
                 : null,
-        [selected, objects, edges, reviews, scan, impactDepth],
+        [selected, objects, edges, reviews, scan, impactDepth, evidenceNow],
     );
     const detailId = inspectedId || selected?.objectId || '';
     const detail = index.objects.get(detailId);
@@ -442,7 +458,7 @@ export function DependencyPage({
         if (selected) {
             setTrail((current) => [...current, selected.objectId]);
         }
-        if (!matchesGroup(item, centerGroup, candidateIds, reviewByObject)) {
+        if (!matchesGroup(item, centerGroup, candidateIds, reviewByObject, freshness)) {
             setCenterGroup('all');
         }
         setSelectedId(id);
@@ -784,6 +800,29 @@ export function DependencyPage({
                                     />
                                 ) : null}
                             </TabLayout.Panel>
+                            <TabLayout.Panel panelId="changes" label="Changes since review" inset={false}>
+                                <Card>
+                                    <CardHeader><CardTitle>What changed since this review?</CardTitle></CardHeader>
+                                    <CardBody>
+                                        <ReviewFreshnessPanel
+                                            key={selected.objectId}
+                                            objectId={selected.objectId}
+                                            comparison={selectedFreshness(selected.objectId)}
+                                            canDrillTo={(id) => index.objects.has(id)}
+                                            onDrillTo={(id) => {
+                                                drillTo(id);
+                                                setDirection('all');
+                                                setRelatedGroup('all');
+                                                setTab('relationships');
+                                            }}
+                                        />
+                                        <InlineNotice>
+                                            This comparison uses the full captured direct neighborhood, independent
+                                            of relationship filters. Removal impact always uses the full current graph.
+                                        </InlineNotice>
+                                    </CardBody>
+                                </Card>
+                            </TabLayout.Panel>
                         </TabLayout>
                     </div>
                     <DetailPanel
@@ -804,6 +843,11 @@ export function DependencyPage({
                                     {detailReview ? (
                                         <ReviewStageBadge stage={detailReview.stage} />
                                     ) : null}
+                                    <ReviewFreshnessBadge status={selectedFreshness(detail.objectId).status} />
+                                    <StyledButton onClick={() => {
+                                        if (detail.objectId !== selected.objectId) { drillTo(detail.objectId); }
+                                        setTab('changes');
+                                    }}>Changes since review</StyledButton>
                                     {detailId !== selected.objectId ? (
                                         <StyledButton onClick={() => drillTo(detailId)}>
                                             Center on this object

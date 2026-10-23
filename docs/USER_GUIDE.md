@@ -144,6 +144,14 @@ Use the impact CSV for an affected-object register and the JSON report for the
 complete analysis, consequences, caveats, follow-ups, and recommended sequence.
 The application never performs the removal.
 
+The **Changes since review** tab compares the selected object's full captured
+direct neighborhood with its explicitly saved evidence baseline. Definition,
+owner/sharing/ACL, relationship confidence, and adjacent-object configuration
+changes are explained independently of graph filters. Filter center or related
+groups by review-evidence status to focus an investigation. Drill from changed
+relationships into the current object; unavailable targets cannot be centered.
+Impact calculations continue to use the full current graph, not the change list.
+
 ## Review Library
 
 The Review Library is durable app-local workflow state:
@@ -157,10 +165,52 @@ The Review Library is durable app-local workflow state:
 - **Blocked** — missing evidence, policy, or a dependency prevents a decision.
 
 Review records retain an object identity snapshot and scan provenance even if
-the object is not visible in the latest scan. Saving a review also snapshots the
+the object is not visible in the latest scan. Creating a review snapshots the
 current usage coverage, observation count, last-observed time, and usage-run
-identifier so later evidence changes remain visible. Removing a review record
+identifier. Later note/stage edits retain those original at-review facts.
+Removing a review record
 removes only the app-local workflow entry.
+
+### What changed since I reviewed this?
+
+The saved stage is your decision; **Review evidence** is a separate derived status:
+
+- **Current** — a recent comparable scan has complete declared coverage and its
+  returned configuration, access, and parsed direct relationships match the
+  evidence baseline. This is not live verification or permission to remove.
+- **Needs re-review** — a known configuration, access, coverage, relationship,
+  adjacent-object, or attributable-usage change warrants investigation. Any
+  remaining coverage limits are also shown.
+- **Cannot verify** — the object is no longer observed, no supported baseline
+  exists, fingerprints are unavailable, or coverage/freshness cannot establish
+  validity. No longer observed does not mean deleted.
+
+Use the Library evidence-status filter or its summary buttons to work through
+these groups. CSV/JSON exports include status, reasons, limits, and scan provenance.
+The change panel offers its own filtered CSV and full evidence JSON exports.
+Tables are paginated; exports include all matching rows, not just the visible page.
+
+New records capture a recent fingerprint when available. Existing reviews are
+never silently migrated to Current. After reviewing the evidence, save any form
+edits, then choose **Capture review evidence** or **Reaffirm review evidence**.
+This explicit action retains the saved stage, note, assignee, original at-review
+facts, and first-capture history. Reaffirming partial evidence does not make its
+coverage complete. A changed/unverifiable confirmation cannot satisfy removal
+planning prerequisites. Retain/blocked decisions remain blockers regardless of
+evidence status.
+
+Configuration fingerprints are hashes, not raw definitions. Runtime counters,
+collection times, scan IDs, JSON property ordering, and ACL role ordering do not
+invalidate a review. The complete direct adjacency is fingerprinted; durable
+manifests retain at most 200 relationship rows per object. If a neighborhood is
+larger, the app can detect a changed full fingerprint but explicitly limits exact
+row comparisons rather than inventing added/lost relationships. First and recent
+prior baselines survive rolling inventory retention.
+
+These checks cover only returned configuration and supported parsed references.
+Lookup contents, external callers, filesystem scripts, and unsupported dynamic
+references need separate investigation. Run a complete scan after upgrading to
+establish fingerprints; old scans remain readable but cannot verify new reviews.
 
 ## Ownership
 

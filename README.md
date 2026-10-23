@@ -27,7 +27,8 @@ The beta is deliberately safe:
   and review-stage filters, graph-derived removal-impact simulation, ordered
   remediation guidance, and relationship/impact export
 - A persistent Review Library with triage, investigation, owner-confirmation,
-  eligibility, retain, and blocked stages
+  eligibility, retain, and blocked stages, with independent review-evidence
+  validity, change explanations, explicit reaffirmation, and evidence exports
 - Ownership reporting and cross-view navigation
 - Bounded and complete live scans with progress, warnings, collector counts, and
   scan-report export
@@ -42,8 +43,8 @@ the shared cache; access is restricted to explicit hygiene roles.
 
 ## Install the beta
 
-1. Download `content_hygiene-0.4.0-beta.tar.gz` and `SHA256SUMS` from the
-   corresponding GitHub prerelease.
+1. Download the beta archive and `SHA256SUMS` from the
+   corresponding GitHub release.
 2. Verify the SHA-256 digest.
 3. In Splunk Web, open **Apps > Manage Apps > Install app from file** and upload
    the archive.
@@ -68,6 +69,9 @@ search-head-cluster, and Splunk Cloud certification is not complete. See
 5. Add an object to **Review Library**, record evidence, assign it, and move it
    through the appropriate confirmation stage.
 6. Export the filtered evidence for external review or reporting.
+7. Before relying on a saved decision, check **Review evidence** and
+   **Changes since review**. Investigate changes, then explicitly reaffirm the
+   evidence; scans never overwrite your decision.
 
 “Confirmed eligible” is an investigation conclusion, not an action. Removal or
 remediation remains outside this app.
@@ -96,7 +100,7 @@ yarn validate
 ```
 
 The verified installable archive is written to
-`app/dist/content_hygiene-0.4.0-beta.tar.gz`. Run `yarn release:prepare` to
+`app/dist/content_hygiene-0.5.0-beta.tar.gz`. Run `yarn release:prepare` to
 perform the complete validation and update `SHA256SUMS`.
 
 ## Current limitations
