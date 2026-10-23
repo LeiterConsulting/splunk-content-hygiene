@@ -4,7 +4,7 @@ import {
     Card,
     CardHeader,
     CardTitle,
-    DefinitionList,
+    FactGrid,
     DetailLayout,
     DetailPanel,
     DetailSection,
@@ -20,10 +20,18 @@ import {
     StyledButton,
     Table,
     TableScroller,
+    WorkspaceHeader,
+    WorkspaceNavigation,
 } from '../AppStyles';
 import { ResultPagination } from '../components/ResultPagination';
 import { PageHeader } from '../components/PageHeader';
 import { ReviewEditor } from '../components/ReviewEditor';
+import { ExportMenu } from '../components/ExportMenu';
+import { WorkspaceTabs } from '../components/WorkspaceTabs';
+import { ReviewHistoryPanel } from '../components/ReviewHistoryPanel';
+import { useReviewNavigation } from '../components/ReviewNavigationContext';
+import { useSelectionFocus } from '../components/useSelectionFocus';
+import { useSelectionLocation } from '../components/useSelectionLocation';
 import { ReviewStageBadge } from '../components/ReviewStageBadge';
 import { StatusBadge } from '../components/StatusBadge';
 import { UsageEvidencePanel } from '../components/UsageEvidencePanel';
@@ -40,6 +48,7 @@ import {
 import { downloadCsv } from '../utils/downloadCsv';
 import { downloadJson } from '../utils/downloadJson';
 import { navigateToView, readQueryParam } from '../utils/navigation';
+import { ownerLabel } from '../utils/objectLabels';
 
 const analyzedCandidateStatuses: HealthStatus[] = ['dormant', 'orphaned', 'broken', 'unowned'];
 const candidateFindingTypes = new Set([
@@ -80,16 +89,6 @@ function formatBoolean(value: boolean | null, nullLabel = 'Unknown'): string {
         return nullLabel;
     }
     return value ? 'Yes' : 'No';
-}
-
-function ownerLabel(contentObject: ContentObject): string {
-    if (contentObject.owner) {
-        return contentObject.owner;
-    }
-    if (contentObject.sharing === 'app' || contentObject.sharing === 'global') {
-        return `${contentObject.sharing} scope`;
-    }
-    return contentObject.sharing === 'user' ? 'Ownership gap' : 'Owner metadata unavailable';
 }
 
 function firstFinding(
@@ -225,6 +224,7 @@ export function CandidatesPage({
     onSaveReview,
     onDeleteReview,
 }: CandidatesPageProps): React.ReactElement {
+    const { navigate } = useReviewNavigation();
     const [statusFilter, setStatusFilter] = useState(readQueryParam('status') || 'all');
     const [typeFilter, setTypeFilter] = useState('all');
     const [appFilter, setAppFilter] = useState(readQueryParam('app') || 'all');
@@ -233,6 +233,7 @@ export function CandidatesPage({
     const [sortOrder, setSortOrder] = useState('confidence');
     const [query, setQuery] = useState(readQueryParam('query'));
     const [selectedId, setSelectedId] = useState(readQueryParam('object'));
+    useSelectionLocation(selectedId);
     const [page, setPage] = useState(0);
     const findingsByObject = new Map<string, ContentFinding[]>();
     const reviewByObject = new Map(reviews.map((review) => [review.objectId, review]));
@@ -311,9 +312,10 @@ export function CandidatesPage({
     const currentPage = Math.min(page, totalPages - 1);
     const pageStart = currentPage * PAGE_SIZE;
     const pageCandidates = filteredCandidates.slice(pageStart, pageStart + PAGE_SIZE);
-    const selected =
-        filteredCandidates.find((contentObject) => contentObject.objectId === selectedId) ??
-        pageCandidates[0];
+    const selected = snapshot?.objects.find((contentObject) => contentObject.objectId === selectedId);
+    const selectedIndex = filteredCandidates.findIndex((contentObject) => contentObject.objectId === selectedId);
+    const { detailTitle, listTitle } = useSelectionFocus(selected?.objectId);
+    const openCandidate = (objectId: string): void => navigate(() => setSelectedId(objectId));
     const selectedFindings = selected ? (findingsByObject.get(selected.objectId) ?? []) : [];
     const selectedFinding = selected
         ? firstFinding(findingsByObject, selected.objectId)
@@ -332,40 +334,28 @@ export function CandidatesPage({
             <PageHeader
                 title="Cleanup Candidates"
                 subtitle="Review evidence-backed findings from the latest live snapshot. Customer content remains read-only."
-                actions={
-                    <ButtonRow>
-                        <StyledButton
-                            type="button"
-                            onClick={() =>
+                actions={!selected ?
+                    <ExportMenu label="Export filtered candidates" disabled={!filteredCandidates.length} items={[
+                        { label: 'Candidates CSV', onClick: () =>
                                 exportCandidates(
                                     filteredCandidates,
                                     findingsByObject,
                                     reviewByObject,
                                 )
-                            }
-                            disabled={filteredCandidates.length === 0}
-                        >
-                            Export filtered CSV
-                        </StyledButton>
-                        <StyledButton
-                            type="button"
-                            onClick={() =>
+                            },
+                        { label: 'Candidates JSON', onClick: () =>
                                 exportCandidatesJson(
                                     filteredCandidates,
                                     findingsByObject,
                                     reviewByObject,
                                     snapshot?.scan.scanId ?? null,
                                 )
-                            }
-                            disabled={filteredCandidates.length === 0}
-                        >
-                            Export filtered JSON
-                        </StyledButton>
-                    </ButtonRow>
+                            },
+                    ]} /> : undefined
                 }
             />
 
-            <FilterBar
+            <div hidden={Boolean(selected)}><FilterBar
                 onSubmit={(event) => {
                     event.preventDefault();
                 }}
@@ -505,11 +495,12 @@ export function CandidatesPage({
                     Clear filters
                 </StyledButton>
             </FilterBar>
+            </div>
 
             <DetailLayout>
-                <Card>
+                <Card hidden={Boolean(selected)}>
                     <CardHeader>
-                        <CardTitle>
+                        <CardTitle ref={listTitle} tabIndex={-1}>
                             {filteredCandidates.length} live candidate
                             {filteredCandidates.length === 1 ? '' : 's'}
                         </CardTitle>
@@ -555,12 +546,8 @@ export function CandidatesPage({
                                                 <td>
                                                     <RowButton
                                                         type="button"
-                                                        aria-pressed={
-                                                            contentObject.objectId ===
-                                                            selected?.objectId
-                                                        }
                                                         onClick={() =>
-                                                            setSelectedId(contentObject.objectId)
+                                                            openCandidate(contentObject.objectId)
                                                         }
                                                     >
                                                         {contentObject.name}
@@ -612,13 +599,38 @@ export function CandidatesPage({
                 </Card>
 
                 {selected ? (
+                    <div data-investigation-workspace>
+                    <WorkspaceNavigation aria-label="Candidate navigation">
+                        <StyledButton onClick={() => navigate(() => {
+                            if (selectedIndex >= 0) { setPage(Math.floor(selectedIndex / PAGE_SIZE)); }
+                            setSelectedId('');
+                        })}>Back to candidates</StyledButton>
+                        <ButtonRow>
+                            <span>{selectedIndex >= 0 ? `${selectedIndex + 1} of ${filteredCandidates.length} filtered candidates` : 'Inventory object · outside current candidate filters'}</span>
+                            <StyledButton disabled={selectedIndex <= 0} onClick={() => openCandidate(filteredCandidates[selectedIndex - 1].objectId)}>Previous candidate</StyledButton>
+                            <StyledButton disabled={selectedIndex < 0 || selectedIndex >= filteredCandidates.length - 1} onClick={() => openCandidate(filteredCandidates[selectedIndex + 1].objectId)}>Next candidate</StyledButton>
+                        </ButtonRow>
+                    </WorkspaceNavigation>
                     <DetailPanel aria-label={`Details for ${selected.name}`}>
-                        <DetailSection>
-                            <DetailTitle>{selected.name}</DetailTitle>
+                        <WorkspaceHeader>
+                            <div>
+                            <DetailTitle ref={detailTitle} tabIndex={-1}>{selected.name}</DetailTitle>
+                            <p>{selected.objectType} · {selected.app} · {ownerLabel(selected)}</p>
                             <StatusBadge status={selected.healthStatus} />
-                        </DetailSection>
+                            </div>
+                            <ButtonRow>
+                                <StyledButton type="button" $primary onClick={() => navigate(() => navigateToView('dependencies', { object: selected.objectId }))}>Explore dependencies</StyledButton>
+                                {reviewByObject.has(selected.objectId) ? <StyledButton onClick={() => navigate(() => navigateToView('reviews', { object: selected.objectId }))}>Open in review library</StyledButton> : null}
+                                <ExportMenu label="Export this object" items={[
+                                    { label: 'Selected finding CSV', onClick: () => exportCandidates([selected], findingsByObject, reviewByObject) },
+                                    { label: 'Selected finding JSON', onClick: () => exportCandidatesJson([selected], findingsByObject, reviewByObject, snapshot?.scan.scanId ?? null) },
+                                ]} />
+                            </ButtonRow>
+                        </WorkspaceHeader>
+                        <WorkspaceTabs key={selected.objectId} defaultActivePanelId="evidence">
+                        <WorkspaceTabs.Panel panelId="evidence" label="Candidate evidence" inset={false}>
                         <DetailSection>
-                            <DefinitionList>
+                            <FactGrid>
                                 <dt>Type</dt>
                                 <dd>{selected.objectType}</dd>
                                 <dt>App</dt>
@@ -639,7 +651,7 @@ export function CandidatesPage({
                                 <dd>{selected.inboundReferences}</dd>
                                 <dt>Outbound refs</dt>
                                 <dd>{selected.outboundReferences}</dd>
-                            </DefinitionList>
+                            </FactGrid>
                         </DetailSection>
                         <DetailSection>
                             <UsageEvidencePanel contentObject={selected} />
@@ -654,7 +666,7 @@ export function CandidatesPage({
                         </DetailSection>
                         <DetailSection>
                             <strong>Independent scores</strong>
-                            <DefinitionList>
+                            <FactGrid>
                                 <dt>Abandonment confidence</dt>
                                 <dd>
                                     {formatScore(
@@ -668,48 +680,14 @@ export function CandidatesPage({
                                         selectedFinding?.removalImpact ?? selected.removalImpact,
                                     )}
                                 </dd>
-                            </DefinitionList>
+                            </FactGrid>
                         </DetailSection>
                         <DetailSection>
                             <strong>Suggested review action</strong>
                             <p>{selectedFinding?.suggestedAction ?? selected.suggestedAction}</p>
-                            <StyledButton
-                                type="button"
-                                onClick={() =>
-                                    exportCandidates([selected], findingsByObject, reviewByObject)
-                                }
-                            >
-                                Export this finding
-                            </StyledButton>
                         </DetailSection>
-                        <DetailSection>
-                            <strong>Investigate this object</strong>
-                            <ButtonRow>
-                                <StyledButton
-                                    type="button"
-                                    onClick={() =>
-                                        navigateToView('dependencies', {
-                                            object: selected.objectId,
-                                        })
-                                    }
-                                >
-                                    Explore dependencies
-                                </StyledButton>
-                                {reviewByObject.has(selected.objectId) ? (
-                                    <StyledButton
-                                        type="button"
-                                        onClick={() =>
-                                            navigateToView('reviews', {
-                                                object: selected.objectId,
-                                            })
-                                        }
-                                    >
-                                        Open in review library
-                                    </StyledButton>
-                                ) : null}
-                            </ButtonRow>
-                        </DetailSection>
-                        <DetailSection>
+                        </WorkspaceTabs.Panel>
+                        <WorkspaceTabs.Panel panelId="review" label="Review decision">
                             <ReviewEditor
                                 key={selected.objectId}
                                 contentObject={selected}
@@ -718,9 +696,15 @@ export function CandidatesPage({
                                 canWrite={canWriteReviews}
                                 onSave={onSaveReview}
                                 onDelete={onDeleteReview}
+                                showHistory={false}
                             />
-                        </DetailSection>
+                        </WorkspaceTabs.Panel>
+                        <WorkspaceTabs.Panel panelId="history" label="Revision history">
+                            <ReviewHistoryPanel objectId={selected.objectId} />
+                        </WorkspaceTabs.Panel>
+                        </WorkspaceTabs>
                     </DetailPanel>
+                    </div>
                 ) : null}
             </DetailLayout>
         </>

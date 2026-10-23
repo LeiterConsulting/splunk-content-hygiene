@@ -4,10 +4,9 @@ import {
     Card,
     CardHeader,
     CardTitle,
-    DefinitionList,
+    FactGrid,
     DetailLayout,
     DetailPanel,
-    DetailSection,
     DetailTitle,
     EmptyState,
     FilterBar,
@@ -20,10 +19,18 @@ import {
     StyledButton,
     Table,
     TableScroller,
+    WorkspaceHeader,
+    WorkspaceNavigation,
 } from '../AppStyles';
 import { ResultPagination } from '../components/ResultPagination';
 import { PageHeader } from '../components/PageHeader';
 import { ReviewEditor } from '../components/ReviewEditor';
+import { ExportMenu } from '../components/ExportMenu';
+import { WorkspaceTabs } from '../components/WorkspaceTabs';
+import { ReviewHistoryPanel } from '../components/ReviewHistoryPanel';
+import { useReviewNavigation } from '../components/ReviewNavigationContext';
+import { useSelectionFocus } from '../components/useSelectionFocus';
+import { useSelectionLocation } from '../components/useSelectionLocation';
 import { ReviewWorkflowContext } from '../components/ReviewWorkflowContext';
 import { ReviewStageBadge } from '../components/ReviewStageBadge';
 import { ReviewFreshnessBadge, ReviewFreshnessPanel } from '../components/ReviewFreshnessPanel';
@@ -38,6 +45,7 @@ import { ContentObject, InventorySnapshot, ReviewInput, ReviewRecord } from '../
 import { downloadCsv } from '../utils/downloadCsv';
 import { downloadJson } from '../utils/downloadJson';
 import { navigateToView, readQueryParam } from '../utils/navigation';
+import { ownerLabel } from '../utils/objectLabels';
 
 const PAGE_SIZE = 50;
 
@@ -181,6 +189,7 @@ export function ReviewLibraryPage({
     onDeleteReview,
 }: ReviewLibraryPageProps): React.ReactElement {
     const workflow = useContext(ReviewWorkflowContext);
+    const { navigate } = useReviewNavigation();
     const [query, setQuery] = useState(readQueryParam('query'));
     const [stageFilter, setStageFilter] = useState(readQueryParam('stage') || 'all');
     const [appFilter, setAppFilter] = useState('all');
@@ -189,6 +198,7 @@ export function ReviewLibraryPage({
     const [validityFilter, setValidityFilter] = useState(readQueryParam('validity') || 'all');
     const [libraryFilter, setLibraryFilter] = useState(readQueryParam('library') || 'active');
     const [selectedId, setSelectedId] = useState(readQueryParam('object'));
+    useSelectionLocation(selectedId);
     const [page, setPage] = useState(0);
     const evidenceNow = useEvidenceClock();
     const objectById = useMemo(() => new Map(
@@ -235,11 +245,18 @@ export function ReviewLibraryPage({
     const currentPage = Math.min(page, totalPages - 1);
     const pageStart = currentPage * PAGE_SIZE;
     const pageReviews = filteredReviews.slice(pageStart, pageStart + PAGE_SIZE);
-    const selectedReview =
-        filteredReviews.find((review) => review.objectId === selectedId) ?? pageReviews[0] ?? null;
+    const selectedReview = reviews.find((review) => review.objectId === selectedId) ?? null;
+    const selectedIndex = filteredReviews.findIndex((review) => review.objectId === selectedId);
+    const { detailTitle, listTitle } = useSelectionFocus(selectedReview?.objectId);
+    const openReview = (objectId: string): void => navigate(() => setSelectedId(objectId));
+    const closeReview = (): void => navigate(() => {
+        if (selectedIndex >= 0) { setPage(Math.floor(selectedIndex / PAGE_SIZE)); }
+        setSelectedId('');
+    });
     const selectedObject = selectedReview
         ? (objectById.get(selectedReview.objectId) ?? lastObservedObject(selectedReview))
         : null;
+    const selectedIsPresent = Boolean(selectedReview && objectById.has(selectedReview.objectId));
     const stageCount = (stage: ReviewRecord['stage']): number =>
         activeReviews.filter((review) => review.stage === stage).length;
     const missingLabel = snapshot ? 'Not present' : 'Unavailable';
@@ -259,20 +276,13 @@ export function ReviewLibraryPage({
             <PageHeader
                 title="Review Library"
                 subtitle="Build a durable, app-local investigation queue without modifying any Splunk knowledge object."
-                actions={
+                actions={!selectedReview ?
                     <ButtonRow>
                         {workflow.refresh ? <StyledButton type="button" disabled={isLoading}
                             onClick={() => workflow.refresh!().catch(() => undefined)}>Refresh library</StyledButton> : null}
-                        <StyledButton
-                            type="button"
-                            onClick={() => exportReviews(filteredReviews, objectById, freshness, Boolean(snapshot))}
-                            disabled={filteredReviews.length === 0}
-                        >
-                            Export filtered CSV
-                        </StyledButton>
-                        <StyledButton
-                            type="button"
-                            onClick={() =>
+                        <ExportMenu label="Export filtered reviews" disabled={!filteredReviews.length} items={[
+                            { label: 'Review library CSV', onClick: () => exportReviews(filteredReviews, objectById, freshness, Boolean(snapshot)) },
+                            { label: 'Review library JSON', onClick: () =>
                                 downloadJson('content-hygiene-review-library.json', {
                                     exportedAt: new Date().toISOString(),
                                     scanId: snapshot?.scan.scanId ?? null,
@@ -282,22 +292,21 @@ export function ReviewLibraryPage({
                                         reviewEvidenceStatus: freshness.get(review.objectId),
                                     })),
                                 })
-                            }
-                            disabled={filteredReviews.length === 0}
-                        >
-                            Export filtered JSON
-                        </StyledButton>
+                            },
+                        ]} />
                         <StyledButton
                             type="button"
                             $primary
-                            onClick={() => navigateToView('candidates')}
+                            onClick={() => navigate(() => navigateToView('candidates'))}
                         >
                             Find candidates
                         </StyledButton>
-                    </ButtonRow>
+                    </ButtonRow> : undefined
                 }
             />
 
+            {loadError ? <InlineNotice role="alert">{loadError}</InlineNotice> : null}
+            <div hidden={Boolean(selectedReview)}>
             <MetricGrid aria-label="Review workflow summary">
                 <SummaryMetric
                     label="Active library records"
@@ -337,8 +346,6 @@ export function ReviewLibraryPage({
                     </StyledButton>
                 ))}
             </ButtonRow>
-
-            {loadError ? <InlineNotice role="alert">{loadError}</InlineNotice> : null}
 
             <FilterBar
                 aria-label="Review library filters"
@@ -456,11 +463,12 @@ export function ReviewLibraryPage({
                     Clear filters
                 </StyledButton>
             </FilterBar>
+            </div>
 
             <DetailLayout>
-                <Card>
+                <Card hidden={Boolean(selectedReview)}>
                     <CardHeader>
-                        <CardTitle>
+                        <CardTitle ref={listTitle} tabIndex={-1}>
                             {filteredReviews.length} review record
                             {filteredReviews.length === 1 ? '' : 's'}
                         </CardTitle>
@@ -509,12 +517,8 @@ export function ReviewLibraryPage({
                                                 <td>
                                                     <RowButton
                                                         type="button"
-                                                        aria-pressed={
-                                                            selectedReview?.objectId ===
-                                                            review.objectId
-                                                        }
                                                         onClick={() =>
-                                                            setSelectedId(review.objectId)
+                                                            openReview(review.objectId)
                                                         }
                                                     >
                                                         {review.objectName}
@@ -548,32 +552,69 @@ export function ReviewLibraryPage({
                 </Card>
 
                 {selectedReview && selectedObject ? (
+                    <div data-investigation-workspace>
+                    <WorkspaceNavigation aria-label="Review navigation">
+                        <StyledButton onClick={closeReview}>Back to review library</StyledButton>
+                        <ButtonRow>
+                            <span>{selectedIndex >= 0 ? `${selectedIndex + 1} of ${filteredReviews.length} filtered reviews` : 'Outside current library filters'}</span>
+                            <StyledButton disabled={selectedIndex <= 0} onClick={() => openReview(filteredReviews[selectedIndex - 1].objectId)}>Previous review</StyledButton>
+                            <StyledButton disabled={selectedIndex < 0 || selectedIndex >= filteredReviews.length - 1} onClick={() => openReview(filteredReviews[selectedIndex + 1].objectId)}>Next review</StyledButton>
+                        </ButtonRow>
+                    </WorkspaceNavigation>
                     <DetailPanel aria-label={`Review details for ${selectedReview.objectName}`}>
-                        <DetailSection>
-                            <DetailTitle>{selectedReview.objectName}</DetailTitle>
+                        <WorkspaceHeader>
+                            <div>
+                            <DetailTitle ref={detailTitle} tabIndex={-1}>{selectedReview.objectName}</DetailTitle>
+                            <p>{selectedReview.objectType} · {selectedReview.app} · {ownerLabel(selectedObject)}</p>
                             <ButtonRow>
                                 <ReviewStageBadge stage={selectedReview.stage} />
                                 {selectedReview.removed ? <span>Archived · decision retained</span> : null}
+                                {!selectedIsPresent ? <span>Health at review:</span> : null}
                                 <StatusBadge status={selectedObject.healthStatus} />
+                                <ReviewFreshnessBadge status={freshness.get(selectedReview.objectId)!.status} />
                             </ButtonRow>
-                        </DetailSection>
-                        <DetailSection>
+                            </div>
+                            <ButtonRow>
+                                <StyledButton $primary disabled={!objectById.has(selectedReview.objectId)}
+                                    onClick={() => navigate(() => navigateToView('dependencies', { object: selectedReview.objectId }))}>Explore dependencies</StyledButton>
+                                <StyledButton disabled={!objectById.has(selectedReview.objectId)}
+                                    onClick={() => navigate(() => navigateToView('candidates', { object: selectedReview.objectId }))}>View candidate evidence</StyledButton>
+                                <ExportMenu label="Export this review" items={[
+                                    { label: 'Selected review CSV', onClick: () => exportReviews([selectedReview], objectById, freshness, Boolean(snapshot)) },
+                                    { label: 'Selected review JSON', onClick: () => downloadJson('content-hygiene-review.json', { exportedAt: new Date().toISOString(), review: selectedReview, reviewEvidenceStatus: freshness.get(selectedReview.objectId) }) },
+                                ]} />
+                            </ButtonRow>
+                        </WorkspaceHeader>
+                        {!selectedIsPresent ? <InlineNotice>
+                            {snapshot
+                                ? 'This object is not visible in the latest cached scan. Its saved decision and historical health are retained; they are not a current inventory confirmation.'
+                                : 'Inventory is unavailable. This saved decision is retained; current object presence and health are unknown.'}
+                        </InlineNotice> : null}
+                        <WorkspaceTabs key={selectedReview.objectId} defaultActivePanelId="decision">
+                        <WorkspaceTabs.Panel panelId="decision" label="Review decision">
+                            <ReviewEditor contentObject={selectedObject} review={selectedReview}
+                                scanId={snapshot?.scan.scanId ?? selectedReview.scanId}
+                                canWrite={canWriteReviews} onSave={onSaveReview} onDelete={onDeleteReview} showHistory={false} />
+                        </WorkspaceTabs.Panel>
+                        <WorkspaceTabs.Panel panelId="evidence" label="Evidence & changes">
                             <ReviewFreshnessPanel
                                 key={selectedReview.objectId}
                                 objectId={selectedReview.objectId}
                                 comparison={freshness.get(selectedReview.objectId)!}
                                 canDrillTo={(id) => objectById.has(id)}
-                                onDrillTo={(id) => navigateToView('dependencies', { object: id })}
+                                onDrillTo={(id) => navigate(() => navigateToView('dependencies', { object: id }))}
                             />
-                        </DetailSection>
-                        <DetailSection>
-                            <DefinitionList>
+                        </WorkspaceTabs.Panel>
+                        <WorkspaceTabs.Panel panelId="details" label="Object & usage details">
+                            <FactGrid>
                                 <dt>Type</dt>
                                 <dd>{selectedReview.objectType}</dd>
                                 <dt>App</dt>
                                 <dd>{selectedReview.app}</dd>
-                                <dt>Owner</dt>
-                                <dd>{selectedReview.owner ?? 'Unknown'}</dd>
+                                <dt>Owner at review</dt>
+                                <dd>{selectedReview.owner ?? 'No named owner captured'}</dd>
+                                <dt>Current ownership</dt>
+                                <dd>{selectedIsPresent ? ownerLabel(selectedObject) : 'Unavailable in current inventory'}</dd>
                                 <dt>Current scan</dt>
                                 <dd>
                                     {objectById.has(selectedReview.objectId)
@@ -598,60 +639,19 @@ export function ReviewLibraryPage({
                                 </dd>
                                 <dt>Last updated by</dt>
                                 <dd>{selectedReview.updatedBy}</dd>
+                                <dt>Decision source scan</dt>
+                                <dd>{selectedReview.scanId}</dd>
                                 <dt>Last updated</dt>
                                 <dd>{formatDateTime(selectedReview.updatedAt)}</dd>
-                            </DefinitionList>
-                        </DetailSection>
-                        {!objectById.has(selectedReview.objectId) ? (
-                            <DetailSection>
-                                <InlineNotice>
-                                    {snapshot
-                                        ? 'This record remains in the library even though the object is not visible in the latest cached scan.'
-                                        : 'Inventory is unavailable. This saved review remains in the library; object presence is unknown.'}
-                                </InlineNotice>
-                            </DetailSection>
-                        ) : null}
-                        <DetailSection>
+                            </FactGrid>
                             <UsageEvidencePanel contentObject={selectedObject} />
-                        </DetailSection>
-                        <DetailSection>
-                            <ButtonRow>
-                                <StyledButton
-                                    type="button"
-                                    onClick={() =>
-                                        navigateToView('dependencies', {
-                                            object: selectedReview.objectId,
-                                        })
-                                    }
-                                    disabled={!objectById.has(selectedReview.objectId)}
-                                >
-                                    Explore dependencies
-                                </StyledButton>
-                                <StyledButton
-                                    type="button"
-                                    onClick={() =>
-                                        navigateToView('candidates', {
-                                            object: selectedReview.objectId,
-                                        })
-                                    }
-                                    disabled={!objectById.has(selectedReview.objectId)}
-                                >
-                                    View candidate evidence
-                                </StyledButton>
-                            </ButtonRow>
-                        </DetailSection>
-                        <DetailSection>
-                            <ReviewEditor
-                                key={selectedObject.objectId}
-                                contentObject={selectedObject}
-                                review={selectedReview}
-                                scanId={snapshot?.scan.scanId ?? selectedReview.scanId}
-                                canWrite={canWriteReviews}
-                                onSave={onSaveReview}
-                                onDelete={onDeleteReview}
-                            />
-                        </DetailSection>
+                        </WorkspaceTabs.Panel>
+                        <WorkspaceTabs.Panel panelId="history" label="Revision history">
+                            <ReviewHistoryPanel objectId={selectedReview.objectId} />
+                        </WorkspaceTabs.Panel>
+                        </WorkspaceTabs>
                     </DetailPanel>
+                    </div>
                 ) : null}
             </DetailLayout>
         </>

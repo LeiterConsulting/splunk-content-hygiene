@@ -15,19 +15,24 @@ interface ValueProps {
     onChange?: (change: ValueChange) => void;
 }
 
-export function ActionButton({
+// Dropdown requires a DOM ref for its anchor. Preserve native ref forwarding
+// through the app's styling adapter instead of reporting an expanded empty menu.
+export const ActionButton = React.forwardRef<HTMLAnchorElement | HTMLButtonElement,
+    React.ComponentPropsWithoutRef<typeof Button> & { $primary?: boolean }>(({
     $primary,
     disabled,
     ...props
-}: React.ComponentProps<typeof Button> & { $primary?: boolean }): React.ReactElement {
+}, ref): React.ReactElement => {
     return (
         <Button
             {...props}
+            ref={ref}
             appearance={$primary ? 'primary' : (props.appearance ?? 'secondary')}
             disabled={disabled ? 'disabled' : false}
         />
     );
-}
+});
+ActionButton.displayName = 'ActionButton';
 export function TextControl({
     value,
     onChange,

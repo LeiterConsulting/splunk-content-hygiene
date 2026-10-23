@@ -1,7 +1,9 @@
 import React from 'react';
 import WaitSpinner from '@splunk/react-ui/WaitSpinner';
-import { ScanBanner, ScanMeta, SourceBadge } from '../AppStyles';
+import { ScanBanner, ScanMeta, SourceBadge, StyledButton } from '../AppStyles';
 import { ScanSummary } from '../types';
+import { navigateToView } from '../utils/navigation';
+import { useReviewNavigation } from './ReviewNavigationContext';
 
 const numberFormatter = new Intl.NumberFormat('en-US');
 const dateFormatter = new Intl.DateTimeFormat('en-US', {
@@ -52,10 +54,14 @@ export function ScanStatusBanner({
     isLoading,
     loadError,
 }: ScanStatusBannerProps): React.ReactElement {
+    const { navigate } = useReviewNavigation();
     if (scan) {
         const timestamp = scan.completedAt ?? scan.startedAt;
+        let bannerState: 'ready' | 'warning' | 'error' = 'ready';
+        if (scan.status === 'failed') { bannerState = 'error'; }
+        else if (scan.status === 'partial' || scan.warningCount > 0 || scan.analysisStatus !== 'complete') { bannerState = 'warning'; }
         return (
-            <ScanBanner aria-label="Scan status">
+            <ScanBanner aria-label="Scan status" $state={bannerState}>
                 <div>
                     <strong>{scanTitle(scan.status)}</strong>
                     {scan.retainedBaseline ? (
@@ -77,13 +83,14 @@ export function ScanStatusBanner({
                 <ScanMeta>
                     <SourceBadge>Live Splunk data</SourceBadge>
                     <span>Updated {dateFormatter.format(new Date(timestamp))}</span>
+                    <StyledButton appearance="standalone" onClick={() => navigate(() => navigateToView('settings'))}>View scan details</StyledButton>
                 </ScanMeta>
             </ScanBanner>
         );
     }
 
     return (
-        <ScanBanner aria-label="Scan status">
+        <ScanBanner aria-label="Scan status" $state={loadError ? 'error' : 'unknown'}>
             <div>
                 {isLoading ? <WaitSpinner screenReaderText="Loading verified inventory" /> : null}
                 <strong>{emptyScanTitle(isLoading, loadError)}</strong>

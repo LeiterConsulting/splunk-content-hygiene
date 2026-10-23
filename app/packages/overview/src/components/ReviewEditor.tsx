@@ -1,10 +1,12 @@
-import React, { useCallback, useContext, useEffect, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import Modal from '@splunk/react-ui/Modal';
 import {
     ButtonRow,
     DefinitionList,
     FilterField,
     InlineNotice,
     Input,
+    ReviewFields,
     Select,
     SmallText,
     StyledButton,
@@ -17,6 +19,7 @@ import { ContentObject, ReviewInput, ReviewRecord, ReviewStage } from '../types'
 import { ReviewStageBadge } from './ReviewStageBadge';
 import { ReviewWorkflowContext } from './ReviewWorkflowContext';
 import { ReviewHistoryPanel } from './ReviewHistoryPanel';
+import { useReviewNavigation } from './ReviewNavigationContext';
 
 interface ReviewEditorProps {
     contentObject: ContentObject;
@@ -25,6 +28,7 @@ interface ReviewEditorProps {
     canWrite: boolean;
     onSave: (input: ReviewInput) => Promise<ReviewRecord>;
     onDelete: (objectId: string, expectedRevisionId?: string | null) => Promise<void>;
+    showHistory?: boolean;
 }
 
 const dateFormatter = new Intl.DateTimeFormat('en-US', {
@@ -42,8 +46,12 @@ export function ReviewEditor({
     canWrite,
     onSave,
     onDelete,
+    showHistory = true,
 }: ReviewEditorProps): React.ReactElement {
     const workflow = useContext(ReviewWorkflowContext);
+    const { setDraft } = useReviewNavigation();
+    const archiveToggle = useRef<HTMLButtonElement | null>(null);
+    const [confirmArchive, setConfirmArchive] = useState(false);
     const storedReview = workflow.states.get(contentObject.objectId) ?? suppliedReview;
     const [review, setBaseReview] = useState(storedReview);
     const [stage, setStage] = useState<ReviewStage>(review?.stage ?? 'triage');
@@ -61,6 +69,17 @@ export function ReviewEditor({
     }, []);
     const hasUnsavedChanges = stage !== (review?.stage ?? 'triage') || note !== (review?.note ?? '') ||
         assignedTo !== (review?.assignedTo ?? '');
+    const discardDraft = useCallback(() => {
+        setStage(review?.stage ?? 'triage'); setNote(review?.note ?? '');
+        setAssignedTo(review?.assignedTo ?? ''); setReconciling(false); setCompared(false);
+        // Preserve any known conflict/reload requirement. Discarding local text
+        // is not verification of a newer server revision.
+        setMessage('Unsaved review changes discarded. The saved decision is unchanged.');
+    }, [review]);
+    useEffect(() => {
+        setDraft({ objectId: contentObject.objectId, dirty: hasUnsavedChanges, busy: isSaving, onDiscard: discardDraft });
+    }, [setDraft, contentObject.objectId, hasUnsavedChanges, isSaving, discardDraft]);
+    useEffect(() => () => setDraft({ objectId: contentObject.objectId, dirty: false, busy: false }), [setDraft, contentObject.objectId]);
     useEffect(() => {
         const newer = storedReview && (!review ||
             (storedReview.revisionNumber ?? 0) > (review.revisionNumber ?? 0) ||
@@ -158,21 +177,14 @@ export function ReviewEditor({
     return (
         <>
             {review ? (
-                <DefinitionList>
-                    <dt>Current stage</dt>
-                    <dd>
+                <section aria-label="Saved review decision">
+                    <ButtonRow>
                         <ReviewStageBadge stage={review.stage} />
                         {review.removed ? ' · Archived; decision retained' : ''}
-                    </dd>
-                    <dt>Last updated</dt>
-                    <dd>
-                        {Number.isNaN(Date.parse(review.updatedAt)) ? 'Unknown time' : dateFormatter.format(new Date(review.updatedAt))} by {review.updatedBy}
-                    </dd>
-                    <dt>Source scan</dt>
-                    <dd>{review.scanId}</dd>
-                    <dt>Saved revision</dt>
-                    <dd>{review.revisionNumber ?? 0}{review.revisionNumber === 0 ? ' · preserved legacy record' : ''}</dd>
-                </DefinitionList>
+                        <span>Revision {review.revisionNumber ?? 0}{review.revisionNumber === 0 ? ' · preserved legacy record' : ''}</span>
+                    </ButtonRow>
+                    <SmallText>Last saved {Number.isNaN(Date.parse(review.updatedAt)) ? 'at an unknown time' : dateFormatter.format(new Date(review.updatedAt))} by {review.updatedBy}.</SmallText>
+                </section>
             ) : (
                 <SmallText>This object is not yet in the review library.</SmallText>
             )}
@@ -192,6 +204,7 @@ export function ReviewEditor({
                     handleSave().catch(() => undefined);
                 }}
             >
+                <ReviewFields>
                 <FilterField>
                     Confirmation stage
                     <Select
@@ -216,6 +229,7 @@ export function ReviewEditor({
                         onChange={(event) => setAssignedTo(event.currentTarget.value)}
                     />
                 </FilterField>
+                </ReviewFields>
                 <FilterField>
                     Investigation note
                     <TextArea
@@ -225,13 +239,10 @@ export function ReviewEditor({
                         onChange={(event) => setNote(event.currentTarget.value)}
                     />
                 </FilterField>
+                {hasUnsavedChanges ? <SmallText role="status">Unsaved review changes. Save before leaving this object.</SmallText> : null}
                 <SmallText>
-                    Record evidence checked, the owner response, blockers, or the decision
-                    rationale.
-                </SmallText>
-                <SmallText>
-                    Saves only an app-local workflow record. It does not modify, disable, or remove
-                    this Splunk object.
+                    Record checked evidence, owner responses, blockers, and the decision rationale.
+                    Saves only app-local review state; customer content remains read-only.
                 </SmallText>
                 <SmallText>
                     {review
@@ -239,7 +250,7 @@ export function ReviewEditor({
                         : 'A new record captures the current evidence baseline when a recent fingerprint is available. Incomplete coverage remains unverified.'}
                 </SmallText>
                 <ButtonRow>
-                    <StyledButton type="submit" $primary disabled={!writable || isSaving}>
+                    <StyledButton type="submit" $primary disabled={!writable || isSaving || (Boolean(review) && !review?.removed && !hasUnsavedChanges && !reconciling)}>
                         {saveLabel}
                     </StyledButton>
                     {review && !review.removed ? (
@@ -254,10 +265,11 @@ export function ReviewEditor({
                     {review && !review.removed ? (
                         <StyledButton
                             type="button"
-                            disabled={!writable || isSaving}
-                            onClick={() => handleDelete().catch(() => undefined)}
+                            elementRef={archiveToggle}
+                            disabled={!writable || isSaving || hasUnsavedChanges}
+                            onClick={() => setConfirmArchive(true)}
                         >
-                            Remove library record
+                            Archive library record
                         </StyledButton>
                     ) : null}
                     {workflow.reload ? <>
@@ -266,10 +278,21 @@ export function ReviewEditor({
                     </> : null}
                 </ButtonRow>
             </WorkflowForm>
+            {!canWrite ? <SmallText>Review editing requires a Content Hygiene reviewer or operator role and a successfully loaded library.</SmallText> : null}
+            {review && !canCapture ? <SmallText>Evidence capture requires this object in a recent, verified scan. Run or refresh a scan before capturing a new baseline.</SmallText> : null}
             {(message || error) && (
                 <InlineNotice role={error ? 'alert' : 'status'}>{error ?? message}</InlineNotice>
             )}
-            <ReviewHistoryPanel objectId={contentObject.objectId} />
+            {showHistory ? <ReviewHistoryPanel objectId={contentObject.objectId} /> : null}
+            <Modal open={confirmArchive} onRequestClose={() => setConfirmArchive(false)} returnFocus={archiveToggle}
+                style={{ width: 520, maxWidth: 'calc(100vw - 32px)' }}>
+                <Modal.Header title="Archive this library record?" />
+                <Modal.Body>{contentObject.name} will leave the active Review Library. Its decision and history are retained and can be restored from Archived reviews. No Splunk knowledge object will be changed.</Modal.Body>
+                <Modal.Footer>
+                    <StyledButton onClick={() => setConfirmArchive(false)}>Keep active</StyledButton>
+                    <StyledButton $primary onClick={() => { setConfirmArchive(false); handleDelete().catch(() => undefined); }}>Archive record</StyledButton>
+                </Modal.Footer>
+            </Modal>
         </>
     );
 }

@@ -4,6 +4,7 @@ import { CustomizeTheme, SplunkThemeProvider } from '@splunk/themes';
 import { InlineNotice, Page, StyledApp } from './AppStyles';
 import { ScanStatusBanner } from './components/ScanStatusBanner';
 import { ReviewWorkflowContext } from './components/ReviewWorkflowContext';
+import { ReviewNavigationProvider } from './components/ReviewNavigationContext';
 import { getHygieneAccess } from './services/access';
 import { splunkInventoryClient } from './services/inventory';
 import { splunkReviewClient } from './services/reviews';
@@ -278,7 +279,7 @@ export function ContentHygieneApp({
 
     return (
         <SplunkThemeProvider customizeTheme={readableTheme}>
-            <StyledApp>
+            <ReviewNavigationProvider><StyledApp>
                 <Page>
                     <ScanStatusBanner
                         scan={snapshot?.scan ?? null}
@@ -299,7 +300,7 @@ export function ContentHygieneApp({
                         <ReviewWorkflowContext.Provider value={workflow}>{content}</ReviewWorkflowContext.Provider>
                     </Suspense>
                 </Page>
-            </StyledApp>
+            </StyledApp></ReviewNavigationProvider>
         </SplunkThemeProvider>
     );
 }

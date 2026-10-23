@@ -139,10 +139,11 @@ test.each(['light', 'dark'] as const)(
                 />
             </SplunkThemeProvider>,
         );
+        await user.click(screen.getByRole('button', { name: 'Reviewed macro' }));
         const details = screen.getByRole('complementary', {
             name: 'Review details for Reviewed macro',
         });
-        expect(within(details).getByText('Cannot verify')).toBeInTheDocument();
+        expect(within(details).getAllByText('Cannot verify')[0]).toBeVisible();
         expect(within(details).getByRole('textbox', { name: 'Investigation note' })).toHaveValue(
             reviewed.note,
         );
@@ -191,6 +192,7 @@ test('Explorer exposes independent changes and full-impact tabs, including legac
     expect(within(changes).getByText('Cannot verify')).toBeInTheDocument();
     expect(within(changes).getByText(/no supported evidence baseline/)).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Removal impact' })).toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: 'Review decision' }));
     expect(screen.getByRole('button', { name: 'Capture review evidence' })).toBeDisabled();
 });
 

@@ -29,6 +29,7 @@ import {
     TwoColumnGrid,
 } from '../AppStyles';
 import { PageHeader } from '../components/PageHeader';
+import { ExportMenu } from '../components/ExportMenu';
 import { ReviewStageBadge } from '../components/ReviewStageBadge';
 import { StatusBadge } from '../components/StatusBadge';
 import { SummaryMetric } from '../components/SummaryMetric';
@@ -231,9 +232,8 @@ export function OverviewPage({
                 subtitle="Understand what was collected from Splunk, what has been analyzed, and where evidence is still missing."
                 actions={
                     <ButtonRow>
-                        <StyledButton
-                            type="button"
-                            onClick={() =>
+                        <ExportMenu label="Export environment summary" disabled={!snapshot} items={[
+                            { label: 'Environment summary CSV', onClick: () =>
                                 downloadCsv(
                                     'content-hygiene-environment-summary.csv',
                                     [
@@ -255,14 +255,8 @@ export function OverviewPage({
                                         app.unknownPercent,
                                     ]),
                                 )
-                            }
-                            disabled={!snapshot}
-                        >
-                            Export summary CSV
-                        </StyledButton>
-                        <StyledButton
-                            type="button"
-                            onClick={() =>
+                            },
+                            { label: 'Environment summary JSON', onClick: () =>
                                 downloadJson('content-hygiene-environment-summary.json', {
                                     exportedAt: new Date().toISOString(),
                                     scan: snapshot?.scan ?? null,
@@ -279,11 +273,8 @@ export function OverviewPage({
                                     appComposition: fullAppComposition,
                                     reviews,
                                 })
-                            }
-                            disabled={!snapshot}
-                        >
-                            Export summary JSON
-                        </StyledButton>
+                            },
+                        ]} />
                         <StyledButton type="button" onClick={() => navigateToView('reviews')}>
                             Review library
                         </StyledButton>

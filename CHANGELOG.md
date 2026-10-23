@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.0.1 — 2026-10-23
+
+- Replaced narrow, internally scrolling detail sidebars with full-width
+  investigation workspaces in Review Library, Cleanup Candidates, Dependency
+  Explorer, and Ownership
+- Moved dependency exploration and related investigation actions to selected
+  object headers; added explicit list/detail navigation with retained filters,
+  previous/next records, stable object links, and keyboard focus management
+- Separated review decisions, evidence/changes, object details, and revision
+  history into native Splunk tabs without resetting drafts when switching tabs
+- Added unsaved-draft protection for object changes, drill-through, app links,
+  and browser navigation, plus explicit recoverable archive confirmation
+- Grouped exports into context-labeled native menus with explicit data scope and
+  format; corrected ownership export labels to match their actual scope
+- Removed floating-overlay shadows from static cards, kept themed controls and
+  responsive layouts, and made partial/failed scan status visually distinct with
+  a direct path to scan details
+- Restored native primary-action styling through the shared button adapter,
+  clarified current shared ownership versus saved owner metadata, and kept
+  list navigation actions distinct from toggle/checkbox controls
+- Kept an always-visible historical-context warning for retained reviews whose
+  objects are no longer observed; saved health and ownership never masquerade
+  as current inventory evidence
+- Preserved existing decisions, coverage semantics, review coordination, and
+  the read-only customer-content boundary; no data migration is required
+
 ## 1.0.0 — 2026-10-23
 
 - Split review coverage into returned configuration, returned ACL, declared

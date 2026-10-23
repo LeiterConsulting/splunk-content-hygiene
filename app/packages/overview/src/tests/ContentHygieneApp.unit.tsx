@@ -453,6 +453,7 @@ test('filters live candidates and shows recorded finding evidence', async () => 
     await user.type(search, 'retired host');
 
     expect(screen.getByRole('button', { name: 'Retired Host Report' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Retired Host Report' }));
     expect(
         screen.getByText('No observed views in the configured evidence window'),
     ).toBeInTheDocument();
@@ -477,11 +478,14 @@ test.each(['RETired_host-report', 'retired host report', 'content-admin'])(
 );
 
 test('keeps abandonment confidence and removal impact separate', async () => {
+    const user = userEvent.setup();
     render(<ContentHygieneApp page="dependency-explorer" inventoryClient={clientWithSnapshot()} />);
 
     expect(await screen.findByText('Live inventory cache ready')).toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: 'Selected object' }));
     expect(screen.getByText('Abandonment confidence')).toBeInTheDocument();
-    expect(screen.getAllByText('Removal impact')).toHaveLength(2);
+    expect(screen.getByText('Abandonment confidence')).toBeVisible();
+    expect(screen.getAllByText('Removal impact').length).toBeGreaterThanOrEqual(2);
     expect(screen.queryByText(/^Risk score$/i)).not.toBeInTheDocument();
 });
 
@@ -504,8 +508,9 @@ test('explains removal blast radius and recommends a non-destructive sequence', 
     expect(
         screen.getByText(/supported Splunk administration or deployment process/),
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Export impact CSV' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Export impact JSON' })).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: 'Export investigation' }));
+    expect(await screen.findByRole('menuitem', { name: 'Full removal impact CSV' })).toBeEnabled();
+    expect(screen.getByRole('menuitem', { name: 'Full removal impact JSON' })).toBeEnabled();
     expect(
         screen.queryByRole('button', { name: /remove selected|delete selected/i }),
     ).not.toBeInTheDocument();
@@ -590,7 +595,8 @@ test('filters candidates by defensible usage-evidence state', async () => {
     await screen.findByText('Live inventory cache ready');
     await selectChoice(user, 'Usage evidence', 'No activity, complete window');
 
-    expect(screen.getAllByText('Retired Host Report')).toHaveLength(2);
+    await user.click(screen.getByRole('button', { name: 'Retired Host Report' }));
+    expect(screen.getByRole('heading', { name: 'Retired Host Report' })).toBeInTheDocument();
     expect(
         screen.getByText(/No attributable activity was observed in the complete source window/),
     ).toBeInTheDocument();
@@ -609,6 +615,8 @@ test('persists candidate confirmation workflow records in the app-local review l
     );
 
     await screen.findByText('Live inventory cache ready');
+    await user.click(screen.getByRole('button', { name: 'Retired Host Report' }));
+    await user.click(screen.getByRole('tab', { name: 'Review decision' }));
     await selectChoice(user, 'Confirmation stage', 'Investigating');
     await user.type(screen.getByRole('textbox', { name: 'Assigned reviewer' }), 'platform-team');
     await user.type(
@@ -628,6 +636,7 @@ test('persists candidate confirmation workflow records in the app-local review l
     });
 
     cleanup();
+    window.history.replaceState(null, '', '/');
     render(
         <ContentHygieneApp
             page="review-library"
@@ -638,6 +647,7 @@ test('persists candidate confirmation workflow records in the app-local review l
 
     expect(await screen.findByRole('heading', { name: 'Review Library' })).toBeInTheDocument();
     expect(await screen.findByText('platform-team')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Retired Host Report' }));
     expect(screen.getByRole('textbox', { name: 'Investigation note' })).toHaveValue(
         'Confirm the dashboard reference with its owner.',
     );
@@ -704,15 +714,17 @@ test.each(['light', 'dark'] as const)(
             </SplunkThemeProvider>,
         );
         const graphButton = (await screen.findAllByRole('button', { name: /^Inspect / }))[0];
-        await user.click(graphButton);
-        expect(graphButton).toHaveFocus();
+        // Graph inspection opens a readable full-width object view and moves focus there.
         expect(window.getComputedStyle(graphButton).backgroundColor).toBe('rgba(0, 0, 0, 0)');
         expect(
             window.getComputedStyle(within(graphButton).getByText('Saved Search')).whiteSpace,
         ).toBe('nowrap');
+        await user.click(graphButton);
+        expect(screen.getByRole('complementary').querySelector('h2')).toHaveFocus();
+        await user.click(screen.getByRole('tab', { name: /^Relationships/ }));
         const rowButton = screen.getByRole('button', { name: 'Retired Host Report' });
         await user.click(rowButton);
-        expect(rowButton).toHaveFocus();
+        expect(screen.getByRole('complementary').querySelector('h2')).toHaveFocus();
         expect(window.getComputedStyle(rowButton).backgroundColor).toBe('rgba(0, 0, 0, 0)');
     },
 );

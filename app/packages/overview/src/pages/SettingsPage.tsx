@@ -20,6 +20,7 @@ import {
     TwoColumnGrid,
 } from '../AppStyles';
 import { PageHeader } from '../components/PageHeader';
+import { ExportMenu } from '../components/ExportMenu';
 import { evidenceWindowFresh } from '../services/usage';
 import {
     InventoryClient,
@@ -136,11 +137,8 @@ export function SettingsPage({
                 title="Settings & Scan Status"
                 subtitle="Verify cached-data freshness and collector readiness without launching work during navigation."
                 actions={
-                    <ButtonRow>
-                        <StyledButton
-                            type="button"
-                            disabled={!displayedScan}
-                            onClick={() =>
+                    <ExportMenu label="Export scan report" disabled={!displayedScan} items={[
+                        { label: 'Scan report CSV', onClick: () =>
                                 downloadCsv(
                                     'content-hygiene-scan-report.csv',
                                     [
@@ -182,14 +180,8 @@ export function SettingsPage({
                                           ]
                                         : [],
                                 )
-                            }
-                        >
-                            Export scan CSV
-                        </StyledButton>
-                        <StyledButton
-                            type="button"
-                            disabled={!displayedScan}
-                            onClick={() =>
+                            },
+                        { label: 'Scan report JSON', onClick: () =>
                                 downloadJson('content-hygiene-scan-report.json', {
                                     exportedAt: new Date().toISOString(),
                                     scan: displayedScan,
@@ -197,11 +189,8 @@ export function SettingsPage({
                                     usage: snapshot?.usage ?? null,
                                     reviewRecordCount: reviews.length,
                                 })
-                            }
-                        >
-                            Export scan JSON
-                        </StyledButton>
-                    </ButtonRow>
+                            },
+                    ]} />
                 }
             />
 

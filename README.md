@@ -30,6 +30,9 @@ The app keeps customer content read-only:
   eligibility, retain, and blocked stages, with independent review-evidence
   validity, scoped coverage, change explanations, explicit reaffirmation,
   conflict-safe saves, recoverable archiving, revision history, and evidence exports
+- Full-width selected-object workspaces with investigation actions at the top,
+  focused evidence/decision/history tabs, previous/next review navigation, and
+  unsaved-draft protection
 - Ownership reporting and cross-view navigation
 - Bounded and complete live scans with progress, warnings, collector counts, and
   scan-report export
@@ -86,13 +89,16 @@ only the active Library entry; its decision and revision history remain availabl
 
 ## Screenshots
 
-These captures show live Content Hygiene application metadata, with customer
-content and lab navigation excluded. Complete coverage can still need re-review
-when returned configuration changes; explicit reaffirmation follows investigation.
+The 1.0.1 Review Library gives a selected object the full workspace width,
+places investigation actions beside its title, and separates decisions,
+evidence, object details, and history into native tabs. These real-data captures
+show Content Hygiene's own application metadata; customer content, user identity,
+and lab navigation are excluded. **Current** compares a captured inventory
+snapshot with the reviewed baseline, not live content or removal eligibility.
 
-![Light mode review coverage after an observed configuration change](docs/images/review-coverage-light.jpg)
+![Full-width Review Library workspace in light mode](docs/images/review-workspace-light.jpg)
 
-![Dark mode review coverage after explicit reaffirmation](docs/images/review-coverage-dark.jpg)
+![Full-width Review Library workspace in dark mode](docs/images/review-workspace-dark.jpg)
 
 The directional map groups the app's real dashboard and lookup consumers by
 type, with on-demand expansion and a full evidence table alongside the map.
@@ -127,7 +133,7 @@ yarn validate
 ```
 
 The verified installable archive is written to
-`app/dist/content_hygiene-1.0.0.tar.gz`. Run `yarn release:prepare` to
+`app/dist/content_hygiene-1.0.1.tar.gz`. Run `yarn release:prepare` to
 perform the complete validation and update `SHA256SUMS`.
 
 ## Current limitations

@@ -91,8 +91,15 @@ Open an object to inspect identity, ownership, reference counts, reasons, and
 suggested next steps. Exports include the full filtered result set, not just the
 current page.
 
-Use **Review candidate** to store a stage, investigation note, and optional
-assignee. The underlying Splunk object is not changed.
+Selecting a row opens a full-width workspace. **Explore dependencies** is in the
+object header, above its evidence. Use **Back to candidates** to return to the
+same filters and results page, or Previous/Next to move through the filtered
+results. A link to a known inventory object opens that exact object even when it
+is outside the cleanup-candidate filters; the workspace labels that context.
+
+Use the **Review decision** tab to store a stage, investigation note, and optional
+assignee. Evidence, decision editing, and revision history have their own tabs.
+The underlying Splunk object is not changed.
 
 ## Dependency Explorer
 
@@ -114,6 +121,15 @@ the contained map. The map discloses represented and omitted counts; the
 paginated evidence table and full filtered exports remain available. The center
 picker shows up to 200 matches; refine its search to reach any other object.
 Filters and the reset action remain available even when a group is empty.
+
+The map and evidence tables use the full workspace width. Inspecting a graph
+card or relationship opens **Selected object**, with its identity and actions at
+the top. **Review decision** applies to that inspected object; its title names
+the object explicitly. **Review center object** instead selects the graph center
+for review. Switching tabs preserves an in-progress review draft.
+
+**Export investigation** separates filtered relationship CSV/JSON from the full,
+unfiltered removal-impact CSV/JSON. View filters never reduce impact calculations.
 
 ### Impact of removal
 
@@ -164,15 +180,28 @@ The Review Library is durable app-local workflow state:
 - **Retain** — the object was reviewed and should remain.
 - **Blocked** — missing evidence, policy, or a dependency prevents a decision.
 
+Select a record to open its full-width workspace. **Explore dependencies** and
+**View candidate evidence** sit beside the object title. **Review decision** is
+the default tab; **Evidence & changes**, **Object & usage details**, and
+**Revision history** keep supporting material readable without a narrow sidebar
+or an independent scrolling pane. Back/Previous/Next retain the list's filters.
+Exports clearly distinguish the filtered Library from the selected review.
+
 Review records retain an object identity snapshot and scan provenance even if
 the object is not visible in the latest scan. Creating a review snapshots the
 current usage coverage, observation count, last-observed time, and usage-run
 identifier. Later note/stage edits retain those original at-review facts.
-**Remove from library** archives only the active app-local entry. Select
+**Archive library record** asks for confirmation and archives only the active app-local entry. Select
 **Archived** or **All** in the Library state filter to inspect it and restore the
 preserved decision. Customer content is never archived or removed by this action.
 
 ### Concurrent edits and history
+
+Switching evidence/history tabs keeps your draft in place. Changing objects,
+following an investigation link, or leaving the app asks you to keep editing or
+explicitly discard unsaved changes. Nothing is automatically saved or merged.
+Browser reload/close uses the browser's own unsaved-change prompt. Save form
+edits before capturing/reaffirming evidence or archiving the record.
 
 Each editor starts from the revision it loaded. If someone saves first, your
 draft is retained and Save is blocked. Select **Compare with latest saved review**,

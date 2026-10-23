@@ -1,5 +1,27 @@
 # Troubleshooting
 
+## Selected-object workspace and unsaved changes
+
+From 1.0.1 onward, selected objects open in a full-width workspace rather than
+a narrow right-side detail tile. Use **Back to review library**, **Back to
+candidates**, or **Back to ownership inventory** to return to the retained list
+filters and pagination. Dependency inspection has its own **Selected object**
+tab and does not move the graph center unless you choose a centering action.
+
+Evidence and history tabs do not reset a review draft. If navigation is blocked
+by unsaved changes, choose **Keep editing** and save the note/stage/reviewer, or
+explicitly discard the draft. The app does not autosave. A browser reload/close
+uses the browser's own warning. Archive and evidence-capture controls require
+form edits to be saved first.
+
+Export actions are grouped in labeled menus. Check the menu item's scope:
+filtered results, selected object/review/owner, full impact, or loaded history.
+The export format does not change that scope.
+
+If you still see the older sidebar after upgrading, refresh that app tab. Do
+not refresh a tab containing unsaved work until the draft has been saved or
+copied to a safe location.
+
 Use the displayed scan, coverage, and review messages before changing permissions
 or data. This app never needs customer-content write access to investigate an
 object. Preserve existing decisions and take a supported KV backup before any

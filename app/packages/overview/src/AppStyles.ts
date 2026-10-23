@@ -28,6 +28,9 @@ export const StyledApp = styled.div`
     color: ${variables.contentColorDefault};
     font-size: ${variables.fontSize};
     line-height: 1.5;
+    [hidden] {
+        display: none !important;
+    }
     button:focus-visible,
     input:focus-visible,
     textarea:focus-visible,
@@ -51,6 +54,10 @@ export const HeaderRow = styled.header`
     justify-content: space-between;
     gap: ${variables.spacingLarge};
     margin-bottom: ${variables.spacingLarge};
+    > div:first-child {
+        min-width: 0;
+        flex: 1;
+    }
 
     @media (width <= 760px) {
         flex-direction: column;
@@ -78,14 +85,18 @@ export const ButtonRow = styled.div`
     min-width: 0;
 `;
 
-export const StyledButton = styled(ActionButton)`
+// Transient styling props are not forwarded through styled-components to the
+// adapter. Translate the primary intent before that filtering takes place.
+export const StyledButton = styled(ActionButton).attrs(({ $primary, appearance }) => ({
+    appearance: $primary ? 'primary' as const : appearance,
+}))`
     margin: 0;
     max-width: 100%;
     white-space: normal;
     overflow-wrap: anywhere;
 `;
 
-export const ScanBanner = styled.section`
+export const ScanBanner = styled.section<{ $state?: 'ready' | 'warning' | 'error' | 'unknown' }>`
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -93,7 +104,12 @@ export const ScanBanner = styled.section`
     padding: ${variables.spacingMedium} ${variables.spacingLarge};
     margin-bottom: ${variables.spacingLarge};
     border: 1px solid ${variables.borderColor};
-    border-left: 4px solid ${variables.statusColorNormalStrong};
+    border-left: 4px solid ${({ $state }) => {
+        if ($state === 'ready') { return variables.statusColorNormalStrong; }
+        if ($state === 'warning') { return variables.statusColorHighStrong; }
+        if ($state === 'error') { return variables.statusColorCriticalStrong; }
+        return variables.contentColorDefault;
+    }};
     border-radius: ${variables.borderRadius};
     background: ${variables.backgroundColorSection};
 
@@ -155,7 +171,6 @@ export const MetricCard = styled.article<MetricCardProps>`
     border: 1px solid ${variables.borderColor};
     border-radius: ${variables.borderRadius};
     background: ${variables.backgroundColorSection};
-    box-shadow: ${variables.overlayShadow};
     border-top: 3px solid ${({ $accent = 'neutral' }) => metricAccent[$accent]};
 `;
 
@@ -206,7 +221,6 @@ export const Card = styled.section`
     border: 1px solid ${variables.borderColor};
     border-radius: ${variables.borderRadius};
     background: ${variables.backgroundColorSection};
-    box-shadow: ${variables.overlayShadow};
 `;
 
 export const CardHeader = styled.header`
@@ -383,6 +397,7 @@ export const WorkflowForm = styled.form`
     display: grid;
     gap: ${variables.spacingMedium};
     margin-top: ${variables.spacingMedium};
+    max-width: 1000px;
 `;
 
 export const SmallText = styled.p`
@@ -408,32 +423,60 @@ export const DetailLayout = styled.section`
         min-width: 0;
     }
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+    grid-template-columns: minmax(0, 1fr);
     gap: ${variables.spacingLarge};
     align-items: start;
 
-    @media (width <= 1040px) {
-        grid-template-columns: 1fr;
-    }
 `;
 
 export const DetailPanel = styled.aside`
     min-width: 0;
     max-width: 100%;
     overflow-wrap: anywhere;
-    position: sticky;
-    max-height: calc(100vh - 48px);
-    overflow: auto;
-    top: ${variables.spacingLarge};
+    scroll-margin-top: ${variables.spacingLarge};
     border: 1px solid ${variables.borderColor};
     border-radius: ${variables.borderRadius};
     background: ${variables.backgroundColorSection};
-    box-shadow: ${variables.overlayShadow};
+`;
 
-    @media (width <= 1040px) {
-        position: static;
-        max-height: none;
-        overflow: visible;
+export const WorkspaceHeader = styled.header`
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: ${variables.spacingMedium};
+    padding: ${variables.spacingLarge};
+    border-bottom: 1px solid ${variables.borderColorWeak};
+    > div:first-child {
+        flex: 1 1 300px;
+        min-width: 0;
+    }
+`;
+
+export const WorkspaceNavigation = styled.nav`
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: ${variables.spacingSmall};
+    margin-bottom: ${variables.spacingMedium};
+`;
+
+export const WorkspacePanel = styled.div`
+    min-width: 0;
+    padding: ${variables.spacingLarge};
+    &[hidden] {
+        display: none;
+    }
+`;
+
+export const ReviewFields = styled.div`
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: ${variables.spacingMedium};
+    max-width: 1000px;
+    @media (width <= 680px) {
+        grid-template-columns: minmax(0, 1fr);
     }
 `;
 
@@ -447,6 +490,8 @@ export const DetailSection = styled.section`
 `;
 
 export const DetailTitle = styled.h2`
+    display: inline-block;
+    max-width: 100%;
     overflow-wrap: anywhere;
     margin: 0 0 ${variables.spacingSmall};
     font-size: ${variables.fontSizeXLarge};
@@ -454,6 +499,7 @@ export const DetailTitle = styled.h2`
 
 export const DefinitionList = styled.dl`
     min-width: 0;
+    max-width: 1100px;
     display: grid;
     grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.4fr);
     gap: ${variables.spacingSmall} ${variables.spacingMedium};
@@ -466,6 +512,15 @@ export const DefinitionList = styled.dl`
     dd {
         margin: 0;
         overflow-wrap: anywhere;
+    }
+`;
+
+export const FactGrid = styled(DefinitionList)`
+    max-width: none;
+    grid-template-columns: repeat(2, minmax(120px, 0.6fr) minmax(0, 1fr));
+    gap: ${variables.spacingSmall} ${variables.spacingLarge};
+    @media (width <= 1000px) {
+        grid-template-columns: minmax(120px, 0.6fr) minmax(0, 1.4fr);
     }
 `;
 

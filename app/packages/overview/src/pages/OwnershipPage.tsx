@@ -4,7 +4,7 @@ import {
     Card,
     CardHeader,
     CardTitle,
-    DefinitionList,
+    FactGrid,
     DetailLayout,
     DetailPanel,
     DetailSection,
@@ -21,12 +21,16 @@ import {
     StyledButton,
     Table,
     TableScroller,
+    WorkspaceHeader,
+    WorkspaceNavigation,
 } from '../AppStyles';
 import { ResultPagination } from '../components/ResultPagination';
 import { PageHeader } from '../components/PageHeader';
 import { ReviewStageBadge } from '../components/ReviewStageBadge';
 import { StatusBadge } from '../components/StatusBadge';
 import { SummaryMetric } from '../components/SummaryMetric';
+import { useSelectionFocus } from '../components/useSelectionFocus';
+import { ExportMenu } from '../components/ExportMenu';
 import { ContentObject, InventorySnapshot, ReviewRecord } from '../types';
 import { downloadCsv } from '../utils/downloadCsv';
 import { downloadJson } from '../utils/downloadJson';
@@ -172,8 +176,8 @@ export function OwnershipPage({
     const filteredOwners = ownerSummaries.filter((summary) =>
         summary.owner.toLowerCase().includes(normalizedQuery),
     );
-    const selected =
-        ownerSummaries.find((summary) => summary.owner === selectedOwner) ?? filteredOwners[0];
+    const selected = ownerSummaries.find((summary) => summary.owner === selectedOwner);
+    const { detailTitle, listTitle } = useSelectionFocus(selected?.owner);
     const selectedObjects = selected ? objectsForOwner(selected.owner, objects) : [];
 
     const currentOwnerPage = Math.min(
@@ -195,21 +199,9 @@ export function OwnershipPage({
                 subtitle="Inspect live ACL ownership metadata and prepare a worksheet without changing Splunk objects."
                 actions={
                     <ButtonRow>
-                        <StyledButton
-                            type="button"
-                            onClick={() =>
-                                exportOwnershipWorksheet(
-                                    selectedObjects.length > 0 ? selectedObjects : objects,
-                                    reviewByObject,
-                                )
-                            }
-                            disabled={objects.length === 0}
-                        >
-                            Export selected ownership CSV
-                        </StyledButton>
-                        <StyledButton
-                            type="button"
-                            onClick={() =>
+                        <ExportMenu label="Export ownership" disabled={!objects.length} items={[
+                            { label: 'Full ownership CSV', onClick: () => exportOwnershipWorksheet(objects, reviewByObject) },
+                            { label: 'Full ownership JSON', onClick: () =>
                                 downloadJson('content-hygiene-ownership-report.json', {
                                     exportedAt: new Date().toISOString(),
                                     scanId: snapshot?.scan.scanId ?? null,
@@ -219,16 +211,13 @@ export function OwnershipPage({
                                         review: reviewByObject.get(contentObject.objectId) ?? null,
                                     })),
                                 })
-                            }
-                            disabled={objects.length === 0}
-                        >
-                            Export full ownership JSON
-                        </StyledButton>
+                            },
+                        ]} />
                     </ButtonRow>
                 }
             />
 
-            <MetricGrid aria-label="Ownership summary">
+            <div hidden={Boolean(selected)}><MetricGrid aria-label="Ownership summary">
                 <SummaryMetric
                     label="Active named owners"
                     value={snapshot ? numberFormatter.format(activeOwnersWithContent) : '—'}
@@ -281,12 +270,13 @@ export function OwnershipPage({
                     Clear filter
                 </StyledButton>
             </FilterBar>
+            </div>
 
             <DetailLayout>
-                <div>
+                <div hidden={Boolean(selected)}>
                     <Card>
                         <CardHeader>
-                            <CardTitle>Live ownership inventory</CardTitle>
+                            <CardTitle ref={listTitle} tabIndex={-1}>Live ownership inventory</CardTitle>
                             <ResultPagination
                                 page={currentOwnerPage}
                                 pageSize={25}
@@ -339,10 +329,6 @@ export function OwnershipPage({
                                                         <td>
                                                             <RowButton
                                                                 type="button"
-                                                                aria-pressed={
-                                                                    selected?.owner ===
-                                                                    summary.owner
-                                                                }
                                                                 onClick={() => {
                                                                     setSelectedOwner(summary.owner);
                                                                     setObjectPage(0);
@@ -478,13 +464,17 @@ export function OwnershipPage({
                 </div>
 
                 {selected ? (
+                    <div data-investigation-workspace>
+                    <WorkspaceNavigation aria-label="Ownership navigation">
+                        <StyledButton onClick={() => setSelectedOwner('')}>Back to ownership inventory</StyledButton>
+                    </WorkspaceNavigation>
                     <DetailPanel aria-label={`Ownership details for ${selected.owner}`}>
-                        <DetailSection>
-                            <DetailTitle>{selected.owner}</DetailTitle>
+                        <WorkspaceHeader><div>
+                            <DetailTitle ref={detailTitle} tabIndex={-1}>{selected.owner}</DetailTitle>
                             <strong>Account status: {selected.status}</strong>
-                        </DetailSection>
+                        </div><StyledButton disabled={!selectedObjects.length} onClick={() => exportOwnershipWorksheet(selectedObjects, reviewByObject)}>Export this owner CSV</StyledButton></WorkspaceHeader>
                         <DetailSection>
-                            <DefinitionList>
+                            <FactGrid>
                                 <dt>Total objects</dt>
                                 <dd>{numberFormatter.format(selected.objectCount)}</dd>
                                 <dt>Known active</dt>
@@ -493,7 +483,7 @@ export function OwnershipPage({
                                 <dd>{numberFormatter.format(selected.reviewCount)}</dd>
                                 <dt>Without named owner</dt>
                                 <dd>{numberFormatter.format(selected.unownedCount)}</dd>
-                            </DefinitionList>
+                            </FactGrid>
                         </DetailSection>
                         <DetailSection>
                             <strong>Interpretation</strong>
@@ -576,6 +566,7 @@ export function OwnershipPage({
                             ) : null}
                         </DetailSection>
                     </DetailPanel>
+                    </div>
                 ) : null}
             </DetailLayout>
         </>

@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import TabLayout from '@splunk/react-ui/TabLayout';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { WorkspaceTabs as TabLayout } from '../components/WorkspaceTabs';
 import {
     Breadcrumbs,
     ButtonRow,
@@ -8,6 +8,7 @@ import {
     CardHeader,
     CardTitle,
     DefinitionList,
+    FactGrid,
     DetailLayout,
     DetailPanel,
     DetailSection,
@@ -24,12 +25,15 @@ import {
     StyledButton,
     Table,
     TableScroller,
+    WorkspaceHeader,
 } from '../AppStyles';
 import { DependencyGraph } from '../components/DependencyGraph';
 import { ResultPagination } from '../components/ResultPagination';
 import { PageHeader } from '../components/PageHeader';
 import { RemovalImpactPanel } from '../components/RemovalImpactPanel';
 import { ReviewEditor } from '../components/ReviewEditor';
+import { ExportMenu } from '../components/ExportMenu';
+import { useReviewNavigation } from '../components/ReviewNavigationContext';
 import { ReviewStageBadge } from '../components/ReviewStageBadge';
 import { ReviewFreshnessBadge, ReviewFreshnessPanel } from '../components/ReviewFreshnessPanel';
 import { useEvidenceClock } from '../components/useEvidenceClock';
@@ -51,6 +55,7 @@ import {
 import { downloadCsv } from '../utils/downloadCsv';
 import { downloadJson } from '../utils/downloadJson';
 import { navigateToView, readQueryParam } from '../utils/navigation';
+import { ownerLabel } from '../utils/objectLabels';
 
 const candidateFindingTypes = new Set([
     'cleanup_candidate',
@@ -82,16 +87,6 @@ interface RelatedNode {
 
 function formatScore(value: number | null): string {
     return value === null ? 'Unknown' : `${value}/100`;
-}
-
-function ownerLabel(contentObject: ContentObject): string {
-    if (contentObject.owner) {
-        return contentObject.owner;
-    }
-    if (contentObject.sharing === 'app' || contentObject.sharing === 'global') {
-        return `${contentObject.sharing} scope`;
-    }
-    return contentObject.sharing === 'user' ? 'Ownership gap' : 'Owner metadata unavailable';
 }
 
 function unresolvedNode(
@@ -298,6 +293,9 @@ export function DependencyPage({
     onSaveReview,
     onDeleteReview,
 }: DependencyPageProps): React.ReactElement {
+    const { navigate } = useReviewNavigation();
+    const inspectionTitle = useRef<HTMLHeadingElement | null>(null);
+    const focusInspection = useRef(false);
     const [selectedId, setSelectedId] = useState(() => readQueryParam('object'));
     const [inspectedId, setInspectedId] = useState('');
     const [query, setQuery] = useState(() => readQueryParam('query'));
@@ -305,7 +303,7 @@ export function DependencyPage({
     const [centerGroup, setCenterGroup] = useState(() => readQueryParam('group') || 'all');
     const [relatedGroup, setRelatedGroup] = useState(() => readQueryParam('related') || 'all');
     const [tab, setTab] = useState(() =>
-        ['impact', 'changes'].includes(readQueryParam('tab')) ? readQueryParam('tab') : 'relationships',
+        ['impact', 'changes', 'object', 'review'].includes(readQueryParam('tab')) ? readQueryParam('tab') : 'relationships',
     );
     const [impactDepth, setImpactDepth] = useState(3);
     const [page, setPage] = useState(0);
@@ -427,6 +425,13 @@ export function DependencyPage({
             ? unresolvedNode(unresolvedEvidence[0], detailId, 'outbound')
             : null;
     const detailReview = detail ? (reviewByObject.get(detail.objectId) ?? null) : null;
+    useEffect(() => {
+        if (focusInspection.current && tab === 'object') {
+            inspectionTitle.current?.focus({ preventScroll: true });
+            inspectionTitle.current?.scrollIntoView?.({ block: 'start' });
+            focusInspection.current = false;
+        }
+    }, [detailId, tab]);
     const currentPage = Math.min(page, Math.max(0, Math.ceil(relatedRows.length / 25) - 1));
     const pageRows = relatedRows.slice(currentPage * 25, currentPage * 25 + 25);
 
@@ -450,7 +455,7 @@ export function DependencyPage({
         window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
     }, [selected?.objectId, query, direction, centerGroup, relatedGroup, tab]);
 
-    const drillTo = (id: string): void => {
+    const drillTo = (id: string): void => navigate(() => {
         const item = index.objects.get(id);
         if (!item) {
             return;
@@ -465,14 +470,19 @@ export function DependencyPage({
         setInspectedId('');
         setQuery('');
         setPage(0);
+        setTab('relationships');
+    });
+    const inspect = (id: string, nextTab = 'object'): void => {
+        const action = (): void => { focusInspection.current = nextTab === 'object'; setInspectedId(id); setTab(nextTab); };
+        if (id === detailId) { action(); } else { navigate(action); }
     };
-    const clear = (): void => {
+    const clear = (): void => navigate(() => {
         setCenterGroup('all');
         setRelatedGroup('all');
         setDirection('all');
         setQuery('');
         setPage(0);
-    };
+    });
     return (
         <>
             <PageHeader
@@ -480,17 +490,11 @@ export function DependencyPage({
                 subtitle="Explore consumers and dependencies, inspect the evidence, and assess removal impact."
                 actions={
                     selected && impact ? (
-                        <ButtonRow>
-                            <StyledButton
-                                onClick={() =>
-                                    exportRelationships(selected, relatedRows, reviewByObject)
-                                }
-                                disabled={!relatedRows.length}
-                            >
-                                Export relationships CSV
-                            </StyledButton>
-                            <StyledButton
-                                onClick={() =>
+                        <ExportMenu label="Export investigation" items={[
+                            { label: 'Filtered relationships CSV', disabled: !relatedRows.length,
+                                onClick: () => exportRelationships(selected, relatedRows, reviewByObject) },
+                            { label: 'Filtered relationships JSON', disabled: !relatedRows.length,
+                                onClick: () =>
                                     downloadJson('content-hygiene-dependencies.json', {
                                         exportedAt: new Date().toISOString(),
                                         scanId: snapshot?.scan.scanId,
@@ -502,16 +506,9 @@ export function DependencyPage({
                                                 : 'not_applicable',
                                         })),
                                     })
-                                }
-                                disabled={!relatedRows.length}
-                            >
-                                Export relationships JSON
-                            </StyledButton>
-                            <StyledButton onClick={() => exportRemovalImpact(selected, impact)}>
-                                Export impact CSV
-                            </StyledButton>
-                            <StyledButton
-                                onClick={() =>
+                                },
+                            { label: 'Full removal impact CSV', onClick: () => exportRemovalImpact(selected, impact) },
+                            { label: 'Full removal impact JSON', onClick: () =>
                                     downloadJson('content-hygiene-impact.json', {
                                         exportedAt: new Date().toISOString(),
                                         scanId: snapshot?.scan.scanId,
@@ -519,11 +516,8 @@ export function DependencyPage({
                                         usageValidity: usageValidity(selected),
                                         analysis: impact,
                                     })
-                                }
-                            >
-                                Export impact JSON
-                            </StyledButton>
-                        </ButtonRow>
+                                },
+                        ]} />
                     ) : undefined
                 }
             />
@@ -532,13 +526,13 @@ export function DependencyPage({
                     {trail.map((id, i) => (
                         <React.Fragment key={trail.slice(0, i + 1).join('>')}>
                             <RowButton
-                                onClick={() => {
+                                onClick={() => navigate(() => {
                                     setCenterGroup('all');
                                     setSelectedId(id);
                                     setInspectedId('');
                                     setTrail((current) => current.slice(0, i));
                                     setPage(0);
-                                }}
+                                })}
                             >
                                 {index.objects.get(id)?.name ?? id}
                             </RowButton>
@@ -557,13 +551,13 @@ export function DependencyPage({
                     Center group
                     <Select
                         value={centerGroup}
-                        onChange={(event) => {
+                        onChange={(event) => navigate(() => {
                             setCenterGroup(event.currentTarget.value);
                             setSelectedId('');
                             setInspectedId('');
                             setTrail([]);
                             setPage(0);
-                        }}
+                        })}
                     >
                         {groupOptions('All inventory objects')}
                     </Select>
@@ -582,12 +576,12 @@ export function DependencyPage({
                     <Select
                         disabled={!options.length}
                         value={selected?.objectId ?? ''}
-                        onChange={(event) => {
+                        onChange={(event) => navigate(() => {
                             setSelectedId(event.currentTarget.value);
                             setInspectedId('');
                             setTrail([]);
                             setPage(0);
-                        }}
+                        })}
                         footerMessage={
                             matches.length > 200
                                 ? `Showing 200 of ${matches.length} matches. Refine Find center object to select any other object.`
@@ -649,6 +643,21 @@ export function DependencyPage({
                 </Card>
             ) : (
                 <DetailLayout>
+                    <Card>
+                        <WorkspaceHeader>
+                            <div>
+                                <SmallText>Dependency graph center</SmallText>
+                                <DetailTitle>{selected.name}</DetailTitle>
+                                <p>{selected.objectType} · {selected.app} · {selected.inboundReferences} inbound · {selected.outboundReferences} outbound</p>
+                                <StatusBadge status={selected.healthStatus} />
+                            </div>
+                            <ButtonRow>
+                                <StyledButton onClick={() => setTab('impact')}>Assess removal impact</StyledButton>
+                                <StyledButton $primary onClick={() => inspect(selected.objectId, 'review')}>Review center object</StyledButton>
+                                {reviewByObject.has(selected.objectId) ? <StyledButton onClick={() => navigate(() => navigateToView('reviews', { object: selected.objectId }))}>Open center in review library</StyledButton> : null}
+                            </ButtonRow>
+                        </WorkspaceHeader>
+                    </Card>
                     <div>
                         <TabLayout
                             activePanelId={tab}
@@ -668,6 +677,7 @@ export function DependencyPage({
                                             {relatedRows.length} matching relationship
                                             {relatedRows.length === 1 ? '' : 's'}
                                         </CardTitle>
+                                        <SmallText>Inspect an object without moving the graph center. Choose “Drill in” to follow its own dependencies. Filters affect this view, not the full removal-impact assessment.</SmallText>
                                     </CardHeader>
                                     <CardBody>
                                         {relatedRows.length ? (
@@ -677,7 +687,7 @@ export function DependencyPage({
                                                 index={index}
                                                 edges={graphEdges}
                                                 inspectedId={detailId}
-                                                onInspect={setInspectedId}
+                                                onInspect={inspect}
                                                 allows={allows}
                                             />
                                         ) : (
@@ -733,7 +743,7 @@ export function DependencyPage({
                                                                 <td>
                                                                     <RowButton
                                                                         onClick={() =>
-                                                                            setInspectedId(
+                                                                            inspect(
                                                                                 row.objectId,
                                                                             )
                                                                         }
@@ -823,13 +833,12 @@ export function DependencyPage({
                                     </CardBody>
                                 </Card>
                             </TabLayout.Panel>
-                        </TabLayout>
-                    </div>
+                            <TabLayout.Panel panelId="object" label="Selected object" inset={false}>
                     <DetailPanel
                         aria-label={`Details for ${detail?.name ?? unresolved?.name ?? detailId}`}
                     >
                         <DetailSection>
-                            <DetailTitle>
+                            <DetailTitle ref={inspectionTitle} tabIndex={-1}>
                                 {detail?.name ?? unresolved?.name ?? detailId}
                             </DetailTitle>
                             <SmallText>
@@ -844,15 +853,18 @@ export function DependencyPage({
                                         <ReviewStageBadge stage={detailReview.stage} />
                                     ) : null}
                                     <ReviewFreshnessBadge status={selectedFreshness(detail.objectId).status} />
-                                    <StyledButton onClick={() => {
+                                    <StyledButton onClick={() => navigate(() => {
                                         if (detail.objectId !== selected.objectId) { drillTo(detail.objectId); }
                                         setTab('changes');
-                                    }}>Changes since review</StyledButton>
+                                    })}>Changes since review</StyledButton>
                                     {detailId !== selected.objectId ? (
-                                        <StyledButton onClick={() => drillTo(detailId)}>
+                                        <StyledButton $primary onClick={() => drillTo(detailId)}>
                                             Center on this object
                                         </StyledButton>
                                     ) : null}
+                                    <StyledButton onClick={() => setTab('review')}>Review selected object</StyledButton>
+                                    <StyledButton onClick={() => navigate(() => navigateToView('candidates', { object: detail.objectId }))}>View candidate evidence</StyledButton>
+                                    {detailReview ? <StyledButton onClick={() => navigate(() => navigateToView('reviews', { object: detail.objectId }))}>Open in review library</StyledButton> : null}
                                 </ButtonRow>
                             ) : (
                                 <InlineNotice>
@@ -864,7 +876,7 @@ export function DependencyPage({
                         {detail ? (
                             <>
                                 <DetailSection>
-                                    <DefinitionList>
+                                    <FactGrid>
                                         <dt>Type</dt>
                                         <dd>{detail.objectType}</dd>
                                         <dt>App</dt>
@@ -879,7 +891,7 @@ export function DependencyPage({
                                         <dd>{formatScore(detail.abandonmentConfidence)}</dd>
                                         <dt>Removal impact</dt>
                                         <dd>{formatScore(detail.removalImpact)}</dd>
-                                    </DefinitionList>
+                                    </FactGrid>
                                     {detail.analysisWarnings?.length ? (
                                         <InlineNotice>
                                             {detail.analysisWarnings.join('; ')}
@@ -896,39 +908,6 @@ export function DependencyPage({
                                             <li key={item}>{item}</li>
                                         ))}
                                     </ul>
-                                    <ButtonRow>
-                                        <StyledButton
-                                            onClick={() =>
-                                                navigateToView('candidates', {
-                                                    object: detail.objectId,
-                                                })
-                                            }
-                                        >
-                                            View candidate evidence
-                                        </StyledButton>
-                                        {detailReview ? (
-                                            <StyledButton
-                                                onClick={() =>
-                                                    navigateToView('reviews', {
-                                                        object: detail.objectId,
-                                                    })
-                                                }
-                                            >
-                                                Open in review library
-                                            </StyledButton>
-                                        ) : null}
-                                    </ButtonRow>
-                                </DetailSection>
-                                <DetailSection>
-                                    <ReviewEditor
-                                        key={detail.objectId}
-                                        contentObject={detail}
-                                        review={detailReview}
-                                        scanId={snapshot?.scan.scanId ?? ''}
-                                        canWrite={canWriteReviews}
-                                        onSave={onSaveReview}
-                                        onDelete={onDeleteReview}
-                                    />
                                 </DetailSection>
                             </>
                         ) : (
@@ -951,6 +930,17 @@ export function DependencyPage({
                             </DetailSection>
                         )}
                     </DetailPanel>
+                            </TabLayout.Panel>
+                            <TabLayout.Panel panelId="review" label="Review decision" inset={false}>
+                                <Card><CardHeader><CardTitle>Review {detail?.name ?? 'unresolved target'}</CardTitle></CardHeader><CardBody>
+                                    {detail ? <ReviewEditor key={detail.objectId} contentObject={detail} review={detailReview}
+                                        scanId={snapshot?.scan.scanId ?? ''} canWrite={canWriteReviews}
+                                        onSave={onSaveReview} onDelete={onDeleteReview} />
+                                        : <InlineNotice>Unresolved targets cannot be added to the library. Inspect source evidence and namespace coverage first.</InlineNotice>}
+                                </CardBody></Card>
+                            </TabLayout.Panel>
+                        </TabLayout>
+                    </div>
                 </DetailLayout>
             )}
         </>
