@@ -5,6 +5,7 @@ import { splunkRequest, SplunkRequestError as RestRequestError } from './rest';
 
 import { AnalysisCompleteness, RawAnalysisSource, analyzeInventoryAsync } from './analysis';
 import { attachReviewEvidence, configurationFingerprint } from './reviewEvidence';
+import { PrivateObjectCount } from './dependencyCoverage';
 import {
     CollectedUsageSource,
     DASHBOARD_ACCESS_SOURCE_ID,
@@ -493,16 +494,6 @@ function scheduledFromContent(collectorId: string, content: JsonRecord): boolean
     return collectorId === 'saved_searches' ? booleanValue(content.is_scheduled) : null;
 }
 
-function serializeAnalysisValue(value: unknown): string {
-    if (typeof value === 'string') {
-        return value;
-    }
-    if (value === undefined) {
-        return '';
-    }
-    return JSON.stringify(value) ?? '';
-}
-
 export function normalizeObjectEntry(
     entry: SplunkRestEntry,
     collector: ObjectCollectorDefinition,
@@ -601,9 +592,22 @@ function analysisSourceForEntry(
         text = stringValue(content.filename);
         kind = 'lookup';
         sourceLocation = 'filename';
+        if (!text.trim() && (content.collection || content.external_cmd || content.external_type)) {
+            return { objectId: record.object_id, kind, text: '', sourceLocation,
+                failure: 'KV or external lookup backend relationships are outside the supported file-reference coverage.', failureTargets: [] };
+        }
     } else if (collector.id === 'data_models') {
-        text = serializeAnalysisValue(content['dataset.commands']);
-        sourceLocation = 'dataset.commands';
+        text = stringValue(content.description);
+        kind = 'data_model';
+        sourceLocation = 'description';
+    }
+
+    const expectedFields: Record<string, string> = { saved_searches: 'search', macros: 'definition', dashboards: 'eai:data', data_models: 'description' };
+    const expected = expectedFields[collector.id];
+    if (expected && (typeof content[expected] !== 'string' ||
+        (['dashboards', 'data_models'].includes(collector.id) && !text.trim()))) {
+        return { objectId: record.object_id, kind, text: '', sourceLocation,
+            failure: `The returned ${collector.label.toLowerCase()} definition is empty or unavailable; source coverage is unverified.` };
     }
 
     return text.trim()
@@ -1613,6 +1617,9 @@ async function runInventoryScan(
     const errors: string[] = [];
     const allObjectRecords: KvObjectRecord[] = [];
     const analysisSources: RawAnalysisSource[] = [];
+    const privateCounts = new Map<string, PrivateObjectCount>();
+    const privateTargets: Array<{ collector: string; app: string; name: string }> = [];
+    const collectorCoverage: Record<string, boolean> = {};
     let completedCollectors = 0;
     let objectCount = 0;
     let edgeCount = 0;
@@ -1622,6 +1629,8 @@ async function runInventoryScan(
     let didPublish = false;
     let collectionComplete = true;
     let scanningRoles: string[] = [];
+    let scanningPrincipal = username || 'unknown';
+    let identityKnown = false;
 
     await acquireScanLock(scanId);
     activeScanController = new AbortController();
@@ -1642,8 +1651,8 @@ async function runInventoryScan(
         collector_totals: {},
         collector_versions: {
             rest_inventory: '0.2.0',
-            dependency_analysis: '0.4.0',
-            classification: '0.4.0',
+            dependency_analysis: '1.0.0',
+            classification: '1.0.0',
             review_evidence: '1.0.0',
         },
         scan_limit_per_collector:
@@ -1658,6 +1667,15 @@ async function runInventoryScan(
     try {
         await createRecord('ch_scan_runs', runningRecord);
         scanRecordCreated = true;
+        try {
+            const context = await requestJson<SplunkRestResponse>(withQuery(createRESTURL('authentication/current-context'), { output_mode: 'json' }));
+            const content = asRecord(context.entry?.[0]?.content);
+            scanningPrincipal = stringValue(content.username, scanningPrincipal);
+            scanningRoles = stringArray(content.roles);
+            identityKnown = scanningPrincipal !== 'unknown' && scanningRoles.length > 0;
+        } catch {
+            warnings.push('Scanning identity/roles could not be verified; review coverage remains unverified.');
+        }
 
         /* eslint-disable no-restricted-syntax, no-await-in-loop -- REST collectors run serially to cap search-head load and persist independent checkpoints. */
         for (const collector of objectCollectors) {
@@ -1669,11 +1687,19 @@ async function runInventoryScan(
 
             try {
                 const collected = await collectEntries(collector, mode);
+                collectorCoverage[collector.id] = collected.complete;
                 const collectedAt = new Date().toISOString();
                 const eligibleEntries = collected.entries.filter(
                     (entry) => entryAcl(entry).sharing !== 'user',
                 );
                 const excluded = collected.entries.length - eligibleEntries.length;
+                collected.entries.filter((entry) => entryAcl(entry).sharing === 'user').forEach((entry) => {
+                    const app = stringValue(entryAcl(entry).app, 'unknown');
+                    const key = `${collector.id}\0${app}`;
+                    const current = privateCounts.get(key) ?? { collector: collector.id, app, count: 0 };
+                    current.count += 1; privateCounts.set(key, current);
+                    privateTargets.push({ collector: collector.id, app, name: entry.name });
+                });
                 if (excluded) {
                     warnings.push(
                         `${collector.label}: ${excluded} private object(s) excluded from the shared hygiene inventory.`,
@@ -1704,6 +1730,7 @@ async function runInventoryScan(
                 }
                 objectCount += records.length;
             } catch (error) {
+                collectorCoverage[collector.id] = false;
                 collectionComplete = false;
                 if (activeScanController?.signal.aborted) {
                     throw error;
@@ -1737,7 +1764,6 @@ async function runInventoryScan(
             const ownerRecords = collected.entries.map((entry) =>
                 normalizeOwnerEntry(entry, scanId, collectedAt),
             );
-            scanningRoles = ownerRecords.find((owner) => owner.owner === username)?.roles ?? [];
             await batchSave('ch_owners', ownerRecords);
             collectorCounts.owners = ownerRecords.length;
             collectorTotals.owners = collected.total;
@@ -1774,6 +1800,7 @@ async function runInventoryScan(
                 allObjectRecords.map(objectRecordToContentObject),
                 analysisSources,
                 assertionCompleteness,
+                { privateObjects: [...privateCounts.values()], privateTargets },
             );
             if (analysis.parserWarnings.length) {
                 const affectedCount = analysis.objects.filter(
@@ -1788,10 +1815,12 @@ async function runInventoryScan(
                 Object.values(completeness).every(Boolean) &&
                 analysis.parserWarnings.length === 0;
             const evidenceObjects = await attachReviewEvidence(analysis.objects, analysis.edges, {
-                scanId, observedAt: new Date().toISOString(), principal: username || 'unknown',
+                scanId, observedAt: new Date().toISOString(), principal: scanningPrincipal,
                 roles: scanningRoles, mode,
                 collectionComplete, analysisComplete: completeAnalysis,
-                collectors: { ...completeness },
+                collectors: { ...collectorCoverage },
+                coverageContext: { gaps: analysis.coverageGaps, privateObjects: [...privateCounts.values()],
+                    collectors: collectorCoverage, identityKnown },
             });
             const analyzedById = new Map(
                 evidenceObjects.map((contentObject) => [contentObject.objectId, contentObject]),

@@ -1,5 +1,5 @@
 import {
-    attachReviewEvidence,
+    attachReviewEvidence as attachEvidence,
     compareReviewEvidence,
     configurationFingerprint,
     evidenceDigest,
@@ -38,6 +38,46 @@ const scan: ScanSummary = {
     analysisStatus: 'complete',
     dataSource: 'live',
 };
+
+test('fingerprints do not depend on host locale collation', () => {
+    const expected = evidenceDigest({ z: { Z: 1, a: 2 }, A: 3 });
+    const spy = jest.spyOn(String.prototype, 'localeCompare').mockImplementation(() => {
+        throw new Error('Locale collation must not decide fingerprint order');
+    });
+    try { expect(evidenceDigest({ A: 3, z: { a: 2, Z: 1 } })).toBe(expected); }
+    finally { spy.mockRestore(); }
+});
+
+test('scan errors cannot establish a Current review', async () => {
+    const [current] = await attachReviewEvidence([object()], [], scope);
+    const result = compareReviewEvidence(review(current), current, { ...scan, errors: ['Collector failed'] }, Date.parse(scope.observedAt));
+    expect(result.status).not.toBe('current');
+    expect(result.limitations.join(' ')).toMatch(/reported errors/);
+});
+
+test('a normalization policy upgrade is not labeled as a definite configuration edit', async () => {
+    const [current] = await attachReviewEvidence([object()], [], scope);
+    const saved = review(current);
+    saved.evidenceBaseline!.evidence = { ...saved.evidenceBaseline!.evidence,
+        configuration: { ...saved.evidenceBaseline!.evidence.configuration, version: 1, digest: '0'.repeat(64) } };
+    const result = compareReviewEvidence(saved, current, scan, Date.parse(scope.observedAt));
+    expect(result.status).not.toBe('current');
+    expect(result.reasons.join(' ')).not.toMatch(/Configuration changed/);
+    expect(result.limitations.join(' ')).toMatch(/normalization changed/);
+});
+// This fixture declares a complete catalog and includes the actual parent app;
+// tests of missing/partial catalogs below explicitly remove that guarantee.
+async function attachReviewEvidence(objects: ContentObject[], edges: DependencyEdge[], input: ReviewEvidenceScope): Promise<ContentObject[]> {
+    const parent = { ...object('app::search'), objectType: 'App', canonicalName: 'search' };
+    const collectors = Object.fromEntries(['apps', 'macros', 'dashboards', 'lookup_definitions', 'lookup_files',
+        'saved_searches', 'data_models', 'indexes', 'sourcetypes'].map((name) => [name, input.collectionComplete]));
+    const result = await attachEvidence([...objects, parent], edges, { ...input, coverageContext: {
+        collectors, privateObjects: [], identityKnown: true,
+        gaps: input.analysisComplete ? [] : [{ sourceId: objects[0].objectId, app: 'search',
+            targets: 'all', message: 'Declared parser fixture gap', sourceLocation: 'search' }],
+    } });
+    return result.slice(0, objects.length);
+}
 function object(id = 'macro::search::a', definition = 'index=example'): ContentObject {
     return {
         objectId: id,

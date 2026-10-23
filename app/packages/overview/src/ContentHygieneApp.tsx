@@ -1,8 +1,9 @@
-import React, { lazy, Suspense, useEffect, useState } from 'react';
+import React, { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import WaitSpinner from '@splunk/react-ui/WaitSpinner';
 import { CustomizeTheme, SplunkThemeProvider } from '@splunk/themes';
-import { Page, StyledApp } from './AppStyles';
+import { InlineNotice, Page, StyledApp } from './AppStyles';
 import { ScanStatusBanner } from './components/ScanStatusBanner';
+import { ReviewWorkflowContext } from './components/ReviewWorkflowContext';
 import { getHygieneAccess } from './services/access';
 import { splunkInventoryClient } from './services/inventory';
 import { splunkReviewClient } from './services/reviews';
@@ -176,10 +177,36 @@ export function ContentHygieneApp({
         return saved;
     };
 
-    const handleDeleteReview = async (objectId: string): Promise<void> => {
-        await reviewClient.deleteReview(objectId);
-        setReviews((current) => current.filter((review) => review.objectId !== objectId));
+    const handleDeleteReview = async (objectId: string, expectedRevisionId?: string | null): Promise<void> => {
+        await reviewClient.deleteReview(objectId, expectedRevisionId);
+        setReviews(await reviewClient.listReviews());
     };
+    const handleRefreshReviews = useCallback(async (): Promise<ReviewRecord[]> => {
+        setIsLoadingReviews(true);
+        try {
+            const latest = await reviewClient.listReviews();
+            setReviews(latest); setReviewLoadError(null); return latest;
+        } catch (failure) {
+            setReviewLoadError(failure instanceof Error ? failure.message : 'Unable to verify the saved review library.');
+            throw failure;
+        } finally { setIsLoadingReviews(false); }
+    }, [reviewClient]);
+    const handleReloadReview = useCallback(async (objectId: string): Promise<ReviewRecord | null> => {
+        if (reviewLoadError) { return (await handleRefreshReviews()).find((record) => record.objectId === objectId) ?? null; }
+        const latest = reviewClient.getReview ? await reviewClient.getReview(objectId)
+            : (await reviewClient.listReviews()).find((record) => record.objectId === objectId) ?? null;
+        setReviews((current) => [...current.filter((record) => record.objectId !== objectId), ...(latest ? [latest] : [])]);
+        return latest;
+    }, [reviewClient, reviewLoadError, handleRefreshReviews]);
+    const activeReviews = useMemo(() => reviews.filter((review) => !review.removed), [reviews]);
+    const usableReviews = useMemo(() => reviewLoadError ? activeReviews.map((review) => ({ ...review,
+        persistenceIssue: 'The latest saved review library could not be verified. Refresh it before relying on this confirmation.',
+    })) : activeReviews, [activeReviews, reviewLoadError]);
+    const workflow = useMemo(() => ({ states: new Map(reviews.map((review) => [review.objectId, review])),
+        reload: handleReloadReview, history: reviewClient.listHistory,
+        refresh: reviewClient.isAvailable() ? async () => { await handleRefreshReviews(); } : undefined,
+    }), [reviews, handleReloadReview, handleRefreshReviews, reviewClient]);
+    const canWriteReviews = reviewClient.isAvailable() && access.canReview && !isLoadingReviews && !reviewLoadError;
 
     let content: React.ReactElement;
 
@@ -189,8 +216,8 @@ export function ContentHygieneApp({
                 <CandidatesPage
                     snapshot={snapshot}
                     isLoading={isLoadingSnapshot}
-                    reviews={reviews}
-                    canWriteReviews={reviewClient.isAvailable() && access.canReview}
+                    reviews={usableReviews}
+                    canWriteReviews={Boolean(canWriteReviews)}
                     onSaveReview={handleSaveReview}
                     onDeleteReview={handleDeleteReview}
                 />
@@ -201,8 +228,8 @@ export function ContentHygieneApp({
                 <DependencyPage
                     snapshot={snapshot}
                     isLoading={isLoadingSnapshot}
-                    reviews={reviews}
-                    canWriteReviews={reviewClient.isAvailable() && access.canReview}
+                    reviews={usableReviews}
+                    canWriteReviews={Boolean(canWriteReviews)}
                     onSaveReview={handleSaveReview}
                     onDeleteReview={handleDeleteReview}
                 />
@@ -215,7 +242,7 @@ export function ContentHygieneApp({
                     reviews={reviews}
                     isLoading={isLoadingReviews || isLoadingSnapshot}
                     loadError={reviewLoadError}
-                    canWriteReviews={reviewClient.isAvailable() && access.canReview}
+                    canWriteReviews={Boolean(canWriteReviews)}
                     onSaveReview={handleSaveReview}
                     onDeleteReview={handleDeleteReview}
                 />
@@ -226,7 +253,7 @@ export function ContentHygieneApp({
                 <OwnershipPage
                     snapshot={snapshot}
                     isLoading={isLoadingSnapshot}
-                    reviews={reviews}
+                    reviews={activeReviews}
                 />
             );
             break;
@@ -237,7 +264,7 @@ export function ContentHygieneApp({
                     canCollect={access.canCollect}
                     snapshot={snapshot}
                     snapshotLoadError={snapshotLoadError}
-                    reviews={reviews}
+                    reviews={activeReviews}
                     onScanCompleted={handleScanCompleted}
                 />
             );
@@ -245,7 +272,7 @@ export function ContentHygieneApp({
         case 'overview':
         default:
             content = (
-                <OverviewPage snapshot={snapshot} isLoading={isLoadingSnapshot} reviews={reviews} />
+                <OverviewPage snapshot={snapshot} isLoading={isLoadingSnapshot} reviews={activeReviews} />
             );
     }
 
@@ -258,6 +285,9 @@ export function ContentHygieneApp({
                         isLoading={isLoadingSnapshot}
                         loadError={snapshotLoadError}
                     />
+                    {reviewLoadError && page !== 'review-library' ? (
+                        <InlineNotice role="alert">Saved reviews could not be verified: {reviewLoadError} Review edits are disabled until the library reloads successfully.</InlineNotice>
+                    ) : null}
                     <Suspense
                         fallback={
                             <WaitSpinner
@@ -266,7 +296,7 @@ export function ContentHygieneApp({
                             />
                         }
                     >
-                        {content}
+                        <ReviewWorkflowContext.Provider value={workflow}>{content}</ReviewWorkflowContext.Provider>
                     </Suspense>
                 </Page>
             </StyledApp>

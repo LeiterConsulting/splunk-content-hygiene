@@ -41,7 +41,8 @@ const collections = [
     ['ch_exemptions', 'Protected-content and review exemptions', 'Defined'],
     ['ch_scan_runs', 'Scan lifecycle and warnings', 'Defined'],
     ['ch_settings', 'Application settings', 'Defined'],
-    ['ch_reviews', 'Persistent app-local review workflow records', 'Defined'],
+    ['ch_reviews', 'Preserved legacy review decisions (read-only in the app)', 'Defined'],
+    ['ch_review_revisions', 'Conflict-safe review revision journal', 'Defined'],
 ];
 
 interface SettingsPageProps {
@@ -429,7 +430,7 @@ export function SettingsPage({
                                 <dd>Splunk UI Toolkit / React</dd>
                                 <dt>App ID</dt>
                                 <dd>content_hygiene</dd>
-                                <dt>Beta mode</dt>
+                                <dt>Safety boundary</dt>
                                 <dd>Read-only customer content</dd>
                                 <dt>Bounded scan limit</dt>
                                 <dd>100 records per collector</dd>

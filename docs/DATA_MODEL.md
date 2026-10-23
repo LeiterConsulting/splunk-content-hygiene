@@ -31,6 +31,23 @@ configuration/access digests detect changed consumers even when edge identity is
 stable. Indexes are built once per scan; Library loading does not require the
 full edge collection.
 
+Evidence version 2 records policy `shared-static-v1` and four independently
+fingerprinted coverage dimensions: returned configuration, returned ACL,
+declared outbound references, and potential inbound references. Each includes
+status, bounded reasons, a source count, and at most five visible possible-source
+examples. Private-source gaps retain aggregate app/type counts, not private
+object names or owners. Static parser gaps are scoped by namespace and possible
+target type/name; missing source catalogs propagate conservatively. Data-model
+base searches, constraints, lookup calculations, and inherited query scope are
+analyzed. Boolean branches and independent subsearches must establish their own
+positive index scope. A possible source is not an asserted dependency.
+
+Configuration fingerprint version 2 uses locale-independent canonical ordering.
+Different normalization versions are not direct proof of a configuration edit.
+Legacy evidence is retained and remains unverified until a supported scan and
+explicit reaffirmation. An object's supported static scope can be complete while
+the overall scan remains partial; this does not relax removal-impact blockers.
+
 Supported health values are `active`, `dormant`, `orphaned`, `broken`,
 `unowned`, `protected`, and `unknown`.
 
@@ -96,7 +113,7 @@ coverage. Unsupported telemetry does not mean inactivity.
 
 ## Reviews
 
-A review is a durable, app-local record keyed by object identity. It contains
+A review is durable, app-local workflow state associated with object identity. It contains
 an identity snapshot, health status at review, workflow stage, note, optional
 assignee, scan provenance, timestamps, and updater identity.
 The record also snapshots usage coverage, observation count, last-observed
@@ -109,10 +126,27 @@ represent or perform a mutation of its referenced Splunk object.
 Optional `evidence_baseline` contains capture time/actor, the versioned object
 evidence manifest, and usage evidence at capture. `evidence_history` retains the
 first capture plus the four most recent prior captures; the active baseline is
-separate. These fields belong to `ch_reviews`, independent of snapshot retirement.
-Normal edits preserve baselines and original at-review facts. Only explicit
-capture/reaffirmation changes the baseline. A pre-save timestamp check rejects
-known concurrent edits; it is not a transactional compare-and-swap guarantee.
+separate. Legacy fields remain in `ch_reviews`, independent of snapshot retirement.
+New writes use the version 1 revision protocol in `ch_review_revisions`.
+
+Each accepted revision has a deterministic SHA-256 key for canonical object ID
+and sequence number, a parent identity, request identity, operation, compact
+decision snapshot, and evidence references. A server coordinator serializes and
+rechecks inserts so one successor wins concurrent creates, edits, or save/archive races. The loser
+retains its local draft. An uncertain response is read back by key/request ID;
+writes are never automatically replayed. Sequence order does not rely on client
+clocks. New revision reviewer/time metadata is server-assigned; retained legacy
+metadata is not retroactively rewritten. KV uniqueness alone is not relied on
+as an atomic compare-and-swap operation.
+
+The first edit of a legacy review retains its exact original document and
+origin digest. Subsequent outside changes to that origin block new edits. Missing
+revisions or evidence references fail closed. Archive is a tombstone revision;
+restoring retains the decision and original at-review facts. Normal edits preserve
+baselines. Explicit reaffirmation changes only evidence, never stage, note, or
+assignee simultaneously. Captures are stored once and referenced by later
+revisions. History is retained independently of scan retirement and is not a
+tamper-proof audit against direct privileged KV changes.
 
 Review validity (`current`, `needs_review`, `cannot_verify`, `unreviewed`) is
 derived, never written into the decision stage. Unsupported/malformed evidence

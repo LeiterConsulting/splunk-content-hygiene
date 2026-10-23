@@ -227,14 +227,14 @@ test('requires a complete scan even when the captured graph has no dependents', 
 });
 
 test('allows controlled change planning only after graph and review prerequisites', async () => {
-    const selected = contentObject('dashboard::search::a', 'Dashboard A', 'Dashboard', {
+    const selected = contentObject('saved_search::search::a', 'Report A', 'Saved Search', {
         removalImpact: 0,
         usageEvidence: {
             usageRunId: 'scan-usage-test',
             inventoryScanId: completeScan.scanId,
-            sourceId: 'dashboard_access',
-            sourceLabel: 'Splunk Web access log',
-            activityKind: 'dashboard_view',
+            sourceId: 'saved_search_execution',
+            sourceLabel: 'Audit saved-search execution',
+            activityKind: 'saved_search_execution',
             windowDays: 90,
             windowStart: '2026-04-29T12:00:00Z',
             windowEnd: '2026-07-28T12:00:00Z',
@@ -247,13 +247,17 @@ test('allows controlled change planning only after graph and review prerequisite
             failedCount: 0,
             skippedCount: 0,
             lastObserved: null,
-            evidence: ['No dashboard access observed in a complete window'],
+            evidence: ['No execution observed in a complete window'],
         },
     });
-    selected.configurationFingerprint = configurationFingerprint({ 'eai:data': '<dashboard />' }, {});
-    [selected.reviewEvidence] = (await attachReviewEvidence([selected], [], {
+    const acl = { app: 'search', owner: 'analyst', sharing: 'app', perms: { read: ['user'], write: ['admin'] } };
+    selected.configurationFingerprint = configurationFingerprint({ search: '| makeresults' }, acl);
+    const parent = contentObject('app::search', 'Search', 'App', { configurationFingerprint: configurationFingerprint({}, acl) });
+    const collectors = Object.fromEntries(['apps', 'macros', 'dashboards', 'lookup_definitions', 'lookup_files', 'saved_searches', 'data_models', 'indexes', 'sourcetypes'].map((name) => [name, true]));
+    [selected.reviewEvidence] = (await attachReviewEvidence([selected, parent], [], {
         scanId: completeScan.scanId, observedAt: completeScan.startedAt, principal: 'operator',
         roles: ['operator'], mode: 'full', collectionComplete: true, analysisComplete: true, collectors: {},
+        coverageContext: { collectors, identityKnown: true, privateObjects: [], gaps: [] },
     })).map((item) => item.reviewEvidence);
     const analysis = analyzeRemovalImpact(
         selected,

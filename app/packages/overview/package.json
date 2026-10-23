@@ -1,6 +1,6 @@
 {
   "name": "@splunk/overview",
-  "version": "0.5.0-beta",
+  "version": "1.0.0",
   "license": "MIT",
   "scripts": {
     "build": "node bin/build.js build && yarn types:build",

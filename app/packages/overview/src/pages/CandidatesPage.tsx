@@ -57,7 +57,7 @@ interface CandidatesPageProps {
     reviews: ReviewRecord[];
     canWriteReviews: boolean;
     onSaveReview: (input: ReviewInput) => Promise<ReviewRecord>;
-    onDeleteReview: (objectId: string) => Promise<void>;
+    onDeleteReview: (objectId: string, expectedRevisionId?: string | null) => Promise<void>;
 }
 
 function formatDate(value: string | null): string {
@@ -331,7 +331,7 @@ export function CandidatesPage({
         <>
             <PageHeader
                 title="Cleanup Candidates"
-                subtitle="Review evidence-backed findings from the latest live snapshot. No customer content can be changed from this beta."
+                subtitle="Review evidence-backed findings from the latest live snapshot. Customer content remains read-only."
                 actions={
                     <ButtonRow>
                         <StyledButton
@@ -711,6 +711,7 @@ export function CandidatesPage({
                         </DetailSection>
                         <DetailSection>
                             <ReviewEditor
+                                key={selected.objectId}
                                 contentObject={selected}
                                 review={reviewByObject.get(selected.objectId) ?? null}
                                 scanId={snapshot?.scan.scanId ?? ''}

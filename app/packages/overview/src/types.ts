@@ -99,10 +99,26 @@ export interface ContentObject {
 }
 
 export interface ConfigurationFingerprint {
-    version: 1;
+    version: 1 | 2;
     digest: string;
     fields: Array<{ name: string; digest: string }>;
     accessDigest: string;
+    accessComplete?: boolean;
+}
+
+export interface EvidenceCoverageDimension {
+    status: 'complete' | 'partial' | 'unavailable';
+    reasons: string[];
+    sourceCount: number;
+    sourceObjectIds: string[];
+    digest: string;
+}
+export interface ReviewCoverage {
+    policy: 'shared-static-v1';
+    configuration: EvidenceCoverageDimension;
+    access: EvidenceCoverageDimension;
+    outbound: EvidenceCoverageDimension;
+    inbound: EvidenceCoverageDimension;
 }
 
 export interface ReviewRelationshipEvidence {
@@ -119,7 +135,7 @@ export interface ReviewRelationshipEvidence {
 }
 
 export interface ObjectReviewEvidence {
-    version: 1;
+    version: 1 | 2;
     objectId: string;
     scanId: string;
     observedAt: string;
@@ -137,6 +153,7 @@ export interface ObjectReviewEvidence {
     scopeDigest: string;
     coverageComplete: boolean;
     limitations: string[];
+    coverage?: ReviewCoverage;
 }
 
 export interface ReviewEvidenceBaseline {
@@ -258,6 +275,26 @@ export interface ReviewRecord {
     updatedBy: string;
     evidenceBaseline?: ReviewEvidenceBaseline | null;
     evidenceHistory?: ReviewEvidenceBaseline[];
+    revisionId?: string;
+    revisionNumber?: number;
+    removed?: boolean;
+    persistenceIssue?: string;
+}
+
+export interface ReviewHistoryEntry {
+    revisionId: string;
+    revisionNumber: number;
+    operation: 'save' | 'remove';
+    stage: string;
+    note: string;
+    assignedTo: string | null;
+    updatedAt: string;
+    updatedBy: string;
+    capturedEvidence: boolean;
+}
+export interface ReviewHistoryPage {
+    entries: ReviewHistoryEntry[];
+    nextBefore: number | null;
 }
 
 export interface ReviewInput {
@@ -269,13 +306,16 @@ export interface ReviewInput {
     captureEvidence?: boolean;
     evidence?: ObjectReviewEvidence;
     expectedUpdatedAt?: string | null;
+    expectedRevisionId?: string | null;
 }
 
 export interface ReviewClient {
     isAvailable: () => boolean;
     listReviews: () => Promise<ReviewRecord[]>;
     upsertReview: (input: ReviewInput) => Promise<ReviewRecord>;
-    deleteReview: (objectId: string) => Promise<void>;
+    deleteReview: (objectId: string, expectedRevisionId?: string | null) => Promise<void>;
+    getReview?: (objectId: string) => Promise<ReviewRecord | null>;
+    listHistory?: (objectId: string, before?: number) => Promise<ReviewHistoryPage>;
 }
 
 export interface ScanProgress {

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useContext, useMemo, useState } from 'react';
 import {
     ButtonRow,
     Card,
@@ -24,6 +24,7 @@ import {
 import { ResultPagination } from '../components/ResultPagination';
 import { PageHeader } from '../components/PageHeader';
 import { ReviewEditor } from '../components/ReviewEditor';
+import { ReviewWorkflowContext } from '../components/ReviewWorkflowContext';
 import { ReviewStageBadge } from '../components/ReviewStageBadge';
 import { ReviewFreshnessBadge, ReviewFreshnessPanel } from '../components/ReviewFreshnessPanel';
 import { useEvidenceClock } from '../components/useEvidenceClock';
@@ -47,7 +48,7 @@ interface ReviewLibraryPageProps {
     loadError: string | null;
     canWriteReviews: boolean;
     onSaveReview: (input: ReviewInput) => Promise<ReviewRecord>;
-    onDeleteReview: (objectId: string) => Promise<void>;
+    onDeleteReview: (objectId: string, expectedRevisionId?: string | null) => Promise<void>;
 }
 
 function lastObservedObject(review: ReviewRecord): ContentObject {
@@ -127,6 +128,8 @@ function exportReviews(rows: ReviewRecord[], objectById: Map<string, ContentObje
             'Created at',
             'Updated at',
             'Updated by',
+            'Library state', 'Revision', 'Revision ID', 'Persistence warning',
+            'Coverage policy', 'Configuration coverage', 'ACL coverage', 'Outbound coverage', 'Inbound coverage',
         ],
         rows.map((review) => [
             review.objectId,
@@ -158,6 +161,12 @@ function exportReviews(rows: ReviewRecord[], objectById: Map<string, ContentObje
             review.createdAt,
             review.updatedAt,
             review.updatedBy,
+            review.removed ? 'archived' : 'active', review.revisionNumber ?? 0, review.revisionId ?? '', review.persistenceIssue ?? '',
+            freshness.get(review.objectId)?.current?.coverage?.policy ?? 'legacy-unscoped',
+            freshness.get(review.objectId)?.current?.coverage?.configuration.status ?? 'unavailable',
+            freshness.get(review.objectId)?.current?.coverage?.access.status ?? 'unavailable',
+            freshness.get(review.objectId)?.current?.coverage?.outbound.status ?? 'unavailable',
+            freshness.get(review.objectId)?.current?.coverage?.inbound.status ?? 'unavailable',
         ]),
     );
 }
@@ -171,12 +180,14 @@ export function ReviewLibraryPage({
     onSaveReview,
     onDeleteReview,
 }: ReviewLibraryPageProps): React.ReactElement {
+    const workflow = useContext(ReviewWorkflowContext);
     const [query, setQuery] = useState(readQueryParam('query'));
     const [stageFilter, setStageFilter] = useState(readQueryParam('stage') || 'all');
     const [appFilter, setAppFilter] = useState('all');
     const [typeFilter, setTypeFilter] = useState('all');
     const [presenceFilter, setPresenceFilter] = useState('all');
     const [validityFilter, setValidityFilter] = useState(readQueryParam('validity') || 'all');
+    const [libraryFilter, setLibraryFilter] = useState(readQueryParam('library') || 'active');
     const [selectedId, setSelectedId] = useState(readQueryParam('object'));
     const [page, setPage] = useState(0);
     const evidenceNow = useEvidenceClock();
@@ -184,15 +195,18 @@ export function ReviewLibraryPage({
         (snapshot?.objects ?? []).map((contentObject) => [contentObject.objectId, contentObject]),
     ), [snapshot]);
     const freshness = useMemo(() => new Map(reviews.map((review) => [review.objectId,
-        compareReviewEvidence(review, objectById.get(review.objectId), snapshot?.scan, evidenceNow),
-    ])), [reviews, objectById, snapshot?.scan, evidenceNow]);
+        compareReviewEvidence(loadError ? { ...review, persistenceIssue: 'The saved library could not be verified. Refresh before relying on this confirmation.' } : review,
+            objectById.get(review.objectId), snapshot?.scan, evidenceNow),
+    ])), [reviews, objectById, snapshot?.scan, evidenceNow, loadError]);
     const apps = Array.from(new Set(reviews.map((review) => review.app))).sort();
     const objectTypes = Array.from(new Set(reviews.map((review) => review.objectType))).sort();
     const normalizedQuery = query.trim().toLowerCase();
+    const activeReviews = useMemo(() => reviews.filter((review) => !review.removed), [reviews]);
     const filteredReviews = reviews
         .filter((review) => {
             const isPresent = objectById.has(review.objectId);
             return (
+                (libraryFilter === 'all' || (libraryFilter === 'archived' ? review.removed : !review.removed)) &&
                 (stageFilter === 'all' || review.stage === stageFilter) &&
                 (validityFilter === 'all' || freshness.get(review.objectId)?.status === validityFilter) &&
                 (appFilter === 'all' || review.app === appFilter) &&
@@ -227,7 +241,7 @@ export function ReviewLibraryPage({
         ? (objectById.get(selectedReview.objectId) ?? lastObservedObject(selectedReview))
         : null;
     const stageCount = (stage: ReviewRecord['stage']): number =>
-        reviews.filter((review) => review.stage === stage).length;
+        activeReviews.filter((review) => review.stage === stage).length;
     const missingLabel = snapshot ? 'Not present' : 'Unavailable';
 
     if (isLoading && !snapshot) {
@@ -247,6 +261,8 @@ export function ReviewLibraryPage({
                 subtitle="Build a durable, app-local investigation queue without modifying any Splunk knowledge object."
                 actions={
                     <ButtonRow>
+                        {workflow.refresh ? <StyledButton type="button" disabled={isLoading}
+                            onClick={() => workflow.refresh!().catch(() => undefined)}>Refresh library</StyledButton> : null}
                         <StyledButton
                             type="button"
                             onClick={() => exportReviews(filteredReviews, objectById, freshness, Boolean(snapshot))}
@@ -284,9 +300,9 @@ export function ReviewLibraryPage({
 
             <MetricGrid aria-label="Review workflow summary">
                 <SummaryMetric
-                    label="Library records"
-                    value={reviews.length.toLocaleString()}
-                    hint="Persist across live inventory scans"
+                    label="Active library records"
+                    value={activeReviews.length.toLocaleString()}
+                    hint={`${reviews.length - activeReviews.length} archived; decisions and history remain durable`}
                     accent="info"
                 />
                 <SummaryMetric
@@ -328,6 +344,14 @@ export function ReviewLibraryPage({
                 aria-label="Review library filters"
                 onSubmit={(event) => event.preventDefault()}
             >
+                <FilterField>
+                    Library state
+                    <Select value={libraryFilter} onChange={(event) => { setLibraryFilter(event.currentTarget.value); setPage(0); }}>
+                        <option value="active">Active library</option>
+                        <option value="archived">Archived reviews</option>
+                        <option value="all">All saved records</option>
+                    </Select>
+                </FilterField>
                 <FilterField>
                     Search
                     <Input
@@ -425,6 +449,7 @@ export function ReviewLibraryPage({
                         setTypeFilter('all');
                         setPresenceFilter('all');
                         setValidityFilter('all');
+                        setLibraryFilter('active');
                         setPage(0);
                     }}
                 >
@@ -499,6 +524,7 @@ export function ReviewLibraryPage({
                                                 <td>{review.objectType}</td>
                                                 <td>
                                                     <ReviewStageBadge stage={review.stage} />
+                                                    {review.removed ? <div>Archived · decision retained</div> : null}
                                                 </td>
                                                 <td><ReviewFreshnessBadge status={freshness.get(review.objectId)!.status} /></td>
                                                 <td>{review.assignedTo ?? 'Unassigned'}</td>
@@ -527,6 +553,7 @@ export function ReviewLibraryPage({
                             <DetailTitle>{selectedReview.objectName}</DetailTitle>
                             <ButtonRow>
                                 <ReviewStageBadge stage={selectedReview.stage} />
+                                {selectedReview.removed ? <span>Archived · decision retained</span> : null}
                                 <StatusBadge status={selectedObject.healthStatus} />
                             </ButtonRow>
                         </DetailSection>
@@ -615,6 +642,7 @@ export function ReviewLibraryPage({
                         </DetailSection>
                         <DetailSection>
                             <ReviewEditor
+                                key={selectedObject.objectId}
                                 contentObject={selectedObject}
                                 review={selectedReview}
                                 scanId={snapshot?.scan.scanId ?? selectedReview.scanId}

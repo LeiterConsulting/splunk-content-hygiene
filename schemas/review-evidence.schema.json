@@ -16,10 +16,11 @@
       "type": "object",
       "required": ["version", "digest", "fields", "accessDigest"],
       "properties": {
-        "version": { "const": 1 },
+        "version": { "enum": [1, 2] },
         "digest": { "$ref": "#/$defs/hash" },
         "fields": { "type": "array", "items": { "type": "object", "required": ["name", "digest"], "properties": { "name": { "type": "string" }, "digest": { "$ref": "#/$defs/hash" } } } },
-        "accessDigest": { "$ref": "#/$defs/hash" }
+        "accessDigest": { "$ref": "#/$defs/hash" },
+        "accessComplete": { "type": "boolean" }
       }
     },
     "relationship": {
@@ -38,11 +39,33 @@
         "neighborDigest": { "anyOf": [{ "$ref": "#/$defs/hash" }, { "type": "null" }] }
       }
     },
+    "coverageDimension": {
+      "type": "object",
+      "required": ["status", "reasons", "sourceCount", "sourceObjectIds", "digest"],
+      "properties": {
+        "status": { "enum": ["complete", "partial", "unavailable"] },
+        "reasons": { "type": "array", "items": { "type": "string" } },
+        "sourceCount": { "type": "integer", "minimum": 0 },
+        "sourceObjectIds": { "type": "array", "maxItems": 5, "items": { "type": "string" } },
+        "digest": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "required": ["policy", "configuration", "access", "outbound", "inbound"],
+      "properties": {
+        "policy": { "const": "shared-static-v1" },
+        "configuration": { "$ref": "#/$defs/coverageDimension" },
+        "access": { "$ref": "#/$defs/coverageDimension" },
+        "outbound": { "$ref": "#/$defs/coverageDimension" },
+        "inbound": { "$ref": "#/$defs/coverageDimension" }
+      }
+    },
     "evidence": {
       "type": "object",
       "required": ["version", "objectId", "scanId", "observedAt", "configuration", "owner", "sharing", "objectType", "enabled", "scheduled", "protected", "relationshipDigest", "relationshipCount", "relationships", "relationshipsTruncated", "scopeDigest", "coverageComplete", "limitations"],
       "properties": {
-        "version": { "const": 1 },
+        "version": { "enum": [1, 2] },
         "objectId": { "type": "string" },
         "scanId": { "type": "string" },
         "observedAt": { "type": "string", "format": "date-time" },
@@ -59,8 +82,10 @@
         "relationshipsTruncated": { "type": "boolean" },
         "scopeDigest": { "$ref": "#/$defs/hash" },
         "coverageComplete": { "type": "boolean" },
-        "limitations": { "type": "array", "items": { "type": "string" } }
-      }
+        "limitations": { "type": "array", "items": { "type": "string" } },
+        "coverage": { "$ref": "#/$defs/coverage" }
+      },
+      "allOf": [{ "if": { "properties": { "version": { "const": 2 } } }, "then": { "required": ["coverage"] } }]
     }
   }
 }

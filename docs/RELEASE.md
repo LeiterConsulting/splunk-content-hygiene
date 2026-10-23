@@ -29,8 +29,8 @@ sets `COPYFILE_DISABLE=1`, removes `.DS_Store`, AppleDouble `._*`, and
 Inspect the archive before signing off:
 
 ```bash
-tar -tzf app/dist/content_hygiene-0.5.0-beta.tar.gz
-shasum -a 256 app/dist/content_hygiene-0.5.0-beta.tar.gz
+tar -tzf app/dist/content_hygiene-1.0.0.tar.gz
+shasum -a 256 app/dist/content_hygiene-1.0.0.tar.gz
 ```
 
 It must have exactly one top-level `content_hygiene/` directory and must not
@@ -47,6 +47,11 @@ Install the exact inspected archive on a non-production target Splunk version.
 Run a bounded scan, a complete scan, cross-view drill-through, filters, all
 exports, and review save/reload/remove. Confirm that the final verification
 state contains no temporary review records and that no customer object changed.
+For review-protocol changes, exercise concurrent creates/edits, lost responses,
+archive/restore, role permissions, and preservation of legacy decisions. Validate
+the exact final archive in both workspace themes. Public screenshots must contain
+only approved app-owned content; keep lab chrome, reports, hosts, credentials, and
+customer names out of the repository and release assets.
 
 ## Stage the GitHub release
 

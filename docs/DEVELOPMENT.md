@@ -4,6 +4,7 @@
 
 - Node.js 22 or newer
 - Yarn 1.22
+- Python 3.9 or newer for standard-library coordinator tests
 - A supported `tar` command for release packaging
 - Splunk AppInspect for pre-release certification checks
 - A non-production Splunk Enterprise environment for integration testing
@@ -22,7 +23,7 @@ yarn validate
 The validation sequence runs:
 
 1. Reproducible branding verification
-2. Jest component, host/theme, and service tests
+2. Jest component, host/theme, and service tests plus Python coordinator tests
 3. ESLint and Stylelint
 4. TypeScript compilation
 5. Production webpack builds
@@ -54,7 +55,11 @@ directories are intentionally ignored.
 - Add component tests for filters, drill-through, review state, empty states,
   warning states, and exports.
 - Treat incomplete visibility as unknown or partial.
-- Confirm that review writes touch only `ch_reviews`.
+- Confirm that app review writes use the coordinator and insert only into
+  `ch_review_revisions`, leaving legacy `ch_reviews` unchanged.
+- Test the coordinator against a fake store that accepts duplicate keys, and
+  verify real interprocess lock exclusion. KV key uniqueness is not an atomicity
+  guarantee. Live tests must include concurrent creates/edits and role checks.
 - Verify a production package before installing it.
 - Use real Splunk data for integration and browser testing; production code
   must never use a demo-data fallback.

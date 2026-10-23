@@ -168,14 +168,31 @@ Review records retain an object identity snapshot and scan provenance even if
 the object is not visible in the latest scan. Creating a review snapshots the
 current usage coverage, observation count, last-observed time, and usage-run
 identifier. Later note/stage edits retain those original at-review facts.
-Removing a review record
-removes only the app-local workflow entry.
+**Remove from library** archives only the active app-local entry. Select
+**Archived** or **All** in the Library state filter to inspect it and restore the
+preserved decision. Customer content is never archived or removed by this action.
+
+### Concurrent edits and history
+
+Each editor starts from the revision it loaded. If someone saves first, your
+draft is retained and Save is blocked. Select **Compare with latest saved review**,
+read the saved stage/note/assignee alongside your draft, then either use the saved
+values or select **Save reconciled draft**. A later collision repeats this check;
+there is no blind overwrite option. An uncertain network response must be
+reloaded before retrying.
+
+**Show saved revisions** loads revision history on demand. **Load older
+revisions** fetches another page. History exports contain only loaded revisions,
+not an implied full archive. New revision names and timestamps are recorded by
+the authenticated server coordinator; this is application history, not a
+tamper-proof audit. Legacy records are retained
+separately and their first new edit starts journal history.
 
 ### What changed since I reviewed this?
 
 The saved stage is your decision; **Review evidence** is a separate derived status:
 
-- **Current** — a recent comparable scan has complete declared coverage and its
+- **Current** — a recent comparable scan has complete supported shared static coverage and its
   returned configuration, access, and parsed direct relationships match the
   evidence baseline. This is not live verification or permission to remove.
 - **Needs re-review** — a known configuration, access, coverage, relationship,
@@ -189,6 +206,16 @@ Use the Library evidence-status filter or its summary buttons to work through
 these groups. CSV/JSON exports include status, reasons, limits, and scan provenance.
 The change panel offers its own filtered CSV and full evidence JSON exports.
 Tables are paginated; exports include all matching rows, not just the visible page.
+
+The coverage panel separates returned configuration, returned ACL, outbound
+references, and potential inbound references. Read the reason and possible-source
+examples for each partial or unavailable dimension. Open a possible source to
+investigate it; it is not automatically a confirmed dependency. Dynamic names,
+default index scope, unknown runtime commands, private sources, or unmodeled
+external callers can leave a dimension partial. Library/Explorer exports retain
+the policy and coverage details. A supported object can be Current even when an
+unrelated part of the full scan is partial; removal-impact planning still retains
+all of its broader blockers.
 
 New records capture a recent fingerprint when available. Existing reviews are
 never silently migrated to Current. After reviewing the evidence, save any form

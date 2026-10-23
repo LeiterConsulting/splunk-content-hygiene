@@ -5,16 +5,20 @@ import {
     ParsedSource,
     parseDashboard,
     parseSpl,
+    parseDataModel,
 } from './dependencyParser';
+import { PrivateObjectCount, SourceCoverageGap } from './dependencyCoverage';
 
 export { extractSplReferences, extractDashboardReferences } from './dependencyParser';
 export type { ParsedReference } from './dependencyParser';
 
 export interface RawAnalysisSource {
     objectId: string;
-    kind: 'spl' | 'dashboard' | 'lookup';
+    kind: 'spl' | 'dashboard' | 'lookup' | 'data_model';
     text: string;
     sourceLocation: string;
+    failure?: string;
+    failureTargets?: ReferenceTarget[] | 'all';
 }
 export interface AnalysisCompleteness {
     macros: boolean;
@@ -31,6 +35,11 @@ export interface InventoryAnalysis {
     findings: ContentFinding[];
     parserCounts: Record<string, number>;
     parserWarnings: string[];
+    coverageGaps: SourceCoverageGap[];
+}
+export interface AnalysisVisibility {
+    privateObjects: PrivateObjectCount[];
+    privateTargets?: Array<{ collector: string; app: string; name: string }>;
 }
 interface Resolution {
     object: ContentObject | null;
@@ -123,6 +132,11 @@ function resolveReference(
 }
 
 function parseSource(source: RawAnalysisSource): ParsedSource {
+    if (source.failure) {
+        return { references: [], warnings: [source.failure],
+            gaps: [{ targets: source.failureTargets ?? 'all', message: source.failure, sourceLocation: source.sourceLocation }] };
+    }
+    if (source.kind === 'data_model') { return parseDataModel(source.text, source.sourceLocation); }
     if (source.kind === 'lookup') {
         return {
             warnings: [],
@@ -218,6 +232,7 @@ export function analyzeInventory(
     sources: RawAnalysisSource[],
     completeness: AnalysisCompleteness,
     parsedSources?: Map<RawAnalysisSource, ParsedSource>,
+    visibility?: AnalysisVisibility,
 ): InventoryAnalysis {
     const objects = inputObjects.map((contentObject) => ({
         ...contentObject,
@@ -231,6 +246,15 @@ export function analyzeInventory(
     const edgeByKey = new Map<string, DependencyEdge>();
     const assertedMissingBySource = new Map<string, string[]>();
     const dynamicSources = new Set<string>();
+    const coverageGaps: SourceCoverageGap[] = [];
+    const privateNameKey = (collector: string, app: string, name: string, arity = 0): string =>
+        `${collector}\0${app}\0${collector === 'macros' ? `${name.replace(/\(\d+\)$/, '')}::${name.match(/\((\d+)\)$/)?.[1] ?? arity}` : name}`;
+    const privateNames = new Set(visibility?.privateTargets?.map((row) => privateNameKey(row.collector, row.app, row.name)) ?? []);
+    const privateCounts = new Map(visibility?.privateObjects.map((row) => [`${row.collector}\0${row.app}`, row.count]) ?? []);
+    const collectorByTarget: Record<ReferenceTarget, string> = {
+        macro: 'macros', lookup: 'lookup_definitions', lookup_file: 'lookup_files', saved_search: 'saved_searches',
+        data_model: 'data_models', index: 'indexes', sourcetype: 'sourcetypes',
+    };
     const parserCounts: Record<string, number> = {
         spl: 0,
         dashboard: 0,
@@ -239,11 +263,13 @@ export function analyzeInventory(
 
     sources.forEach((source) => {
         const sourceObject = objectById.get(source.objectId);
-        if (!sourceObject || !source.text.trim()) {
+        if (!sourceObject || (!source.text.trim() && !source.failure)) {
             return;
         }
         const parsed = parsedSources?.get(source) ?? parseSource(source);
         const { references } = parsed;
+        const gaps = parsed.gaps ?? parsed.warnings.map((message) => ({ targets: 'all' as const, message, sourceLocation: source.sourceLocation }));
+        coverageGaps.push(...gaps.map((gap) => ({ ...gap, sourceId: source.objectId, app: sourceObject.app })));
         if (parsed.warnings.length) {
             dynamicSources.add(source.objectId);
             sourceObject.analysisWarnings = [
@@ -258,6 +284,12 @@ export function analyzeInventory(
 
         references.forEach((reference) => {
             const resolution = resolveReference(reference, sourceObject, referenceIndex);
+            const targetCollectors = [collectorByTarget[reference.targetType],
+                ...(reference.targetType === 'lookup_file' && reference.relation !== 'uses_file' ? ['lookup_definitions'] : [])];
+            const privatePossible = targetCollectors.some((collector) => visibility?.privateTargets
+                ? privateNames.has(privateNameKey(collector, sourceObject.app, reference.targetName, reference.macroArity))
+                : (privateCounts.get(`${collector}\0${sourceObject.app}`) ?? 0) > 0);
+            if (privatePossible) { resolution.object = null; resolution.ambiguous = true; }
             const targetId =
                 resolution.object?.objectId ??
                 missingTargetId(reference.targetType, sourceObject.app, reference.targetName);
@@ -268,6 +300,13 @@ export function analyzeInventory(
                     reference.relation === 'uses_file' ||
                     completeness.lookup_definitions);
             const canAssertMissing = !resolved && !resolution.ambiguous && coverageComplete;
+            if (resolution.ambiguous) {
+                coverageGaps.push({ sourceId: source.objectId, app: sourceObject.app,
+                    targets: reference.targetType === 'lookup_file' && reference.relation !== 'uses_file'
+                        ? ['lookup_file', 'lookup'] : [reference.targetType],
+                    targetName: reference.targetName, sourceLocation: reference.sourceLocation,
+                    message: 'Namespace visibility or multiple candidates prevent deterministic target resolution.' });
+            }
             let { confidence } = reference;
             if (resolution.ambiguous || (!resolved && !coverageComplete)) {
                 confidence = 'unknown';
@@ -507,6 +546,7 @@ export function analyzeInventory(
         findings,
         parserCounts,
         parserWarnings,
+        coverageGaps,
     };
 }
 
@@ -515,6 +555,7 @@ export async function analyzeInventoryAsync(
     objects: ContentObject[],
     sources: RawAnalysisSource[],
     completeness: AnalysisCompleteness,
+    visibility?: AnalysisVisibility,
 ): Promise<InventoryAnalysis> {
     const parsed = new Map<RawAnalysisSource, ParsedSource>();
     for (let start = 0; start < sources.length; start += 40) {
@@ -527,5 +568,5 @@ export async function analyzeInventoryAsync(
             setTimeout(resolve, 0);
         });
     }
-    return analyzeInventory(objects, sources, completeness, parsed);
+    return analyzeInventory(objects, sources, completeness, parsed, visibility);
 }

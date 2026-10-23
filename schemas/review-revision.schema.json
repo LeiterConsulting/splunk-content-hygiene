@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/splunk-content-hygiene/review-revision.schema.json",
+  "title": "Content Hygiene Immutable Review Revision",
+  "description": "Insert-only application protocol in ch_review_revisions. The standalone POSIX server coordinator serializes parent checks and inserts; KV key uniqueness alone is not assumed atomic. This is not a tamper-proof store against direct KV modification.",
+  "type": "object",
+  "required": ["_key", "version", "object_id", "revision_number", "parent_revision", "origin_digest", "operation", "updated_at", "updated_by", "request_id", "record", "baseline_ref", "history_refs"],
+  "properties": {
+    "_key": { "type": "string", "pattern": "^review-r1-[a-f0-9]{64}$" },
+    "version": { "const": 1 },
+    "object_id": { "type": "string", "minLength": 1 },
+    "revision_number": { "type": "integer", "minimum": 1 },
+    "parent_revision": { "type": ["string", "null"] },
+    "origin_digest": { "anyOf": [{ "type": "string", "pattern": "^legacy-r1-[a-f0-9]{64}$" }, { "type": "null" }] },
+    "operation": { "enum": ["save", "remove"] },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "updated_by": { "type": "string", "minLength": 1 },
+    "request_id": { "type": "string", "minLength": 1 },
+    "record": {
+      "type": "object",
+      "required": ["object_id", "stage", "note", "scan_id", "created_at", "updated_at", "updated_by"],
+      "properties": {
+        "object_id": { "type": "string", "minLength": 1 },
+        "stage": { "$ref": "review.schema.json#/properties/stage" },
+        "note": { "$ref": "review.schema.json#/properties/note" },
+        "assigned_to": { "$ref": "review.schema.json#/properties/assigned_to" },
+        "scan_id": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" },
+        "updated_by": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "baseline_ref": { "anyOf": [{ "$ref": "#/$defs/evidenceReference" }, { "type": "null" }] },
+    "history_refs": { "type": "array", "maxItems": 5, "items": { "$ref": "#/$defs/evidenceReference" } },
+    "origin_record": { "type": "object", "description": "Exact original legacy document, including unrecognized future evidence. Never rewritten by this protocol." },
+    "capture": { "$ref": "review-evidence.schema.json" }
+  },
+  "$defs": {
+    "evidenceReference": {
+      "type": "object", "required": ["revision", "number", "slot"],
+      "properties": {
+        "revision": { "type": "string", "pattern": "^review-r1-[a-f0-9]{64}$" },
+        "number": { "type": "integer", "minimum": 1 },
+        "slot": { "enum": ["capture", "origin", "history"] },
+        "index": { "type": "integer", "minimum": 0 }
+      },
+      "allOf": [{ "if": { "properties": { "slot": { "const": "history" } } }, "then": { "required": ["index"] } }]
+    }
+  },
+  "additionalProperties": true
+}

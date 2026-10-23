@@ -26,10 +26,12 @@ normalization + dependency analysis       coverage + attribution
 ## Runtime boundaries
 
 - Scans are explicit and run in the initiating browser session.
-- The app has no custom backend, custom REST endpoint, or external service.
+- Inventory and usage remain browser-driven. One authenticated app-local Python
+  endpoint coordinates review inserts; there is no external service.
 - Production views read only the latest persisted live snapshot.
 - End-user writes are limited to app-local inventory, usage-evidence, lifecycle,
-  and `ch_reviews` workflow state.
+  and `ch_review_revisions` workflow state. Legacy `ch_reviews` records are read
+  and preserved, not rewritten.
 - Customer knowledge objects are never deleted, disabled, reassigned, or
   rewritten.
 - The packaged Simple XML hosts reference a build-qualified entry script;
@@ -137,6 +139,27 @@ are memoized per snapshot/review set and refresh their time gates once a minute
 or on window focus, not on each filter keystroke. Known changes remain actionable
 even with partial coverage, but partial/old evidence cannot establish Current.
 Normal note/stage edits retain the baseline and original at-review facts.
+
+Coverage is indexed by possible target type, namespace, and optional exact name,
+so an unrelated dynamic index expression does not invalidate every macro. Missing
+source catalogs still propagate uncertainty, private-source identities never enter
+the shared cache, and unmodeled external/dashboard navigation remains partial.
+The supported static scope is explicit rather than a claim of universal visibility.
+
+Review saves use the authenticated `content_hygiene/review_revisions` coordinator,
+which holds a POSIX interprocess file lock, rechecks the parent/legacy origin,
+and inserts into the application journal. KV duplicate-key rejection alone is
+not assumed atomic. The endpoint uses the caller's session, checks the named
+hygiene role and capability, and never accepts a write destination from the
+request. It rejects search-head-cluster and non-POSIX use. New reviewer/time
+metadata comes from authenticated server context and the server clock.
+Compact headers validate sequence continuity; heads and referenced
+captures load in bounded batches. A legacy origin digest detects old-client
+divergence. The UI freezes an editor's base revision while dirty and offers
+explicit comparison/reconciliation after a conflict. Archive/restore appends
+history rather than deleting accepted decisions. Collection-level permissions
+do not protect against direct journal modification outside the coordinator.
+Only standalone POSIX search heads are supported for coordinated review writes.
 
 JSON Schemas in [`schemas/`](../schemas/) document the normalized records.
 

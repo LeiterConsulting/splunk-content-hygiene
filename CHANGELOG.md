@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.0.0 — 2026-10-23
+
+- Split review coverage into returned configuration, returned ACL, declared
+  outbound references, and potential inbound references, with scoped reasons
+  and drill-through to visible possible sources
+- Scoped static uncertainty by app, target type, and known name; retained
+  conservative missing-catalog/private-source gaps without publishing private
+  source identities
+- Expanded data-model parsing to base searches, constraints, inherited query
+  scope, lookup calculations, and eval lookups; verified boolean/subsearch index
+  scope rather than treating every positive index token as a complete guard
+- Versioned locale-independent fingerprints and retained legacy evidence without
+  labeling a normalization upgrade as a definite configuration edit
+- Added a standalone POSIX server coordinator for app-local review inserts,
+  with authenticated role/capability checks, interprocess serialization,
+  server-assigned reviewer/time metadata, and stale-parent rejection
+- Preserved legacy decisions unchanged and added an insert-only revision journal,
+  capture references, explicit draft reconciliation, recoverable archive/restore,
+  paged history, and revision/coverage exports
+- Added fail-closed handling for missing/inconsistent history, changed legacy
+  origins, scan errors, and missing captures; no scan or reaffirmation silently
+  changes a saved decision
+- Updated upgrade, backup, security, troubleshooting, and deployment guidance;
+  customer knowledge objects remain read-only
+
 ## 0.5.0-beta — 2026-10-23
 
 - Added independent Current / Needs re-review / Cannot verify evidence states

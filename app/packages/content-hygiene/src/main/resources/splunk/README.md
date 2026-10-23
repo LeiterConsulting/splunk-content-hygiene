@@ -1,10 +1,10 @@
 # Splunk Content Hygiene
 
-Splunk Content Hygiene is a customer-content read-only beta application for
+Splunk Content Hygiene is a customer-content read-only application for
 inventorying Splunk content, reviewing evidence-backed cleanup candidates,
 tracing dependencies, and identifying ownership gaps.
 
-This beta does not delete, disable, reassign, archive, or rewrite customer
+This app does not delete, disable, reassign, archive, or rewrite customer
 objects. Settings includes an explicit bounded metadata inventory that persists
 normalized records and scan status in application-owned KV Store collections.
 The complete scan paginates supported REST endpoints, extracts explicit SPL and
@@ -15,7 +15,17 @@ native Splunk telemetry. Missing or partial evidence remains unknown; the
 production app does not fall back to sample data.
 
 Review stages, notes, and assignees are persisted only in the app-local
-`ch_reviews` collection. Derived usage evidence is persisted in
+`ch_review_revisions` journal. Legacy `ch_reviews` decisions are preserved unchanged.
+Back up both collections together. Concurrent edits reject a stale successor and
+preserve its draft for comparison. Removing a Library entry archives its app-local
+decision; restore and revision history remain available. This is application
+history, not a tamper-proof audit against privileged direct KV changes.
+Saves use an authenticated server-side coordinator on a standalone POSIX search
+head. The coordinator uses the caller's existing permissions, receives no system
+token, and has only one fixed app-local journal insert destination. SHC and Windows
+coordinated review writes are unsupported in 1.0. KV key uniqueness alone is not
+used as an atomic concurrency guarantee.
+Derived usage evidence is persisted in
 `ch_usage_evidence`; raw SPL and actor lists are not stored. Review records and
 usage scans do not change the referenced Splunk objects.
 
@@ -24,7 +34,9 @@ and Dependency Explorer expose Current, Needs re-review, and Cannot verify
 states, explain observed changes, and export comparison evidence. Existing
 decisions are not rewritten by scans. After upgrading, run a complete scan for
 configuration/relationship fingerprints; explicitly capture or reaffirm review
-evidence after investigating it. Partial coverage cannot establish Current,
+evidence after investigating it. Four object-scoped coverage dimensions explain
+returned configuration/ACL and declared outbound/potential inbound references.
+Partial object coverage cannot establish Current,
 and stale confirmations cannot qualify an object for change planning.
 
 ## Requirements
@@ -49,5 +61,5 @@ and search-head-cluster certification is not complete.
 
 ## Support
 
-Developed by Leiter Consulting. Record beta issues and known limitations in the
+Developed by Leiter Consulting. Record issues and known limitations in the
 project repository.

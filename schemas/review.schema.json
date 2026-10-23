@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.invalid/splunk-content-hygiene/review.schema.json",
   "title": "Content Hygiene Review Record",
-  "description": "A durable, app-local workflow record. It never represents a mutation of the referenced Splunk object.",
+  "description": "Legacy app-local workflow record retained read-only by the application from version 1.0. New edits are immutable review-revision documents; the application hydrates current decisions from that lineage. Never a mutation of the referenced Splunk object.",
   "type": "object",
   "required": [
     "_key",

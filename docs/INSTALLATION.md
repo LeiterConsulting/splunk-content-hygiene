@@ -2,7 +2,7 @@
 
 ## Compatibility
 
-The beta package requires Splunk Enterprise with KV Store.
+The package requires Splunk Enterprise with KV Store.
 The current validation scope is deliberately specific:
 
 | Version | Validation |
@@ -10,6 +10,11 @@ The current validation scope is deliberately specific:
 | 10.2.8 | Installed; all six views, light/dark themes, real-data scan, review workflow, graph/impact, and exports |
 | 10.4.4 | Installed; all six native-navigation views, expanded/collapsed sidebar, home launcher and app-switcher icons, light/dark workspace, real-data graph/impact, app-local review workflow, and exports |
 | 10.0.1 | Earlier beta smoke test, not repeated for this host migration |
+
+Version 1.0 review coordination requires a standalone POSIX search head with
+Splunk's Python 3 runtime. Search-head clusters and Windows coordinated writes
+are unsupported; the endpoint fails closed rather than claiming cross-host
+serialization. Keep all review editors on the matching app version.
 
 This is not certification of every 10.x release, Splunk Cloud, or search-head
 clustering. The workspace now mounts in a standard Simple XML host and keeps
@@ -25,7 +30,7 @@ The app workspace reflows at narrower widths, but classic Splunk's own navigatio
 retains a wider minimum canvas. Narrow viewport checks do not substitute for
 manual browser/text-zoom accessibility acceptance.
 
-Install the beta on a non-production search head first. KV Store must be
+Install on a non-production search head first. KV Store must be
 available.
 
 ## Verify the download
@@ -74,6 +79,25 @@ baseline. Reaffirmation does not make partial evidence complete. The native entr
 script has a build-specific filename, so upgrades do not require refreshing the
 server-wide static cache merely to obtain the matching app JavaScript.
 
+Version 1.0 keeps `ch_reviews` unchanged as the legacy decision source. New edits,
+captures, archives, and restores are inserted into `ch_review_revisions`. There
+is no destructive migration. Both collections are required for recovery. Back
+them up together using your supported Splunk KV Store backup process; a CSV or
+filtered Library export is a report, not a complete journal backup.
+
+After upgrading from 0.5, run a fresh complete scan. Evidence and fingerprint
+policies are versioned; old decisions remain visible, but old unscoped evidence
+cannot silently become Current. Review the four coverage dimensions, save any
+form edits, then explicitly reaffirm. A normalization-policy upgrade is not
+reported as definite proof of a configuration edit.
+
+Close old editing tabs before upgrading. Non-administrator reviewer/operator
+roles can no longer write `ch_reviews`; their new writes use the journal. An old
+administrator client can still change a legacy origin directly. The new app
+detects that divergence and blocks subsequent edits until the records are
+reconciled. Do not downgrade and edit reviews with an older client: it cannot
+understand journal-only decisions. See [Troubleshooting](TROUBLESHOOTING.md).
+
 ## Uninstall
 
 Removing a Splunk app can remove its app-owned KV Store data. Export any review
@@ -91,5 +115,7 @@ objects it inventories.
 - A usage scan persists only derived activity counts, timestamps, source
   coverage, and provenance in app-local KV Store. It does not persist raw SPL
   or actor lists.
-- A test review record can be saved, reloaded, exported, and removed.
-- Removing the review record does not change the referenced Splunk object.
+- A disposable app-owned review can be saved, reloaded, exported, archived,
+  restored, and inspected in revision history.
+- A second editor receives a conflict instead of replacing a newer decision.
+- Archiving the review does not change the referenced Splunk object.

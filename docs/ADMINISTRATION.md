@@ -23,7 +23,7 @@ are excluded from the shared inventory. App/global metadata collected by an
 operator is shared with the hygiene audience, not re-filtered per viewer. Treat
 exports as internal operational data.
 
-Run scans as an administrator during beta evaluation. If a restricted role is
+For initial evaluation, run scans with a suitably authorized operator. If a restricted role is
 used, validate access to every supported REST resource and treat collector
 warnings as a partial inventory—not as proof of absence.
 
@@ -47,8 +47,12 @@ evidence of inactivity.
 - Saved-search execution observations from `_audit`
 - Dashboard-access observations from `splunk_web_access`
 
-No arbitrary filesystem scan, external network request, custom REST handler, or
-subprocess runs in the installed app.
+No arbitrary filesystem scan, external network service, or shell/subprocess
+command runs in the installed app. A narrow Python REST coordinator serializes
+app-local review writes using a runtime lock under
+`$SPLUNK_HOME/var/run/splunk/content_hygiene/`. The Splunk service account must be
+able to create this directory and its lock file. The lock releases when the
+process exits; do not delete it while saves are active.
 
 ## KV Store collections
 
@@ -59,7 +63,9 @@ subprocess runs in the installed app.
 - `ch_usage_evidence`: per-object usage observations, window coverage, and
   provenance
 - `ch_scan_runs`: lifecycle, counts, warnings, and checkpoints
-- `ch_reviews`: durable review workflow state
+- `ch_reviews`: preserved legacy decisions, read-only to the application
+- `ch_review_revisions`: accepted review revisions, evidence captures, and
+  archive/restore history
 - `ch_settings`: scan lock and verified inventory manifest
 - `ch_exemptions`: reserved app-owned configuration state
 
@@ -78,6 +84,41 @@ trusted as baselines and their derived cache is retired after a verified scan.
 Retirement refuses malformed or missing scan identities and can never issue an
 empty deletion filter. KV checkpoints preserve full documents because Splunk's
 update endpoint replaces records rather than applying partial merges.
+
+Review journals are not retired with scan snapshots. The application inserts a
+new deterministic object/sequence key for every accepted edit. The server-side
+coordinator serializes and rechecks saves, admitting only one successor. KV
+duplicate-key rejection alone is not an atomicity guarantee. The app never updates or deletes accepted journal
+documents. Reviewer/operator KV permissions are collection-level and still allow
+direct REST modification outside the app. The journal is not a tamper-proof audit;
+new revision reviewer names/times come from the authenticated server context and
+server clock, and KV `_user` is the shared storage namespace, not the reviewer.
+Restrict direct KV access accordingly. All app editors must use the coordinator;
+direct raw KV modification is outside its conflict-safety contract.
+
+This is application-level serialization, not a database transaction or a
+cross-host lock. A process, transport, or storage failure can leave a save outcome
+uncertain. Writes are not replayed; missing, duplicate, or inconsistent journal
+history blocks subsequent edits. Preserve drafts and both collections for
+administrative recovery rather than deleting conflicting decisions.
+
+The coordinator accepts the `content_hygiene_review` capability or existing
+administrative `admin_all_objects`, verifies the named role, and uses the caller's existing
+collection permissions. It receives no system token and has no customer-content
+write destination. Coordinated saves require a standalone POSIX search head;
+search-head clusters and Windows coordination are not supported in 1.0.
+The app capability is inherited by reviewer/operator roles and explicitly enabled
+for existing `admin`/`sc_admin` roles so administrators can assign the app roles.
+It grants no customer-source capability.
+
+Back up `ch_reviews` and `ch_review_revisions` together. Do not prune individual
+revisions: sequence integrity, preserved legacy origins, and evidence references
+are required to reconstruct current decisions. Revisions retain compact decision
+snapshots; evidence payloads are referenced rather than copied on ordinary edits.
+Library loading validates all compact revision headers, then fetches heads and
+referenced captures in bounded batches. History details load 20 at a time. This
+reduces payload duplication but does not make journal growth free or establish an
+unlimited-scale guarantee.
 
 Usage runs share the same lock and are stored separately from inventory
 snapshots. They retain only aggregate counts and timestamps; raw search strings
@@ -126,5 +167,6 @@ can search `_audit` and `_internal`, then compare the requested window with
 local retention. The app intentionally leaves affected objects unclassified
 rather than converting missing telemetry into “unused.”
 
-**Review updates fail:** verify KV Store health and write access to
-`content_hygiene` collection `ch_reviews`.
+**Review updates fail:** verify KV Store health and the assigned hygiene role's
+write access to `content_hygiene` collection `ch_review_revisions`. Do not enable
+legacy writes as a workaround. See [Troubleshooting](TROUBLESHOOTING.md).

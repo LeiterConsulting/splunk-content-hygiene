@@ -16,6 +16,7 @@ import { HealthStatus } from '../types';
 import { downloadCsv } from '../utils/downloadCsv';
 import { downloadJson } from '../utils/downloadJson';
 import { ResultPagination } from './ResultPagination';
+import { ReviewCoveragePanel } from './ReviewCoveragePanel';
 
 const statusColors: Record<ReviewValidity, HealthStatus> = {
     current: 'active',
@@ -46,6 +47,7 @@ export function ReviewFreshnessPanel({
 }): React.ReactElement {
     const [page, setPage] = useState(0);
     const [filter, setFilter] = useState('all');
+    const [showAllLimits, setShowAllLimits] = useState(false);
     const rows = comparison.relationships.filter((row) => filter === 'all' || row.kind === filter);
     const currentPage = Math.min(page, Math.max(0, Math.ceil(rows.length / 10) - 1));
     return (
@@ -58,6 +60,8 @@ export function ReviewFreshnessPanel({
                 Evidence status is separate from your saved decision. Current means unchanged within
                 supported inventory coverage, not safe to remove or live verification.
             </SmallText>
+            <ReviewCoveragePanel current={comparison.current?.coverage} baseline={comparison.baseline?.evidence.coverage}
+                canDrillTo={canDrillTo} onDrillTo={onDrillTo} />
             <DefinitionList>
                 <dt>Evidence captured</dt>
                 <dd>
@@ -79,10 +83,12 @@ export function ReviewFreshnessPanel({
                 <InlineNotice>
                     <strong>Verification limits</strong>
                     <ul>
-                        {comparison.limitations.map((reason) => (
+                        {(showAllLimits ? comparison.limitations : comparison.limitations.slice(0, 4)).map((reason) => (
                             <li key={reason}>{reason}</li>
                         ))}
                     </ul>
+                    {comparison.limitations.length > 4 ? <StyledButton type="button" aria-expanded={showAllLimits}
+                        onClick={() => setShowAllLimits(!showAllLimits)}>{showAllLimits ? 'Show fewer limits' : `Show all ${comparison.limitations.length} limits`}</StyledButton> : null}
                 </InlineNotice>
             ) : null}
             <SmallText>
@@ -124,6 +130,7 @@ export function ReviewFreshnessPanel({
                                 'Now source',
                                 'Summary',
                                 'Limits',
+                                'Coverage policy', 'Configuration coverage', 'ACL coverage', 'Outbound coverage', 'Inbound coverage',
                             ],
                             (rows.length ? rows : [null]).map((row) => [
                                 objectId,
@@ -142,6 +149,11 @@ export function ReviewFreshnessPanel({
                                 row?.after?.sourceLocation ?? '',
                                 comparison.reasons.join('; '),
                                 comparison.limitations.join('; '),
+                                comparison.current?.coverage?.policy ?? 'legacy-unscoped',
+                                comparison.current?.coverage?.configuration.status ?? 'unavailable',
+                                comparison.current?.coverage?.access.status ?? 'unavailable',
+                                comparison.current?.coverage?.outbound.status ?? 'unavailable',
+                                comparison.current?.coverage?.inbound.status ?? 'unavailable',
                             ]),
                         )
                     }

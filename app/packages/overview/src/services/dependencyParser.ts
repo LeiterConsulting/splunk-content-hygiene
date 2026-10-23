@@ -1,4 +1,5 @@
 import { ConfidenceLevel } from '../types';
+import { hasUnboundedIndexScope } from './indexScope';
 
 export type ReferenceTarget =
     'macro' | 'lookup' | 'lookup_file' | 'saved_search' | 'data_model' | 'index' | 'sourcetype';
@@ -14,6 +15,13 @@ export interface ParsedReference {
 export interface ParsedSource {
     references: ParsedReference[];
     warnings: string[];
+    gaps?: ParserCoverageGap[];
+}
+export interface ParserCoverageGap {
+    targets: ReferenceTarget[] | 'all';
+    message: string;
+    sourceLocation: string;
+    targetName?: string;
 }
 interface Token {
     value: string;
@@ -158,8 +166,13 @@ const commandOptions: Record<string, Set<string>> = {
     ]),
 };
 
-export function parseSpl(sourceText: string, sourceLocation = 'search'): ParsedSource {
+export function parseSpl(sourceText: string, sourceLocation = 'search', assessIndexScope = true): ParsedSource {
     const { tokens, warnings } = tokenize(sourceText);
+    const gaps: ParserCoverageGap[] = warnings.map((message) => ({ targets: 'all', message, sourceLocation }));
+    const warn = (message: string, targets: ReferenceTarget[] | 'all' = 'all'): void => {
+        warnings.push(message);
+        gaps.push({ message, targets, sourceLocation });
+    };
     const references: ParsedReference[] = [];
     const add = (
         token: Token | undefined,
@@ -167,12 +180,13 @@ export function parseSpl(sourceText: string, sourceLocation = 'search'): ParsedS
         relation: string,
         extra: Partial<ParsedReference> = {},
     ): void => {
-        if (!token || !token.value || (!token.quoted && '|[](),'.includes(token.value))) {
-            warnings.push(`Missing ${targetType} reference at ${sourceLocation}`);
+        if (!token || !token.value || (!token.quoted &&
+            ('|[](),'.includes(token.value) || ['AND', 'OR', 'NOT'].includes(token.value.toUpperCase())))) {
+            warn(`Missing ${targetType} reference at ${sourceLocation}`, ['lookup', 'lookup_file'].includes(targetType) ? ['lookup', 'lookup_file'] : [targetType]);
             return;
         }
         if (dynamicName.test(token.value)) {
-            warnings.push(`Dynamic ${targetType} reference at ${sourceLocation}:${token.offset}`);
+            warn(`Dynamic ${targetType} reference at ${sourceLocation}:${token.offset}`, ['lookup', 'lookup_file'].includes(targetType) ? ['lookup', 'lookup_file'] : [targetType]);
             return;
         }
         references.push({
@@ -191,12 +205,17 @@ export function parseSpl(sourceText: string, sourceLocation = 'search'): ParsedS
     let negations = [false];
     let pendingNot = false;
     const consumed = new Set<number>();
+    const resourceArguments = new Set<number>();
     const commandStack: Array<{ command: string; negations: boolean[] }> = [];
     const filterCommands = new Set(['search', 'tstats', 'mstats', 'from']);
     const initialCommands = new Set([...filterCommands, 'lookup', 'inputlookup', 'outputlookup', 'savedsearch', 'datamodel']);
     tokens.forEach((token, index) => {
         if (consumed.has(index)) {
             return;
+        }
+        if (!expectCommand && !token.macro && !resourceArguments.has(index) && /\$[^$]+\$/.test(token.value) &&
+            !/^(?:index|sourcetype|datamodel)=/i.test(token.value)) {
+            warn(`Runtime token in SPL expression at ${sourceLocation}:${token.offset}`);
         }
         if (token.value === '[' && !token.quoted) {
             commandStack.push({ command, negations });
@@ -259,13 +278,13 @@ export function parseSpl(sourceText: string, sourceLocation = 'search'): ParsedS
                 const reason = dynamicName.test(token.value)
                     ? 'Dynamic macro reference'
                     : 'Unsupported macro invocation';
-                warnings.push(`${reason} at ${sourceLocation}:${token.offset}`);
+                warn(`${reason} at ${sourceLocation}:${token.offset}`, ['macro']);
             }
             return;
         }
         if (expectCommand && !token.quoted) {
             if (token.value.includes('$') && !token.value.includes('=')) {
-                warnings.push(`Dynamic SPL command or query at ${sourceLocation}:${token.offset}`);
+                warn(`Dynamic SPL command or query at ${sourceLocation}:${token.offset}`);
             }
             expectCommand = false;
             const name = token.value.toLowerCase();
@@ -273,6 +292,9 @@ export function parseSpl(sourceText: string, sourceLocation = 'search'): ParsedS
             // Only a pipe (or a recognized initial generating command) changes
             // command context; filter parentheses do not become target names.
             command = !token.value.includes('=') && (explicitCommand || initialCommands.has(name)) ? name : 'search';
+            if (['map', 'loadjob', 'script', 'run', 'rest'].includes(command)) {
+                warn(`Runtime or external ${command} command is outside static dependency coverage at ${sourceLocation}:${token.offset}`);
+            }
             if (
                 ['lookup', 'inputlookup', 'outputlookup', 'savedsearch', 'datamodel'].includes(
                     command,
@@ -294,10 +316,13 @@ export function parseSpl(sourceText: string, sourceLocation = 'search'): ParsedS
                     }
                 }
                 if (command === 'savedsearch') {
+                    resourceArguments.add(next);
                     add(tokens[next], 'saved_search', 'invokes');
                 } else if (command === 'datamodel') {
+                    resourceArguments.add(next);
                     add(tokens[next], 'data_model', 'uses');
                 } else {
+                    resourceArguments.add(next);
                     add(
                         tokens[next],
                         /\.csv(?:\.gz)?$/i.test(tokens[next]?.value ?? '')
@@ -313,6 +338,12 @@ export function parseSpl(sourceText: string, sourceLocation = 'search'): ParsedS
         if (token.quoted) {
             return;
         }
+        if (['eval', 'where', 'fieldformat'].includes(command) &&
+            /(?:^|=)lookup$/i.test(token.value) && tokens[index + 1]?.value === '(') {
+            resourceArguments.add(index + 2);
+            add(tokens[index + 2], /\.csv(?:\.gz)?$/i.test(tokens[index + 2]?.value ?? '')
+                ? 'lookup_file' : 'lookup', 'reads');
+        }
         if (command === 'from' && /^datamodel:/i.test(token.value)) {
             add(
                 { ...token, value: token.value.replace(/^datamodel:/i, '').split('.')[0] },
@@ -327,12 +358,13 @@ export function parseSpl(sourceText: string, sourceLocation = 'search'): ParsedS
                 while (next < tokens.length && tokens[next].value !== ')' && !'|[]('.includes(tokens[next].value)) {
                     const member = tokens[next];
                     if (member.value !== ',' && !excluded) {
+                        resourceArguments.add(next);
                         add(type === 'datamodel' ? { ...member, value: member.value.split('.')[0] } : member, type === 'datamodel' ? 'data_model' : (type as ReferenceTarget), type === 'datamodel' ? 'uses' : 'searches');
                     }
                     next += 1;
                 }
                 if (tokens[next]?.value !== ')') {
-                    warnings.push(`Unsupported or unterminated ${type} IN list at ${sourceLocation}:${token.offset}`);
+                    warn(`Unsupported or unterminated ${type} IN list at ${sourceLocation}:${token.offset}`, [type === 'datamodel' ? 'data_model' : type as ReferenceTarget]);
                 } else {
                     for (let item = index + 1; item <= next; item += 1) {consumed.add(item);}
                 }
@@ -345,6 +377,7 @@ export function parseSpl(sourceText: string, sourceLocation = 'search'): ParsedS
             }
             const constraint = token.value.match(/^(index|sourcetype|datamodel)=(.*)$/i);
             if (constraint) {
+                if (!constraint[2]) { resourceArguments.add(index + 1); }
                 const valueToken = constraint[2]
                     ? { ...token, value: constraint[2] }
                     : tokens[index + 1];
@@ -361,6 +394,7 @@ export function parseSpl(sourceText: string, sourceLocation = 'search'): ParsedS
                 tokens[index + 1]?.value === '='
             ) {
                 const type = token.value.toLowerCase();
+                resourceArguments.add(index + 2);
                 add(
                     tokens[index + 2],
                     type === 'datamodel' ? 'data_model' : (type as ReferenceTarget),
@@ -369,20 +403,29 @@ export function parseSpl(sourceText: string, sourceLocation = 'search'): ParsedS
             }
         }
     });
-    return { references, warnings: [...new Set(warnings)] };
+    if (assessIndexScope && hasUnboundedIndexScope(tokens) &&
+        !gaps.some((gap) => gap.targets === 'all' || gap.targets.includes('index'))) {
+        warn(`Implicit/default index scope is not established for every query branch at ${sourceLocation}`, ['index']);
+    }
+    return { references, warnings: [...new Set(warnings)], gaps };
 }
 
 export function parseDashboard(text: string, sourceLocation = 'dashboard'): ParsedSource {
     const references: ParsedReference[] = [];
     const warnings: string[] = [];
+    const gaps: ParserCoverageGap[] = [];
+    const warn = (message: string, path = sourceLocation, targets: ReferenceTarget[] | 'all' = 'all'): void => {
+        warnings.push(message); gaps.push({ message, targets, sourceLocation: path });
+    };
     const search = (query: string, path: string): void => {
         const parsed = parseSpl(query, path);
         references.push(...parsed.references);
         warnings.push(...parsed.warnings);
+        gaps.push(...(parsed.gaps ?? []));
     };
     const savedSearch = (name: string, path: string): void => {
         if (dynamicName.test(name)) {
-            warnings.push(`Dynamic saved-search reference at ${path}`);
+            warn(`Dynamic saved-search reference at ${path}`, path, ['saved_search']);
             return;
         }
         references.push({
@@ -398,7 +441,7 @@ export function parseDashboard(text: string, sourceLocation = 'dashboard'): Pars
         try {
             const walk = (value: unknown, path: string, depth: number): void => {
                 if (depth > 32) {
-                    warnings.push(`Dashboard nesting limit at ${path}`);
+                    warn(`Dashboard nesting limit at ${path}`, path);
                     return;
                 }
                 if (!value || typeof value !== 'object') {
@@ -410,6 +453,10 @@ export function parseDashboard(text: string, sourceLocation = 'dashboard'): Pars
                 }
                 const record = value as Record<string, unknown>;
                 const options = record.options as Record<string, unknown> | undefined;
+                if (String(record.type).startsWith('ds.') &&
+                    !['ds.search', 'ds.chain', 'ds.savedSearch'].includes(String(record.type))) {
+                    warn(`Unsupported Studio data-source type at ${path}`, path);
+                }
                 if (
                     String(record.type).toLowerCase().includes('savedsearch') &&
                     typeof options?.ref === 'string'
@@ -422,29 +469,33 @@ export function parseDashboard(text: string, sourceLocation = 'dashboard'): Pars
                 ) {
                     search(options.query, `${path}.options.query`);
                 }
+                if (String(record.type) === 'ds.search' && typeof options?.query !== 'string') {
+                    warn(`Studio search query is unavailable at ${path}`, path);
+                }
                 Object.entries(record).forEach(([key, child]) =>
                     walk(child, `${path}.${key}`, depth + 1),
                 );
             };
             walk(JSON.parse(text), sourceLocation, 0);
         } catch {
-            warnings.push('Dashboard JSON could not be parsed; dependencies are incomplete');
+            warn('Dashboard JSON could not be parsed; dependencies are incomplete');
         }
     } else if (typeof DOMParser !== 'undefined') {
         const document = new DOMParser().parseFromString(text, 'text/xml');
         if (document.querySelector('parsererror')) {
-            warnings.push('Dashboard XML could not be parsed; dependencies are incomplete');
+            warn('Dashboard XML could not be parsed; dependencies are incomplete');
         } else if (!['dashboard', 'form'].includes(document.documentElement.tagName)) {
-            warnings.push('Custom view format is not a supported dashboard parser');
+            warn('Custom view format is not a supported dashboard parser');
         } else {
             if (document.documentElement.getAttribute('version') === '2') {
                 const definition = document.querySelector('definition')?.textContent?.trim() ?? '';
                 if (!definition.startsWith('{')) {
-                    warnings.push('Dashboard Studio definition is missing or is not JSON');
+                    warn('Dashboard Studio definition is missing or is not JSON');
                 } else {
                     const studio = parseDashboard(definition, `${sourceLocation}.definition`);
                     references.push(...studio.references);
                     warnings.push(...studio.warnings);
+                    gaps.push(...(studio.gaps ?? []));
                 }
             }
             [...document.querySelectorAll('search[ref]')].forEach((element, index) =>
@@ -461,9 +512,84 @@ export function parseDashboard(text: string, sourceLocation = 'dashboard'): Pars
             );
         }
     } else {
-        warnings.push('XML parser unavailable; dashboard dependencies are incomplete');
+        warn('XML parser unavailable; dashboard dependencies are incomplete');
     }
-    return { references, warnings: [...new Set(warnings)] };
+    return { references, warnings: [...new Set(warnings)], gaps };
+}
+
+/** Parse authoritative model constraints/calculations, not regenerated preview searches. */
+export function parseDataModel(text: string, sourceLocation = 'description'): ParsedSource {
+    const references: ParsedReference[] = [];
+    const warnings: string[] = [];
+    const gaps: ParserCoverageGap[] = [];
+    const warn = (message: string, path: string, targets: ReferenceTarget[] | 'all' = 'all'): void => {
+        warnings.push(message); gaps.push({ message, targets, sourceLocation: path });
+    };
+    const search = (query: unknown, path: string): void => {
+        if (typeof query !== 'string') { warn(`Data-model search is unavailable at ${path}`, path); return; }
+        const parsed = parseSpl(query, path, false);
+        references.push(...parsed.references); warnings.push(...parsed.warnings); gaps.push(...(parsed.gaps ?? []));
+    };
+    try {
+        const definition = JSON.parse(text);
+        if (!definition || !Array.isArray(definition.objects)) {
+            throw new Error('Unsupported definition');
+        }
+        const byName = new Map<string, Record<string, unknown>>(definition.objects
+            .filter((item: Record<string, unknown>) => typeof item?.objectName === 'string')
+            .map((item: Record<string, unknown>) => [item.objectName, item]));
+        const effective = new Map<Record<string, unknown>, string>();
+        const queryFor = (object: Record<string, unknown>, seen = new Set<Record<string, unknown>>()): string => {
+            if (effective.has(object)) { return effective.get(object)!; }
+            if (seen.has(object) || seen.size > 32) { throw new Error('Model inheritance cycle or depth limit'); }
+            if (typeof object.objectSearchNoFields === 'string' && object.objectSearchNoFields.trim()) {
+                effective.set(object, object.objectSearchNoFields); return object.objectSearchNoFields;
+            }
+            const own = Array.isArray(object.constraints) ? object.constraints
+                .filter((item) => typeof item?.search === 'string').map((item) => `(${item.search})`).join(' AND ') : '';
+            const parent = byName.get(String(object.parentName));
+            let base = '';
+            if (typeof object.baseSearch === 'string' && object.baseSearch.trim()) { base = object.baseSearch; }
+            else if (parent) { base = queryFor(parent, new Set([...seen, object])); }
+            if (!base && object.parentName && !['BaseEvent', 'BaseSearch'].includes(String(object.parentName))) {
+                throw new Error('Unknown model source');
+            }
+            const query = base ? `${base}${own ? ` | search ${own}` : ''}` : own || '*';
+            effective.set(object, query); return query;
+        };
+        definition.objects.forEach((object: Record<string, unknown>, index: number) => {
+            const path = `${sourceLocation}.objects[${index}]`;
+            if (!object || typeof object !== 'object') { warn(`Invalid data-model dataset at ${path}`, path); return; }
+            try {
+                const scoped = parseSpl(queryFor(object), `${path}.effectiveSearch`);
+                warnings.push(...scoped.warnings); gaps.push(...(scoped.gaps ?? []));
+            } catch { warn(`Data-model inherited source scope could not be established at ${path}`, path); }
+            if (object.baseSearch !== undefined) { search(object.baseSearch, `${path}.baseSearch`); }
+            if (!Array.isArray(object.constraints)) { warn(`Data-model constraints are unavailable at ${path}`, path); }
+            else { object.constraints.forEach((item, constraint) => search(item?.search, `${path}.constraints[${constraint}].search`)); }
+            if (!Array.isArray(object.calculations)) { warn(`Data-model calculations are unavailable at ${path}`, path); }
+            else { object.calculations.forEach((item, calculation) => {
+                const location = `${path}.calculations[${calculation}]`;
+                if (item?.calculationType === 'Lookup') {
+                    const name = item.lookupName;
+                    if (typeof name !== 'string' || !name || dynamicName.test(name)) {
+                        warn(`Dynamic or missing data-model lookup at ${location}`, location, ['lookup', 'lookup_file']);
+                    } else {
+                        references.push({ targetType: /\.csv(?:\.gz)?$/i.test(name) ? 'lookup_file' : 'lookup',
+                            targetName: name, relation: 'reads', confidence: 'high',
+                            evidence: `Data-model calculation explicitly names lookup ${name}`, sourceLocation: `${location}.lookupName` });
+                    }
+                } else if (item?.calculationType === 'Eval') {
+                    search(typeof item.expression === 'string' ? `| eval __hygiene_expression=${item.expression}` : undefined, `${location}.expression`);
+                } else if (!['Rex', 'GeoIP'].includes(item?.calculationType)) {
+                    warn(`Unsupported data-model calculation at ${location}`, location);
+                }
+            }); }
+        });
+    } catch {
+        warn('Data-model JSON could not be parsed; dependencies are incomplete', sourceLocation);
+    }
+    return { references, warnings: [...new Set(warnings)], gaps };
 }
 
 export const extractSplReferences = (text: string, path?: string): ParsedReference[] =>

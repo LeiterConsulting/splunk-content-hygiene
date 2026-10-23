@@ -1,6 +1,6 @@
 {
   "name": "splunk-content-hygiene",
-  "version": "0.5.0-beta",
+  "version": "1.0.0",
   "license": "MIT",
   "private": true,
   "scripts": {
@@ -14,7 +14,8 @@
     "package:verify": "node scripts/verify-package.mjs",
     "release:prepare": "yarn validate && node scripts/checksum.mjs",
     "setup": "yarn && yarn build",
-    "test": "yarn workspace @splunk/overview run test && yarn workspace @splunk/content-hygiene run test",
+    "test:server": "python3 -B -m unittest discover -s tests -p 'test_*.py'",
+    "test": "yarn workspace @splunk/overview run test && yarn workspace @splunk/content-hygiene run test && yarn test:server",
     "validate": "yarn branding:verify && yarn test && yarn lint && yarn package && yarn package:verify",
     "start": "yarn workspace @splunk/content-hygiene run start"
   },

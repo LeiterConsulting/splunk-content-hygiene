@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useState } from 'react';
 import {
     ButtonRow,
     DefinitionList,
@@ -15,6 +15,8 @@ import { reviewStageOptions } from '../services/reviews';
 import { evidenceWindowFresh } from '../services/usage';
 import { ContentObject, ReviewInput, ReviewRecord, ReviewStage } from '../types';
 import { ReviewStageBadge } from './ReviewStageBadge';
+import { ReviewWorkflowContext } from './ReviewWorkflowContext';
+import { ReviewHistoryPanel } from './ReviewHistoryPanel';
 
 interface ReviewEditorProps {
     contentObject: ContentObject;
@@ -22,7 +24,7 @@ interface ReviewEditorProps {
     scanId: string;
     canWrite: boolean;
     onSave: (input: ReviewInput) => Promise<ReviewRecord>;
-    onDelete: (objectId: string) => Promise<void>;
+    onDelete: (objectId: string, expectedRevisionId?: string | null) => Promise<void>;
 }
 
 const dateFormatter = new Intl.DateTimeFormat('en-US', {
@@ -35,24 +37,38 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
 
 export function ReviewEditor({
     contentObject,
-    review,
+    review: suppliedReview,
     scanId,
     canWrite,
     onSave,
     onDelete,
 }: ReviewEditorProps): React.ReactElement {
+    const workflow = useContext(ReviewWorkflowContext);
+    const storedReview = workflow.states.get(contentObject.objectId) ?? suppliedReview;
+    const [review, setBaseReview] = useState(storedReview);
     const [stage, setStage] = useState<ReviewStage>(review?.stage ?? 'triage');
     const [note, setNote] = useState(review?.note ?? '');
     const [assignedTo, setAssignedTo] = useState(review?.assignedTo ?? '');
     const [isSaving, setIsSaving] = useState(false);
     const [message, setMessage] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
-
+    const [needsReload, setNeedsReload] = useState(false);
+    const [reconciling, setReconciling] = useState(false);
+    const [compared, setCompared] = useState(false);
+    const applySaved = useCallback((latest: ReviewRecord | null) => {
+        setBaseReview(latest); setStage(latest?.stage ?? 'triage'); setNote(latest?.note ?? '');
+        setAssignedTo(latest?.assignedTo ?? ''); setNeedsReload(false);
+    }, []);
+    const hasUnsavedChanges = stage !== (review?.stage ?? 'triage') || note !== (review?.note ?? '') ||
+        assignedTo !== (review?.assignedTo ?? '');
     useEffect(() => {
-        setStage(review?.stage ?? 'triage');
-        setNote(review?.note ?? '');
-        setAssignedTo(review?.assignedTo ?? '');
-    }, [contentObject.objectId, review?.stage, review?.note, review?.assignedTo]);
+        const newer = storedReview && (!review ||
+            (storedReview.revisionNumber ?? 0) > (review.revisionNumber ?? 0) ||
+            (storedReview.revisionNumber === 0 && review.revisionNumber === 0 && storedReview.revisionId !== review.revisionId));
+        if (!isSaving && !hasUnsavedChanges && newer) {
+            applySaved(storedReview);
+        }
+    }, [storedReview, review, isSaving, hasUnsavedChanges, applySaved]);
 
     useEffect(() => {
         setMessage(null);
@@ -61,8 +77,7 @@ export function ReviewEditor({
 
     const canCapture = contentObject.reviewEvidence?.scanId === scanId &&
         evidenceWindowFresh(contentObject.reviewEvidence.observedAt);
-    const hasUnsavedChanges = Boolean(review && (stage !== review.stage || note !== review.note ||
-        assignedTo !== (review.assignedTo ?? '')));
+    const writable = canWrite && !review?.persistenceIssue && !needsReload;
     const handleSave = async (captureEvidence = false): Promise<void> => {
         setIsSaving(true);
         setMessage(null);
@@ -76,12 +91,16 @@ export function ReviewEditor({
                 scanId,
                 captureEvidence: captureEvidence || (!review && canCapture),
                 expectedUpdatedAt: review?.updatedAt ?? null,
+                expectedRevisionId: review?.revisionId ?? null,
             });
             setStage(saved.stage);
             setNote(saved.note);
             setAssignedTo(saved.assignedTo ?? '');
+            setBaseReview(saved); setNeedsReload(false); setReconciling(false); setCompared(false);
             setMessage(captureEvidence ? 'Evidence baseline captured. The saved decision is unchanged; coverage limits still apply.' : 'Review record saved to the app-local library.');
         } catch (saveError) {
+            setNeedsReload(saveError instanceof Error &&
+                (saveError.name === 'ReviewConflictError' || saveError.message.includes('could not be confirmed')));
             setError(
                 saveError instanceof Error
                     ? saveError.message
@@ -97,14 +116,13 @@ export function ReviewEditor({
         setMessage(null);
         setError(null);
         try {
-            await onDelete(contentObject.objectId);
-            setStage('triage');
-            setNote('');
-            setAssignedTo('');
+            await onDelete(contentObject.objectId, review?.revisionId ?? null);
+            applySaved(workflow.reload ? await workflow.reload(contentObject.objectId) : null);
             setMessage(
-                'Removed from the app-local review library. The Splunk object was not changed.',
+                'Removed from the active app-local review library. Saved decisions and revisions are retained; the Splunk object was not changed.',
             );
         } catch (deleteError) {
+            setNeedsReload(deleteError instanceof Error && deleteError.name === 'ReviewConflictError');
             setError(
                 deleteError instanceof Error
                     ? deleteError.message
@@ -114,9 +132,25 @@ export function ReviewEditor({
             setIsSaving(false);
         }
     };
+    const reload = async (keepDraft: boolean): Promise<void> => {
+        if (!workflow.reload) { return; }
+        setIsSaving(true); setError(null); setMessage(null);
+        try {
+            const latest = await workflow.reload(contentObject.objectId);
+            if (keepDraft) { setBaseReview(latest); setNeedsReload(false); setReconciling(true); }
+            else { applySaved(latest); setReconciling(false); }
+            setCompared(keepDraft);
+            setMessage(keepDraft ? 'Latest saved revision loaded for comparison. Your draft is retained. Reconcile the values below before saving.' : 'Saved values loaded. No decision was changed.');
+        } catch (failure) { setError(failure instanceof Error ? failure.message : 'Unable to reload the saved review.'); }
+        finally { setIsSaving(false); }
+    };
     let saveLabel = 'Add to review library';
     if (isSaving) {
         saveLabel = 'Saving…';
+    } else if (reconciling) {
+        saveLabel = 'Save reconciled draft';
+    } else if (review?.removed) {
+        saveLabel = 'Restore to review library';
     } else if (review) {
         saveLabel = 'Update review record';
     }
@@ -128,17 +162,29 @@ export function ReviewEditor({
                     <dt>Current stage</dt>
                     <dd>
                         <ReviewStageBadge stage={review.stage} />
+                        {review.removed ? ' · Archived; decision retained' : ''}
                     </dd>
                     <dt>Last updated</dt>
                     <dd>
-                        {dateFormatter.format(new Date(review.updatedAt))} by {review.updatedBy}
+                        {Number.isNaN(Date.parse(review.updatedAt)) ? 'Unknown time' : dateFormatter.format(new Date(review.updatedAt))} by {review.updatedBy}
                     </dd>
                     <dt>Source scan</dt>
                     <dd>{review.scanId}</dd>
+                    <dt>Saved revision</dt>
+                    <dd>{review.revisionNumber ?? 0}{review.revisionNumber === 0 ? ' · preserved legacy record' : ''}</dd>
                 </DefinitionList>
             ) : (
                 <SmallText>This object is not yet in the review library.</SmallText>
             )}
+            {review?.persistenceIssue ? <InlineNotice role="alert">{review.persistenceIssue}</InlineNotice> : null}
+            {needsReload ? <InlineNotice role="alert">Your draft has not been discarded. Compare with the latest saved revision before retrying. No automatic merge or overwrite was performed.</InlineNotice> : null}
+            {compared ? <InlineNotice>
+                <strong>Latest saved values — compare with your draft</strong>
+                <DefinitionList><dt>State</dt><dd>{review?.removed ? 'Archived' : 'Active'}</dd>
+                    <dt>Stage</dt><dd>{review?.stage.replace(/_/g, ' ') ?? 'Not in library'}</dd>
+                    <dt>Assigned reviewer</dt><dd>{review?.assignedTo ?? 'Unassigned'}</dd>
+                    <dt>Saved note</dt><dd>{review?.note || 'No note'}</dd></DefinitionList>
+            </InlineNotice> : null}
 
             <WorkflowForm
                 onSubmit={(event) => {
@@ -150,7 +196,7 @@ export function ReviewEditor({
                     Confirmation stage
                     <Select
                         value={stage}
-                        disabled={!canWrite || isSaving}
+                        disabled={!canWrite || isSaving || Boolean(review?.persistenceIssue)}
                         onChange={(event) => setStage(event.currentTarget.value as ReviewStage)}
                     >
                         {reviewStageOptions.map((option) => (
@@ -165,7 +211,7 @@ export function ReviewEditor({
                     <Input
                         value={assignedTo}
                         maxLength={256}
-                        disabled={!canWrite || isSaving}
+                        disabled={!canWrite || isSaving || Boolean(review?.persistenceIssue)}
                         placeholder="Splunk user or team"
                         onChange={(event) => setAssignedTo(event.currentTarget.value)}
                     />
@@ -175,7 +221,7 @@ export function ReviewEditor({
                     <TextArea
                         value={note}
                         maxLength={4000}
-                        disabled={!canWrite || isSaving}
+                        disabled={!canWrite || isSaving || Boolean(review?.persistenceIssue)}
                         onChange={(event) => setNote(event.currentTarget.value)}
                     />
                 </FilterField>
@@ -193,32 +239,37 @@ export function ReviewEditor({
                         : 'A new record captures the current evidence baseline when a recent fingerprint is available. Incomplete coverage remains unverified.'}
                 </SmallText>
                 <ButtonRow>
-                    <StyledButton type="submit" $primary disabled={!canWrite || isSaving}>
+                    <StyledButton type="submit" $primary disabled={!writable || isSaving}>
                         {saveLabel}
                     </StyledButton>
-                    {review ? (
+                    {review && !review.removed ? (
                         <StyledButton
                             type="button"
-                            disabled={!canWrite || isSaving || !canCapture || hasUnsavedChanges}
+                            disabled={!writable || isSaving || !canCapture || hasUnsavedChanges}
                             onClick={() => handleSave(true).catch(() => undefined)}
                         >
                             {review.evidenceBaseline ? 'Reaffirm review evidence' : 'Capture review evidence'}
                         </StyledButton>
                     ) : null}
-                    {review ? (
+                    {review && !review.removed ? (
                         <StyledButton
                             type="button"
-                            disabled={!canWrite || isSaving}
+                            disabled={!writable || isSaving}
                             onClick={() => handleDelete().catch(() => undefined)}
                         >
                             Remove library record
                         </StyledButton>
                     ) : null}
+                    {workflow.reload ? <>
+                        <StyledButton type="button" disabled={isSaving} onClick={() => reload(true).catch(() => undefined)}>Compare with latest saved review</StyledButton>
+                        {(compared || needsReload) ? <StyledButton type="button" disabled={isSaving} onClick={() => reload(false).catch(() => undefined)}>Use saved values</StyledButton> : null}
+                    </> : null}
                 </ButtonRow>
             </WorkflowForm>
             {(message || error) && (
                 <InlineNotice role={error ? 'alert' : 'status'}>{error ?? message}</InlineNotice>
             )}
+            <ReviewHistoryPanel objectId={contentObject.objectId} />
         </>
     );
 }

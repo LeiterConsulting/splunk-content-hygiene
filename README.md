@@ -9,7 +9,7 @@ inventorying knowledge objects, exploring dependencies, finding ownership and
 repair concerns, and managing a review workflow before any separate cleanup
 process begins.
 
-The beta is deliberately safe:
+The app keeps customer content read-only:
 
 - It reads real Splunk data and never falls back to a demonstration dataset.
 - It does not delete, disable, reassign, or rewrite customer content.
@@ -28,7 +28,8 @@ The beta is deliberately safe:
   remediation guidance, and relationship/impact export
 - A persistent Review Library with triage, investigation, owner-confirmation,
   eligibility, retain, and blocked stages, with independent review-evidence
-  validity, change explanations, explicit reaffirmation, and evidence exports
+  validity, scoped coverage, change explanations, explicit reaffirmation,
+  conflict-safe saves, recoverable archiving, revision history, and evidence exports
 - Ownership reporting and cross-view navigation
 - Bounded and complete live scans with progress, warnings, collector counts, and
   scan-report export
@@ -41,9 +42,9 @@ macros, lookup definitions and files, data models, indexes, sourcetypes, and
 users visible to the initiating Splunk user. Private objects are excluded from
 the shared cache; access is restricted to explicit hygiene roles.
 
-## Install the beta
+## Install
 
-1. Download the beta archive and `SHA256SUMS` from the
+1. Download the release archive and `SHA256SUMS` from the
    corresponding GitHub release.
 2. Verify the SHA-256 digest.
 3. In Splunk Web, open **Apps > Manage Apps > Install app from file** and upload
@@ -52,7 +53,7 @@ the shared cache; access is restricted to explicit hygiene roles.
 5. Run a bounded scan first, then a complete scan when the permission and
    connectivity check succeeds.
 
-The hardening beta has real-data browser validation on Splunk Enterprise
+The app has real-data browser validation on Splunk Enterprise
 10.2.8 and 10.4.4, including modern navigation, native launcher icons, and both
 workspace themes. Broader 10.x,
 search-head-cluster, and Splunk Cloud certification is not complete. See
@@ -73,6 +74,31 @@ search-head-cluster, and Splunk Cloud certification is not complete. See
    **Changes since review**. Investigate changes, then explicitly reaffirm the
    evidence; scans never overwrite your decision.
 
+Coverage separates returned configuration, returned ACL, declared outbound
+references, and potential inbound references. **Current** means the supported
+shared static scope matches a recent reviewed baseline—not that no hidden,
+private, dynamic, or external consumer exists. Removal-impact planning retains
+its wider, conservative blockers.
+
+Concurrent saves cannot silently replace one another. A conflicting editor keeps
+its draft and offers comparison with the latest saved revision. Archiving removes
+only the active Library entry; its decision and revision history remain available.
+
+## Screenshots
+
+These captures show live Content Hygiene application metadata, with customer
+content and lab navigation excluded. Complete coverage can still need re-review
+when returned configuration changes; explicit reaffirmation follows investigation.
+
+![Light mode review coverage after an observed configuration change](docs/images/review-coverage-light.jpg)
+
+![Dark mode review coverage after explicit reaffirmation](docs/images/review-coverage-dark.jpg)
+
+The directional map groups the app's real dashboard and lookup consumers by
+type, with on-demand expansion and a full evidence table alongside the map.
+
+![Grouped dependency neighborhood for Content Hygiene itself](docs/images/dependency-neighborhood-dark.jpg)
+
 “Confirmed eligible” is an investigation conclusion, not an action. Removal or
 remediation remains outside this app.
 
@@ -81,6 +107,7 @@ remediation remains outside this app.
 - [User guide](docs/USER_GUIDE.md)
 - [Installation](docs/INSTALLATION.md)
 - [Administration](docs/ADMINISTRATION.md)
+- [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Architecture and data flow](docs/ARCHITECTURE.md)
 - [Branding and native navigation](docs/BRANDING.md)
 - [Data model](docs/DATA_MODEL.md)
@@ -100,7 +127,7 @@ yarn validate
 ```
 
 The verified installable archive is written to
-`app/dist/content_hygiene-0.5.0-beta.tar.gz`. Run `yarn release:prepare` to
+`app/dist/content_hygiene-1.0.0.tar.gz`. Run `yarn release:prepare` to
 perform the complete validation and update `SHA256SUMS`.
 
 ## Current limitations
@@ -114,6 +141,12 @@ perform the complete validation and update `SHA256SUMS`.
   are reported rather than treated as inactivity.
 - Dynamic SPL and token references are disclosed but not resolved as broken.
 - Inline dashboard panels are analyzed through their parent dashboard.
+- Review history is application history, not a tamper-proof audit. Authorized
+  direct KV access can alter it. App saves use a server-side coordinator;
+  coordinated writes require a standalone POSIX search head, not SHC or Windows.
+- Journal history grows with accepted edits. Library loading reads compact
+  revision headers and the required decision/evidence documents; history details
+  load in pages. Plan KV capacity and backups for your review volume.
 
 ## License
 

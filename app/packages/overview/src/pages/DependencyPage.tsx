@@ -67,7 +67,7 @@ interface DependencyPageProps {
     reviews: ReviewRecord[];
     canWriteReviews: boolean;
     onSaveReview: (input: ReviewInput) => Promise<ReviewRecord>;
-    onDeleteReview: (objectId: string) => Promise<void>;
+    onDeleteReview: (objectId: string, expectedRevisionId?: string | null) => Promise<void>;
 }
 
 interface RelatedNode {
@@ -921,6 +921,7 @@ export function DependencyPage({
                                 </DetailSection>
                                 <DetailSection>
                                     <ReviewEditor
+                                        key={detail.objectId}
                                         contentObject={detail}
                                         review={detailReview}
                                         scanId={snapshot?.scan.scanId ?? ''}

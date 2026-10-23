@@ -35,6 +35,7 @@ async function removeMacMetadata(directory) {
             if (
                 entry.name === '.DS_Store' ||
                 entry.name === '__MACOSX' ||
+                entry.name === '__pycache__' || entry.name.endsWith('.pyc') ||
                 entry.name.startsWith('._')
             ) {
                 await rm(entryPath, { recursive: true, force: true });

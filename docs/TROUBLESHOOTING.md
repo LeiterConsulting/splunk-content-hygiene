@@ -1,0 +1,92 @@
+# Troubleshooting
+
+Use the displayed scan, coverage, and review messages before changing permissions
+or data. This app never needs customer-content write access to investigate an
+object. Preserve existing decisions and take a supported KV backup before any
+administrative repair.
+
+## No inventory or incomplete scans
+
+Run a bounded scan from **Settings & Scan Status**, inspect the collector warning,
+and check the initiating user's existing REST capabilities. Then run a complete
+scan. Keep its browser tab open. A complete collector is capped at 10,000 visible
+records; a cap or failed page is disclosed, not interpreted as object absence.
+An established baseline can remain visible after an incomplete check; the banner
+identifies retained evidence. An abandoned app-local scan lock expires after
+30 minutes. Do not clear a lock while its browser is still collecting.
+
+## Cannot verify or Needs re-review
+
+These are evidence states, not lost decisions. Inspect **Changes since review**
+and all four coverage dimensions. An absent object means no longer observed,
+not proven deleted. Legacy or differently normalized evidence requires a fresh
+complete scan and explicit reaffirmation after review. Save stage/note/assignee
+edits first; reaffirmation cannot change them at the same time. Reaffirming partial
+coverage does not make it complete. Evidence older than seven days, scan errors,
+and missing history cannot establish Current.
+
+If a dynamic reference is shown as a possible source, inspect the actual source
+and namespace. It is not an asserted dependency. Private-source details remain
+excluded. A Current static review never proves absence of hidden or external use
+and does not bypass removal-impact readiness checks.
+
+## A save conflicts
+
+Keep the tab open: the unsaved draft is retained. Select **Compare with latest
+saved review**, compare all three editable fields, and choose the saved values
+or **Save reconciled draft**. The reconciled save still checks the latest revision.
+If the response was uncertain, reload the saved review before retrying. The app
+does not automatically replay writes or offer an unconditional overwrite.
+
+## Review storage or permissions fail
+
+Check KV Store health and the installed app version. Reviewers and operators need
+the named hygiene role and write permission to `ch_review_revisions`; viewers must
+not be granted that write permission. Legacy `ch_reviews` stays read-only to the
+app. Inspect `metadata/local.meta` for overrides through normal administrative
+change control. Do not restore legacy writes as a workaround.
+
+If the coordinator is unavailable, verify the installed Python handler,
+`restmap.conf`/`web.conf`, the `content_hygiene_review` capability, and write
+permission for the Splunk service account under
+`$SPLUNK_HOME/var/run/splunk/content_hygiene/`. Use a standalone POSIX search head;
+clustered and Windows coordinated writes are unsupported in 1.0. A busy save
+returns a retry message after a bounded lock wait. Reload before retrying; do
+not bypass the coordinator or delete an active lock file.
+
+If the message reports a missing/inconsistent revision or evidence reference,
+stop editing and preserve both collections. Restore a consistent supported KV
+backup with your Splunk administrator. Deleting a bad row or rebuilding the scan
+cannot repair journal continuity safely.
+
+If an original legacy decision changed outside the journal, export/preserve both
+versions and involve the decision owners. The app blocks writes because it cannot
+choose which decision is authoritative. There is no automatic reconciliation or
+safe blind overwrite. Close older editing tabs and resolve the origin/journal
+through a backed-up, reviewed administrative recovery procedure.
+
+## An archived review seems missing
+
+Select **Archived** or **All** in Review Library. Restore the retained decision
+from its editor. **Show saved revisions** exposes accepted changes; history exports
+include only pages already loaded. A Library report is not a backup. Back up
+`ch_reviews` and `ch_review_revisions` together and do not prune individual revisions.
+
+## Usage does not establish inactivity
+
+Verify existing search access to `_audit` and `_internal`, retention, requested
+window, row caps, and the source warnings. Zero observations from partial,
+unavailable, historical, or expired telemetry never mean unused. Usage evidence
+cannot authorize cleanup.
+
+## Theme or native icon issues
+
+Use Splunk's native appearance preference and reload the app. The workspace
+follows the signed-in user's light/dark preference. See [Branding](BRANDING.md)
+for native launcher placements and asset-cache diagnosis. Do not change global
+template, security, or cache settings merely to repair a workspace issue.
+
+When reporting an issue, include app/Splunk versions, browser, view, theme,
+sanitized steps, and the relevant warning. Do not publish tokens, hosts, raw
+customer definitions, review notes, or unredacted screenshots. See
+[Support](../SUPPORT.md) and [Security](../SECURITY.md).

@@ -39,6 +39,8 @@ const forbiddenSegments = [
     '/local/',
     '/tests/',
     '/coverage/',
+    '/__pycache__/',
+    '.pyc',
     '/demoData',
     '.map',
 ];
@@ -61,6 +63,9 @@ const requiredEntries = [
     'content_hygiene/LICENSE',
     'content_hygiene/THIRD_PARTY_NOTICES.txt',
     'content_hygiene/default/app.conf',
+    'content_hygiene/default/restmap.conf',
+    'content_hygiene/default/web.conf',
+    'content_hygiene/bin/content_hygiene_reviews.py',
     `content_hygiene/appserver/static/pages/${hostScript}`,
     'content_hygiene/appserver/static/content-hygiene-host.css',
 ];

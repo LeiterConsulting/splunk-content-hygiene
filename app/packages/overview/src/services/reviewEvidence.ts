@@ -1,9 +1,9 @@
-import { sha256 } from '@noble/hashes/sha2.js';
-import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils.js';
+import { evidenceDigest } from './evidenceDigest';
 import {
     ConfigurationFingerprint,
     ContentObject,
     DependencyEdge,
+    EvidenceCoverageDimension,
     ObjectReviewEvidence,
     ReviewEvidenceBaseline,
     ReviewRecord,
@@ -12,6 +12,9 @@ import {
 } from '../types';
 import { buildDependencyIndex, DependencyIndex } from './dependencyGraph';
 import { evidenceWindowFresh, usageValidity } from './usage';
+import { buildCoverageResolver, CoverageContext } from './dependencyCoverage';
+
+export { evidenceDigest } from './evidenceDigest';
 
 // Full adjacency is hashed, but only this many rows travel with each durable review.
 export const REVIEW_RELATIONSHIP_LIMIT = 200;
@@ -37,24 +40,6 @@ export const reviewValidityLabels: Record<ReviewValidity, string> = {
     cannot_verify: 'Cannot verify',
     unreviewed: 'Not reviewed',
 };
-
-function canonical(value: unknown): unknown {
-    if (Array.isArray(value)) {
-        return value.map(canonical);
-    }
-    if (value && typeof value === 'object') {
-        return Object.fromEntries(
-            Object.entries(value)
-                .sort(([a], [b]) => a.localeCompare(b))
-                .map(([key, item]) => [key, canonical(item)]),
-        );
-    }
-    return value;
-}
-
-export function evidenceDigest(value: unknown): string {
-    return bytesToHex(sha256(utf8ToBytes(JSON.stringify(canonical(value)))));
-}
 
 const operationalFields = new Set([
     'next_scheduled_time',
@@ -136,7 +121,7 @@ export function configurationFingerprint(
         return typeof value === 'string' ? value.split(',').sort() : [];
     };
     return {
-        version: 1,
+        version: 2,
         digest: evidenceDigest(fields),
         fields,
         accessDigest: evidenceDigest({
@@ -146,6 +131,10 @@ export function configurationFingerprint(
             read: roles(perms.read),
             write: roles(perms.write),
         }),
+        accessComplete: typeof acl.app === 'string' && typeof acl.owner === 'string' &&
+            ['app', 'global', 'user', 'system'].includes(String(acl.sharing)) &&
+            (Array.isArray(perms.read) || typeof perms.read === 'string') &&
+            (Array.isArray(perms.write) || typeof perms.write === 'string'),
     };
 }
 
@@ -158,6 +147,7 @@ export interface ReviewEvidenceScope {
     collectionComplete: boolean;
     analysisComplete: boolean;
     collectors: Record<string, boolean>;
+    coverageContext?: CoverageContext;
 }
 
 function relationshipEvidence(
@@ -192,6 +182,8 @@ function objectEvidence(
     index: DependencyIndex,
     scope: ReviewEvidenceScope,
     scopeDigest: string,
+    resolveCoverage: ReturnType<typeof buildCoverageResolver>,
+    appNames: Set<string>,
 ): ObjectReviewEvidence | undefined {
     if (!object.configurationFingerprint) {
         return undefined;
@@ -208,16 +200,22 @@ function objectEvidence(
             }),
         ).values(),
     ].sort((a, b) => a.key.localeCompare(b.key));
+    const coverage = resolveCoverage(object, adjacent, appNames.has(object.app));
+    const labels = { configuration: 'Configuration', access: 'Access', outbound: 'Outbound', inbound: 'Inbound' };
     const limitations = [
-        ...(!scope.collectionComplete ? ['Collector visibility is incomplete or bounded.'] : []),
-        ...(!scope.analysisComplete ? ['Dependency parsing has declared coverage gaps.'] : []),
-        ...(object.analysisWarnings ?? []),
+        ...(scope.mode !== 'full' ? ['Only a complete-scan mode can establish review validity.'] : []),
+        ...Object.entries(coverage).flatMap(([key, value]) => key === 'policy' ? [] :
+            (value as EvidenceCoverageDimension).reasons.map((message) => `${labels[key as keyof typeof labels]}: ${message}`)),
         ...(relationships.some((row) => !row.resolved || !row.neighborDigest)
             ? ['One or more adjacent objects are unresolved or lack configuration fingerprints.']
             : []),
+        ...(adjacent.some((edge) => {
+            const id = edge.sourceId === object.objectId ? edge.targetId : edge.sourceId;
+            return edge.resolved && index.objects.get(id)?.configurationFingerprint?.accessComplete !== true;
+        }) ? ['One or more adjacent objects lack complete returned ACL evidence.'] : []),
     ];
     return {
-        version: 1,
+        version: 2,
         objectId: object.objectId,
         scanId: scope.scanId,
         observedAt: scope.observedAt,
@@ -232,9 +230,11 @@ function objectEvidence(
         relationshipCount: relationships.length,
         relationships: relationships.slice(0, REVIEW_RELATIONSHIP_LIMIT),
         relationshipsTruncated: relationships.length > REVIEW_RELATIONSHIP_LIMIT,
-        scopeDigest,
+        scopeDigest: evidenceDigest([scopeDigest, coverage.policy,
+            coverage.configuration.digest, coverage.access.digest, coverage.outbound.digest, coverage.inbound.digest]),
         coverageComplete: limitations.length === 0,
         limitations,
+        coverage,
     };
 }
 
@@ -244,13 +244,15 @@ export async function attachReviewEvidence(
     scope: ReviewEvidenceScope,
 ): Promise<ContentObject[]> {
     const index = buildDependencyIndex(objects, edges);
+    const appNames = new Set(objects.filter((object) => object.objectType === 'App').map((object) => object.app));
+    const resolveCoverage = buildCoverageResolver(scope.coverageContext ?? {
+        gaps: [], privateObjects: [], collectors: scope.collectors, identityKnown: false,
+    });
     const scopeDigest = evidenceDigest({
         principal: scope.principal,
         roles: [...scope.roles].sort(),
         mode: scope.mode,
-        collectionComplete: scope.collectionComplete,
-        analysisComplete: scope.analysisComplete,
-        collectors: scope.collectors,
+        policy: 'shared-static-v1',
     });
     const result: ContentObject[] = [];
     /* eslint-disable no-await-in-loop -- Yield between chunks to keep scan progress and cancellation responsive. */
@@ -258,7 +260,7 @@ export async function attachReviewEvidence(
         result.push(
             ...objects.slice(start, start + 200).map((object) => ({
                 ...object,
-                reviewEvidence: objectEvidence(object, index, scope, scopeDigest),
+                reviewEvidence: objectEvidence(object, index, scope, scopeDigest, resolveCoverage, appNames),
             })),
         );
         if (start + 200 < objects.length) {
@@ -279,7 +281,7 @@ function supportedEvidence(value: unknown): value is ObjectReviewEvidence {
     const hash = (digest: unknown): boolean =>
         typeof digest === 'string' && /^[a-f\d]{64}$/.test(digest);
     return (
-        item.version === 1 &&
+        [1, 2].includes(item.version) &&
         typeof item.objectId === 'string' &&
         typeof item.objectType === 'string' &&
         typeof item.protected === 'boolean' &&
@@ -289,7 +291,7 @@ function supportedEvidence(value: unknown): value is ObjectReviewEvidence {
         (item.scheduled === null || typeof item.scheduled === 'boolean') &&
         typeof item.scanId === 'string' &&
         typeof item.observedAt === 'string' &&
-        item.configuration?.version === 1 &&
+        [1, 2].includes(item.configuration?.version) &&
         hash(item.configuration.digest) &&
         hash(item.configuration.accessDigest) &&
         Array.isArray(item.configuration.fields) &&
@@ -318,7 +320,17 @@ function supportedEvidence(value: unknown): value is ObjectReviewEvidence {
                 (row.sourceLocation === null || typeof row.sourceLocation === 'string') &&
                 hash(row.evidenceDigest) &&
                 (row.neighborDigest === null || hash(row.neighborDigest)),
-        )
+        ) &&
+        (item.version === 1 || (item.coverage?.policy === 'shared-static-v1' &&
+            [item.coverage.configuration, item.coverage.access, item.coverage.outbound, item.coverage.inbound].every((area) =>
+                area && ['complete', 'partial', 'unavailable'].includes(area.status) &&
+                Array.isArray(area.reasons) && area.reasons.every((message) => typeof message === 'string') &&
+                Number.isSafeInteger(area.sourceCount) && area.sourceCount >= 0 &&
+                Array.isArray(area.sourceObjectIds) && area.sourceObjectIds.length <= 5 &&
+                area.sourceObjectIds.every((id) => typeof id === 'string') && hash(area.digest)) &&
+            (!item.coverageComplete || (item.limitations.length === 0 &&
+                [item.coverage.configuration, item.coverage.access, item.coverage.outbound, item.coverage.inbound]
+                    .every((area) => area.status === 'complete')))))
     );
 }
 
@@ -356,6 +368,12 @@ export function compareReviewEvidence(
         result.reasons.push('No saved review decision to compare.');
         return result;
     }
+    if (review.removed) {
+        result.status = 'unreviewed'; result.reasons.push('This review is archived; its decision and history are retained but it is not an active confirmation.'); return result;
+    }
+    if (review.persistenceIssue) {
+        result.limitations.push(review.persistenceIssue);
+    }
     if (!scan) {
         result.reasons.push('Current inventory is unavailable or still loading. Object absence cannot be determined.');
         return result;
@@ -380,6 +398,9 @@ export function compareReviewEvidence(
         return result;
     }
     const before = baseline.evidence;
+    if (before.version !== 2 || current.version !== 2) {
+        result.limitations.push('Legacy evidence predates object-scoped coverage. Run a complete scan and explicitly reaffirm after reviewing the new coverage; the saved decision is preserved.');
+    }
     const currentUsageValidity = usageValidity(object, scan.scanId, now);
     if (baseline.usageAtCapture) {
         if (
@@ -416,7 +437,11 @@ export function compareReviewEvidence(
             'Attributable usage is now observed or occurred after the evidence baseline was captured.',
         );
     }
-    if (before.configuration.digest !== current.configuration.digest) {
+    const comparableConfiguration = before.configuration.version === current.configuration.version;
+    if (!comparableConfiguration) {
+        result.limitations.push('Configuration fingerprint normalization changed. Old hashes are retained but are not direct proof of a configuration edit; explicitly reaffirm after reviewing current evidence.');
+    }
+    if (comparableConfiguration && before.configuration.digest !== current.configuration.digest) {
         const oldFields = new Map(before.configuration.fields.map((field) => [field.name, field.digest]));
         const newFields = new Map(current.configuration.fields.map((field) => [field.name, field.digest]));
         const keys = [...new Set([...oldFields.keys(), ...newFields.keys()])]
@@ -426,7 +451,7 @@ export function compareReviewEvidence(
         );
     }
     if (
-        before.configuration.accessDigest !== current.configuration.accessDigest ||
+        (comparableConfiguration && before.configuration.accessDigest !== current.configuration.accessDigest) ||
         before.owner !== current.owner ||
         before.sharing !== current.sharing
     ) {
@@ -443,11 +468,11 @@ export function compareReviewEvidence(
         result.reasons.push('Object type, enabled/scheduled state, or protection changed.');
     }
     if (before.scopeDigest !== current.scopeDigest) {
-        result.reasons.push('Collector scope, scanning identity/roles, or coverage changed.');
+        result.reasons.push('Object-scoped coverage policy, scanning identity/roles, or relevant uncertainty changed.');
     }
     if (before.relationshipDigest !== current.relationshipDigest) {
         result.reasons.push(
-            `Relationships or adjacent-object configuration changed (${before.relationshipCount} → ${current.relationshipCount} captured relationships).`,
+            `${comparableConfiguration ? 'Relationships or adjacent-object configuration changed' : 'Relationship fingerprints differ across normalization policies; membership observations may also differ'} (${before.relationshipCount} → ${current.relationshipCount} captured relationships).`,
         );
         const oldRows = new Map(before.relationships.map((row) => [row.key, row]));
         const newRows = new Map(current.relationships.map((row) => [row.key, row]));
@@ -455,7 +480,8 @@ export function compareReviewEvidence(
             const old = oldRows.get(after.key);
             if (!old) {
                 result.relationships.push({ kind: 'new', before: null, after });
-            } else if (evidenceDigest(old) !== evidenceDigest(after)) {
+            } else if (evidenceDigest({ ...old, neighborDigest: comparableConfiguration ? old.neighborDigest : null }) !==
+                evidenceDigest({ ...after, neighborDigest: comparableConfiguration ? after.neighborDigest : null })) {
                 result.relationships.push({ kind: 'changed', before: old, after });
             }
         });
@@ -482,6 +508,9 @@ export function compareReviewEvidence(
             'The latest check did not replace the retained inventory baseline.',
         );
     }
+    if (scan.errors.length) {
+        result.limitations.push('The current inventory check reported errors. Resolve them and run a complete scan before treating this review as Current.');
+    }
     if (
         !evidenceWindowFresh(scan.completedAt ?? scan.startedAt, now) ||
         !evidenceWindowFresh(current.observedAt, now)
@@ -493,8 +522,9 @@ export function compareReviewEvidence(
     const complete =
         before.coverageComplete &&
         current.coverageComplete &&
-        scan.analysisStatus === 'complete' &&
-        scan.status === 'succeeded' &&
+        before.version === 2 && current.version === 2 &&
+        ['complete', 'partial'].includes(scan.analysisStatus) &&
+        ['succeeded', 'partial'].includes(scan.status) && scan.scanType === 'full' &&
         result.limitations.length === 0;
     result.status = complete ? 'current' : 'cannot_verify';
     if (result.reasons.length) {

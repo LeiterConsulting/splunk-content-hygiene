@@ -10,12 +10,20 @@ import {
     ReviewRecord,
     ReviewStage,
     UsageCoverage,
+    ReviewHistoryPage,
 } from '../types';
-import { stableRecordKey } from './inventory';
 import { parseReviewBaseline } from './reviewEvidence';
+import {
+    canonicalReviewId, legacyRevisionId, prepareRevision, hydrateReview,
+    RawReview, ReviewRevision, ReviewRevisionHeader, selectRevisionHeads, validateRevision,
+    validateHeader,
+} from './reviewLedger';
+
+export { canonicalReviewId } from './reviewLedger';
 
 const APP_ID = 'content_hygiene';
 const COLLECTION = 'ch_reviews';
+const REVISIONS = 'ch_review_revisions';
 const PAGE_SIZE = 1000;
 
 type JsonRecord = Record<string, unknown>;
@@ -106,8 +114,8 @@ function usageCoverageValue(value: unknown): UsageCoverage | null {
     return value === 'complete' || value === 'partial' || value === 'unavailable' ? value : null;
 }
 
-function collectionUrl(suffix = ''): string {
-    return createRESTURL(`storage/collections/data/${COLLECTION}${suffix}`, {
+function collectionUrl(suffix = '', collection = COLLECTION): string {
+    return createRESTURL(`storage/collections/data/${collection}${suffix}`, {
         owner: 'nobody',
         app: APP_ID,
     });
@@ -120,10 +128,6 @@ function withQuery(url: string, query: Record<string, string | number>): string 
 }
 
 const requestJson = splunkRequest;
-
-export function canonicalReviewId(objectId: string): string {
-    return objectId.replace(/^(?:report|alert)::/, 'saved_search::');
-}
 
 function isReviewStage(value: string): value is ReviewStage {
     return reviewStages.has(value as ReviewStage);
@@ -159,11 +163,8 @@ export function reviewRecordFromKv(record: KvReviewRecord): ReviewRecord {
         evidenceHistory: Array.isArray(record.evidence_history)
             ? record.evidence_history.map(parseReviewBaseline)
                 .filter((item): item is NonNullable<typeof item> => item !== null) : [],
+        ...(!isReviewStage(stage) ? { persistenceIssue: `Stored stage "${stage}" is unsupported. The original record is preserved; its decision must not be interpreted or overwritten.` } : {}),
     };
-}
-
-function recordKey(objectId: string): string {
-    return stableRecordKey(objectId, 'review');
 }
 
 async function getReviewRecord(objectId: string): Promise<KvReviewRecord | null> {
@@ -189,124 +190,228 @@ async function getReviewRecord(objectId: string): Promise<KvReviewRecord | null>
     return records[0] ?? null;
 }
 
-async function listReviews(): Promise<ReviewRecord[]> {
-    const records: KvReviewRecord[] = [];
-    let skip = 0;
+export class ReviewConflictError extends Error {
+    constructor(message = 'Another session changed this review. Your draft is preserved. Reload the saved review and reconcile before saving again.') {
+        super(message);
+        this.name = 'ReviewConflictError';
+    }
+}
 
-    /* eslint-disable no-await-in-loop -- KV review records are paged to support large libraries without unbounded requests. */
+const HEADER_FIELDS = '_key,version,object_id,revision_number,parent_revision,origin_digest,operation,updated_at,updated_by';
+
+async function queryAll<T>(collection: string, query: JsonRecord = {}, fields?: string): Promise<T[]> {
+    const rows: T[] = [];
+    let after = '';
+    /* eslint-disable no-await-in-loop -- Keyset pages are stable when another reviewer appends a revision. */
     while (true) {
-        const page = await requestJson<KvReviewRecord[]>(
-            withQuery(collectionUrl(), {
-                sort: 'updated_at:-1',
-                limit: PAGE_SIZE,
-                skip,
-            }),
-        );
-        records.push(...page);
-        if (page.length < PAGE_SIZE) {
-            break;
-        }
-        skip += page.length;
+        const selection = after ? { $and: [query, { _key: { $gt: after } }] } : query;
+        const page = await requestJson<Array<T & { _key: string }>>(withQuery(collectionUrl('', collection), {
+            query: JSON.stringify(selection), sort: '_key:1', limit: PAGE_SIZE,
+            ...(fields ? { fields } : {}),
+        }));
+        rows.push(...page);
+        if (page.length < PAGE_SIZE) { break; }
+        const next = page[page.length - 1]._key;
+        if (!next || next <= after) { throw new Error('Review pagination did not advance safely.'); }
+        after = next;
     }
     /* eslint-enable no-await-in-loop */
+    return rows;
+}
 
-    const grouped = new Map<string, ReviewRecord[]>();
-    records
-        .map(reviewRecordFromKv)
-        .forEach((record) =>
-            grouped.set(record.objectId, [...(grouped.get(record.objectId) ?? []), record]),
-        );
-    return [...grouped.values()].map((matches) =>
-        matches.length === 1
-            ? matches[0]
-            : {
-                  ...matches[0],
-                  stage: 'blocked' as const,
-                  note: 'Multiple legacy reviews match this identity; reconcile the original records before changing the decision.',
-              },
-    );
+async function loadDocuments(keys: string[], cache = new Map<string, ReviewRevision>()): Promise<Map<string, ReviewRevision>> {
+    const missing = [...new Set(keys)].filter((key) => !cache.has(key));
+    // Bounded URLs and concurrency avoid one request per review or an oversized
+    // GET query. Historical evidence is fetched once per shared revision.
+    for (let start = 0; start < missing.length; start += 200) {
+        const groups = Array.from({ length: Math.ceil(Math.min(200, missing.length - start) / 50) },
+            (_, index) => missing.slice(start + index * 50, start + (index + 1) * 50));
+        // eslint-disable-next-line no-await-in-loop
+        const pages = await Promise.all(groups.map((group) => requestJson<ReviewRevision[]>(
+            withQuery(collectionUrl('', REVISIONS), { query: JSON.stringify({ _key: { $in: group } }), limit: group.length }),
+        )));
+        pages.flat().forEach((row) => { validateRevision(row); cache.set(row._key, row); });
+    }
+    if (keys.some((key) => !cache.has(key))) { throw new Error('A saved review revision is unavailable. Restore review storage before changing decisions.'); }
+    return cache;
+}
+
+interface ReviewState {
+    review: ReviewRecord | null;
+    raw: RawReview | null;
+    legacy: KvReviewRecord | null;
+    head: ReviewRevision | null;
+    documents: Map<string, ReviewRevision>;
+}
+
+function projectedState(legacy: KvReviewRecord | null, head: ReviewRevision | null,
+    documents: Map<string, ReviewRevision>): ReviewState {
+    const raw = head ? hydrateReview(head, documents) : legacy;
+    const review = raw ? reviewRecordFromKv(raw as KvReviewRecord) : null;
+    if (review) {
+        review.revisionId = head?._key ?? legacyRevisionId(legacy!);
+        review.revisionNumber = head?.revision_number ?? 0;
+        review.removed = head?.operation === 'remove';
+        if (head && head.origin_digest !== (legacy ? legacyRevisionId(legacy) : null)) {
+            review.persistenceIssue = 'The original legacy review was changed outside this revision history. Both versions are retained; an administrator must reconcile the app-local records before further edits.';
+        }
+    }
+    return { review, raw, legacy, head, documents };
+}
+
+async function hydrateHeads(heads: Map<string, ReviewRevisionHeader>): Promise<Map<string, ReviewRevision>> {
+    const documents = await loadDocuments([...heads.values()].map((row) => row._key));
+    const refs = [...documents.values()].flatMap((row) => [row.baseline_ref, ...row.history_refs])
+        .filter((ref): ref is NonNullable<typeof ref> => ref !== null).map((ref) => ref.revision);
+    return loadDocuments(refs, documents);
+}
+
+async function loadState(objectId: string): Promise<ReviewState> {
+    const id = canonicalReviewId(objectId);
+    const [legacy, headers] = await Promise.all([
+        getReviewRecord(id), queryAll<ReviewRevisionHeader>(REVISIONS, { object_id: id }, HEADER_FIELDS),
+    ]);
+    const heads = selectRevisionHeads(headers);
+    const documents = await hydrateHeads(heads);
+    const header = heads.get(id);
+    return projectedState(legacy, header ? documents.get(header._key)! : null, documents);
+}
+
+async function listReviews(): Promise<ReviewRecord[]> {
+    const [legacyRows, headers] = await Promise.all([
+        queryAll<KvReviewRecord>(COLLECTION), queryAll<ReviewRevisionHeader>(REVISIONS, {}, HEADER_FIELDS),
+    ]);
+    const grouped = new Map<string, KvReviewRecord[]>();
+    legacyRows.forEach((row) => {
+        const id = canonicalReviewId(row.object_id);
+        grouped.set(id, [...(grouped.get(id) ?? []), row]);
+    });
+    const heads = selectRevisionHeads(headers);
+    const documents = await hydrateHeads(heads);
+    const ids = [...new Set([...grouped.keys(), ...heads.keys()])];
+    return ids.map((id) => {
+        const originals = grouped.get(id) ?? [];
+        const header = heads.get(id);
+        const state = projectedState(originals[0] ?? null,
+            header ? documents.get(header._key)! : null, documents);
+        const review = state.review!;
+        if (originals.length > 1) {
+            review.persistenceIssue = 'Multiple legacy reviews match this identity. Original decisions are preserved; reconcile the app-local duplicates before editing.';
+        }
+        return review;
+    }).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+function checkExpected(state: ReviewState, expected: string | null | undefined): void {
+    if (expected === undefined) {
+        throw new ReviewConflictError('This editor has no revision identity. Reload the upgraded app before changing a review.');
+    }
+    if (state.review?.persistenceIssue) { throw new ReviewConflictError(state.review.persistenceIssue); }
+    if ((state.review?.revisionId ?? null) !== expected) { throw new ReviewConflictError(); }
+}
+
+async function insertRevision(revision: ReviewRevision): Promise<ReviewRevision> {
+    validateRevision(revision);
+    let writeError: unknown;
+    try {
+        // The standalone server coordinator serializes and rechecks the parent.
+        // KV duplicate-key rejection alone is not an atomic concurrency guarantee.
+        await requestJson<unknown>(createRESTURL('content_hygiene/review_revisions', {
+            owner: 'nobody', app: APP_ID,
+        }), {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(revision),
+        }, [200, 201]);
+    } catch (error) { writeError = error; }
+    let stored: ReviewRevision;
+    try {
+        stored = await requestJson<ReviewRevision>(collectionUrl(`/${encodeURIComponent(revision._key)}`, REVISIONS));
+    } catch {
+        if (writeError instanceof ReviewRequestError && writeError.status === 409) { throw new ReviewConflictError(); }
+        if (writeError instanceof ReviewRequestError && [400, 401, 403, 404].includes(writeError.status)) {
+            throw new Error(`Review revision was rejected (HTTP ${writeError.status}). Verify the hygiene role, installed review coordinator, revision collection and KV permissions. No decision was replaced.`);
+        }
+        throw new Error('The save could not be confirmed. Your draft is preserved. Reload the saved review before retrying; no write was automatically replayed.');
+    }
+    validateRevision(stored);
+    if (stored.request_id !== revision.request_id) { throw new ReviewConflictError(); }
+    return stored;
+}
+
+function requestIdentity(): string {
+    return [...globalThis.crypto.getRandomValues(new Uint32Array(4))].map((part) => part.toString(16)).join('-');
 }
 
 async function upsertReview(input: ReviewInput): Promise<ReviewRecord> {
-    const now = new Date().toISOString();
-    const existing = await getReviewRecord(input.object.objectId);
-    if (input.expectedUpdatedAt !== undefined &&
-        (existing?.updated_at ?? null) !== input.expectedUpdatedAt) {
-        throw new Error('This review changed in another session. Reload the library before saving so its decision and evidence are not overwritten.');
+    const state = await loadState(input.object.objectId);
+    checkExpected(state, input.expectedRevisionId);
+    if (input.expectedUpdatedAt !== undefined && (state.review?.updatedAt ?? null) !== input.expectedUpdatedAt) {
+        throw new ReviewConflictError();
     }
-    if (input.captureEvidence && (!input.evidence ||
-        input.evidence.objectId !== canonicalReviewId(input.object.objectId) ||
-        input.evidence.scanId !== input.scanId)) {
+    if (input.captureEvidence && (!input.evidence || input.evidence.objectId !== canonicalReviewId(input.object.objectId) ||
+        input.evidence.scanId !== input.scanId || !parseReviewBaseline({ capturedAt: new Date().toISOString(),
+            capturedBy: username || 'unknown', evidence: input.evidence }))) {
         throw new Error('A current inventory fingerprint is required to capture review evidence. Run a complete scan first.');
     }
-    const prior = parseReviewBaseline(existing?.evidence_baseline);
-    const priorHistory = Array.isArray(existing?.evidence_history)
-        ? existing.evidence_history.map(parseReviewBaseline)
-            .filter((item): item is NonNullable<typeof item> => item !== null) : [];
-    const history = input.captureEvidence && prior ? [...priorHistory, prior] : priorHistory;
-    // Retain the first capture plus the four most recent prior captures.
-    const retainedHistory = history.length > 5 ? [history[0], ...history.slice(-4)] : history;
-    const record: KvReviewRecord = {
-        _key: existing?._key ?? recordKey(canonicalReviewId(input.object.objectId)),
-        object_id: canonicalReviewId(input.object.objectId),
+    if (input.captureEvidence && state.review && (input.stage !== state.review.stage ||
+        input.note.trim() !== state.review.note.trim() || (input.assignedTo?.trim() || null) !== state.review.assignedTo)) {
+        throw new Error('Save decision, note or assignee edits first. Explicit reaffirmation never changes those values at the same time.');
+    }
+    const now = new Date().toISOString();
+    const existing = state.raw;
+    const record: RawReview = {
+        ...(existing ?? {}), object_id: canonicalReviewId(input.object.objectId),
         object_name: existing?.object_name ?? input.object.name,
         canonical_name: existing?.canonical_name ?? input.object.canonicalName,
         object_type: existing?.object_type ?? input.object.objectType,
         app: existing?.app ?? input.object.app,
         owner: existing ? existing.owner : input.object.owner,
-        health_status_at_review: existing?.health_status_at_review ?? input.object.healthStatus,
+        health_status_at_review: existing ? existing.health_status_at_review ?? 'unknown' : input.object.healthStatus,
         usage_coverage_at_review: existing ? existing.usage_coverage_at_review : input.object.usageEvidence?.coverage ?? null,
         usage_last_observed_at_review: existing ? existing.usage_last_observed_at_review : input.object.usageEvidence?.lastObserved ?? null,
         usage_observation_count_at_review: existing ? existing.usage_observation_count_at_review : input.object.usageEvidence?.observationCount ?? null,
         usage_run_id_at_review: existing ? existing.usage_run_id_at_review : input.object.usageEvidence?.usageRunId ?? null,
-        stage: input.stage,
-        note: input.note.trim().slice(0, 4000),
-        assigned_to: input.assignedTo?.trim().slice(0, 256) || null,
-        scan_id: existing?.scan_id ?? input.scanId,
-        created_at: existing?.created_at ?? now,
-        updated_at: now,
-        updated_by: username || 'unknown',
-        evidence_baseline: input.captureEvidence
-            ? { capturedAt: now, capturedBy: username || 'unknown', evidence: input.evidence,
-                usageAtCapture: input.object.usageEvidence }
-            : existing?.evidence_baseline ?? null,
-        evidence_history: input.captureEvidence ? retainedHistory : existing?.evidence_history ?? [],
+        stage: input.stage, note: input.note.trim().slice(0, 4000), assigned_to: input.assignedTo?.trim().slice(0, 256) || null,
+        scan_id: existing ? existing.scan_id ?? '' : input.scanId, created_at: existing?.created_at ?? now,
+        updated_at: now, updated_by: username || 'unknown',
     };
-    const suffix = existing ? `/${encodeURIComponent(existing._key)}` : '';
-    const updateFields: JsonRecord = {};
-    Object.keys(record).forEach((key) => {
-        if (key !== '_key') {
-            updateFields[key] = record[key];
-        }
+    const revision = prepareRevision({ objectId: input.object.objectId, previous: state.head,
+        legacy: state.legacy, record, now, actor: username || 'unknown', requestId: requestIdentity(),
+        ...(input.captureEvidence ? { capture: { capturedAt: now, capturedBy: username || 'unknown',
+            evidence: input.evidence, usageAtCapture: input.object.usageEvidence } } : {}),
     });
-    const requestRecord: JsonRecord = existing ? updateFields : record;
-    await requestJson<unknown>(
-        collectionUrl(suffix),
-        {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestRecord),
-        },
-        [200, 201],
-    );
-    return reviewRecordFromKv(record);
+    const stored = await insertRevision(revision);
+    state.documents.set(stored._key, stored);
+    return projectedState(state.legacy, stored, state.documents).review!;
 }
 
-async function deleteReview(objectId: string): Promise<void> {
-    const existing = await getReviewRecord(objectId);
-    if (!existing) {
-        return;
-    }
-    await requestJson<unknown>(
-        collectionUrl(`/${encodeURIComponent(existing._key)}`),
-        { method: 'DELETE' },
-        [200, 204],
-    );
+async function deleteReview(objectId: string, expectedRevisionId?: string | null): Promise<void> {
+    const state = await loadState(objectId);
+    checkExpected(state, expectedRevisionId);
+    if (!state.raw || state.review?.removed) { return; }
+    await insertRevision(prepareRevision({ objectId, previous: state.head, legacy: state.legacy,
+        record: state.raw, remove: true, now: new Date().toISOString(),
+        actor: username || 'unknown', requestId: requestIdentity(),
+    }));
+}
+
+async function listHistory(objectId: string, before?: number): Promise<ReviewHistoryPage> {
+    const rows = await requestJson<Array<ReviewRevision & { _user?: string }>>(withQuery(collectionUrl('', REVISIONS), {
+        query: JSON.stringify({ object_id: canonicalReviewId(objectId), ...(before ? { revision_number: { $lt: before } } : {}) }),
+        sort: 'revision_number:-1', limit: 21, fields: `${HEADER_FIELDS},record,baseline_ref,_user`,
+    }));
+    rows.forEach(validateHeader);
+    const page = rows.slice(0, 20);
+    return { entries: page.map((row) => ({
+        revisionId: row._key, revisionNumber: row.revision_number, operation: row.operation,
+        stage: String(row.record.stage ?? ''), note: String(row.record.note ?? ''),
+        assignedTo: typeof row.record.assigned_to === 'string' ? row.record.assigned_to : null,
+        // _user is the KV namespace (nobody), not the authenticated reviewer.
+        updatedAt: row.updated_at, updatedBy: row.updated_by,
+        capturedEvidence: row.baseline_ref?.revision === row._key && row.baseline_ref.slot === 'capture',
+    })), nextBefore: rows.length > 20 ? page[page.length - 1].revision_number : null };
 }
 
 export const splunkReviewClient: ReviewClient = {
-    isAvailable: () => Boolean(splunkdPath),
-    listReviews,
-    upsertReview,
-    deleteReview,
+    isAvailable: () => Boolean(splunkdPath), listReviews, upsertReview, deleteReview,
+    getReview: async (id) => (await loadState(id)).review, listHistory,
 };
