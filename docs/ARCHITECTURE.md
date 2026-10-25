@@ -165,7 +165,7 @@ JSON Schemas in [`schemas/`](../schemas/) document the normalized records.
 
 ## Frontend
 
-Six standard Simple XML dashboards provide only a mount point and native
+Seven standard Simple XML dashboards provide only a mount point and native
 Splunk chrome, not searches or custom Mako templates. The entry waits for
 Simple XML readiness and mounts one React root. Chunk URLs use Splunk's
 locale/proxy/build-aware static URL helper rather than inferred script locations.

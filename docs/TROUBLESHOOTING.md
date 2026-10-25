@@ -48,9 +48,11 @@ New links encode spaces as `%20` and literal plus signs as `%2B`. An older link
 whose spaces already became literal plus signs is ambiguous: reopen the object
 from Candidates or select its exact current identity in Explorer. The app does
 not guess by replacing plus signs, which could select another real object.
-Exact Splunk Enterprise 10.2.5 runtime validation remains unconfirmed; report
-the app version, object type, scan transition, and sanitized reproduction steps
-if a valid Report still opens incorrectly. Do not publish customer identities.
+Exact Report targeting and reload, including names containing spaces, have been
+validated on the 10.2.5 minimum runtime. If a valid Report still opens incorrectly,
+report the app version, object type, scan transition, and sanitized reproduction
+steps. Do not publish customer identities. See the
+[compatibility policy](COMPATIBILITY.md) for the tested matrix and support boundary.
 
 ## Invalid review endpoint max_content_length setting
 

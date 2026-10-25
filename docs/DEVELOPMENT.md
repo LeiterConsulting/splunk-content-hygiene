@@ -63,6 +63,9 @@ directories are intentionally ignored.
 - Verify a production package before installing it.
 - Use real Splunk data for integration and browser testing; production code
   must never use a demo-data fallback.
+- Use the [minimum-version and representative-runtime policy](COMPATIBILITY.md)
+  instead of attempting an exhaustive patch-version matrix. Keep VM functional
+  compatibility evidence separate from real-estate scale/performance evidence.
 
 ## Local Splunk testing
 

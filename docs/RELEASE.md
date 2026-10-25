@@ -44,6 +44,10 @@ Record failures and warnings outside the public repository; release only with
 zero errors and zero failures, and review every warning.
 
 Install the exact inspected archive on a non-production target Splunk version.
+Follow the [compatibility policy](COMPATIBILITY.md): qualify the minimum and a
+representative modern-navigation runtime for shared-platform changes, retain
+the exact tested-version matrix, and investigate specific upstream regressions.
+Untested maintenance patches are not separate release blockers by themselves.
 Run a bounded scan, a complete scan, cross-view drill-through, filters, all
 exports, and review save/reload/remove. Confirm that the final verification
 state contains no temporary review records and that no customer object changed.

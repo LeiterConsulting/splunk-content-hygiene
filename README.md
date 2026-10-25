@@ -63,10 +63,14 @@ the shared cache; access is restricted to explicit hygiene roles.
 5. Run a bounded scan first, then a complete scan when the permission and
    connectivity check succeeds.
 
-The app has real-data browser validation on Splunk Enterprise
-10.2.8 and 10.4.4, including modern navigation, native launcher icons, and both
-workspace themes. Broader 10.x,
-search-head-cluster, and Splunk Cloud certification is not complete. See
+The support baseline is Splunk Enterprise **10.2.5 or later** on a standalone
+Linux x86-64 search head with KV Store. App 1.1.0's core workflows and all seven
+pages in light/dark modes are validated in an isolated 10.2.5 VM, alongside
+larger real-data browser validation on 10.2.8 and 10.4.4 covering classic/modern
+navigation and native launcher icons. Maintenance patches do not each require
+separate release qualification without a known regression. See the
+[compatibility policy](docs/COMPATIBILITY.md)
+for the tested matrix and deployment boundaries, and
 [Installation](docs/INSTALLATION.md) for upgrade and verification details.
 
 ## Investigation workflow
@@ -140,6 +144,7 @@ remediation remains outside this app.
 
 - [User guide](docs/USER_GUIDE.md)
 - [Installation](docs/INSTALLATION.md)
+- [Compatibility and minimum-version policy](docs/COMPATIBILITY.md)
 - [Administration](docs/ADMINISTRATION.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Architecture and data flow](docs/ARCHITECTURE.md)

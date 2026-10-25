@@ -2,16 +2,20 @@
 
 ## Compatibility
 
-The package requires Splunk Enterprise with KV Store.
-The current validation scope is deliberately specific:
+The support baseline is Splunk Enterprise **10.2.5 or later** on a standalone
+Linux x86-64 search head with healthy KV Store. The minimum is a project support
+boundary, not a claim that earlier patches lack a required feature. See the
+[compatibility policy](COMPATIBILITY.md) for representative testing and how
+maintenance releases are treated. Current runtime evidence is:
 
 | Version | Validation |
 | --- | --- |
-| 10.2.8 | Installed; all six views, light/dark themes, real-data scan, review workflow, graph/impact, and exports |
-| 10.4.4 | Installed; all six native-navigation views, expanded/collapsed sidebar, home launcher and app-switcher icons, light/dark workspace, real-data graph/impact, app-local review workflow, and exports |
-| 10.0.1 | Earlier beta smoke test, not repeated for this host migration |
+| 10.2.5 | Isolated Linux VM: installation/KV Store, bounded/full inventory, usage coverage, dependency targeting, review concurrency/permissions, all seven pages in light/dark, and representative CSV/JSON delivery |
+| 10.2.8 | Installed; all seven views, light/dark themes, real-data scan, review/bulk workflow, graph/impact, required-content report, and exports |
+| 10.4.4 | Installed; all seven native-navigation views, expanded/collapsed sidebar, home launcher and app-switcher icons, light/dark workspace, real-data graph/impact, app-local review/bulk workflow, required-content report, and exports |
+| 10.0.1 | Historical beta smoke test only; below the current 10.2.5 support floor and not qualification of the current review protocol |
 
-Version 1.0 review coordination requires a standalone POSIX search head with
+Review coordination requires a standalone POSIX search head with
 Splunk's Python 3 runtime. Search-head clusters and Windows coordinated writes
 are unsupported; the endpoint fails closed rather than claiming cross-host
 serialization. Keep all review editors on the matching app version.
@@ -107,7 +111,7 @@ objects it inventories.
 
 ## Initial verification
 
-- All six navigation pages load without browser-console errors.
+- All seven navigation pages load without browser-console errors.
 - **Settings & Scan Status** identifies the data source as live Splunk data.
 - A bounded scan completes or reports actionable permission warnings.
 - A complete scan persists objects, relationships, findings, owners, and scan
