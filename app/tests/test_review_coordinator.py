@@ -185,6 +185,35 @@ class ReviewCoordinatorTests(unittest.TestCase):
             self.assertEqual(handler.handle(json.dumps(request))['status'], 405)
         self.assertEqual(handler.handle(json.dumps({'method': 'POST'}))['status'], 401)
 
+    def test_packaged_request_limit_has_an_explicit_binary_unit(self):
+        config = source.parent.parent / 'default/restmap.conf'
+        setting = [line.strip() for line in config.read_text().splitlines()
+                   if line.startswith('max_content_length')]
+        self.assertEqual(setting, ['max_content_length = 4 MiB'])
+
+    def test_payload_boundary_counts_utf8_bytes_and_never_commits_oversize(self):
+        handler = coordinator.ReviewCoordinator()
+        limit = 4 * 1024 * 1024
+        valid = json.dumps(proposed())
+        with patch.object(coordinator.Backend, 'actor', return_value='reviewer'), \
+                patch.object(coordinator.Backend, 'standalone', return_value=True), \
+                patch.object(coordinator, 'commit_revision', return_value={'accepted': True}) as commit:
+            for size in (limit - 1, limit):
+                payload = valid + ' ' * (size - len(valid.encode('utf-8')))
+                result = handler.handle(json.dumps({'session': {'authtoken': 'test'},
+                                                   'method': 'POST', 'payload': payload}))
+                self.assertEqual(result['status'], 201)
+            self.assertEqual(commit.call_count, 2)
+            commit.reset_mock()
+            for payload in (valid + ' ' * (limit + 1 - len(valid)),
+                            '{"padding":"' + 'é' * (limit // 2) + '"}'):
+                self.assertGreater(len(payload.encode('utf-8')), limit)
+                result = handler.handle(json.dumps({'session': {'authtoken': 'test'},
+                                                   'method': 'POST', 'payload': payload}))
+                self.assertEqual(result['status'], 400)
+                self.assertIn('too large', result['payload']['messages'][0]['text'])
+            commit.assert_not_called()
+
 
 if __name__ == '__main__':
     unittest.main()

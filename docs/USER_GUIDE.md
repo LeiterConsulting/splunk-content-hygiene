@@ -122,6 +122,15 @@ paginated evidence table and full filtered exports remain available. The center
 picker shows up to 200 matches; refine its search to reach any other object.
 Filters and the reset action remain available even when a group is empty.
 
+A supplied object link never falls back to another graph center. While inventory
+loads its exact identity is retained. If the object is outside the center group,
+**Show requested object** broadens that group explicitly. If it is unavailable,
+the page keeps the identity visible and disables center-specific investigation
+actions until a valid center is chosen. Missing inventory is not proof of deletion.
+Links from Candidates, Library, and Ownership carry their originating scan ID;
+a notice identifies when Explorer is using a different inventory snapshot.
+Related-object filters never silently change a requested center.
+
 The map and evidence tables use the full workspace width. Inspecting a graph
 card or relationship opens **Selected object**, with its identity and actions at
 the top. **Review decision** applies to that inspected object; its title names

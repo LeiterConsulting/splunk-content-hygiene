@@ -1,5 +1,37 @@
 # Troubleshooting
 
+## A dependency link cannot show its requested object
+
+Version 1.0.2 preserves the requested identity rather than opening an unrelated
+fallback object. If the object exists but is outside the center group, select
+**Show requested object** to broaden that group explicitly. Relationship
+filters remain separate from the center request.
+
+If the identity is unavailable, inspect scan coverage and the scanning user's
+visibility, or choose a different center. Missing from the current shared
+inventory does not prove that the object was deleted. A source-scan notice
+means the originating page and Explorer used different inventory snapshots;
+the original identity is retained for investigation.
+
+Reports, Alerts, and Saved Searches use the same canonical `saved_search::`
+identity. Do not rename objects or rewrite review KV records to repair a link.
+New links encode spaces as `%20` and literal plus signs as `%2B`. An older link
+whose spaces already became literal plus signs is ambiguous: reopen the object
+from Candidates or select its exact current identity in Explorer. The app does
+not guess by replacing plus signs, which could select another real object.
+Exact Splunk Enterprise 10.2.5 runtime validation remains unconfirmed; report
+the app version, object type, scan transition, and sanitized reproduction steps
+if a valid Report still opens incorrectly. Do not publish customer identities.
+
+## Invalid review endpoint max_content_length setting
+
+Version 1.0.2 declares `max_content_length = 4 MiB` in the app's `restmap.conf`.
+Earlier packages used a bare byte count, which can produce HTTPRestDispatcher
+configuration errors. Upgrade the package and coordinate a Splunk restart if
+required to activate REST configuration. Do not change the server-wide body
+limit or weaken review permissions. The coordinator also enforces its own
+4 MiB UTF-8 payload limit before inserting a journal revision.
+
 ## Selected-object workspace and unsaved changes
 
 From 1.0.1 onward, selected objects open in a full-width workspace rather than

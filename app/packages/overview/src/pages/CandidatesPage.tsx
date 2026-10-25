@@ -619,7 +619,7 @@ export function CandidatesPage({
                             <StatusBadge status={selected.healthStatus} />
                             </div>
                             <ButtonRow>
-                                <StyledButton type="button" $primary onClick={() => navigate(() => navigateToView('dependencies', { object: selected.objectId }))}>Explore dependencies</StyledButton>
+                                <StyledButton type="button" $primary onClick={() => navigate(() => navigateToView('dependencies', { object: selected.objectId, scan: snapshot?.scan.scanId }))}>Explore dependencies</StyledButton>
                                 {reviewByObject.has(selected.objectId) ? <StyledButton onClick={() => navigate(() => navigateToView('reviews', { object: selected.objectId }))}>Open in review library</StyledButton> : null}
                                 <ExportMenu label="Export this object" items={[
                                     { label: 'Selected finding CSV', onClick: () => exportCandidates([selected], findingsByObject, reviewByObject) },

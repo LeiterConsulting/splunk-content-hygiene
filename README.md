@@ -33,6 +33,8 @@ The app keeps customer content read-only:
 - Full-width selected-object workspaces with investigation actions at the top,
   focused evidence/decision/history tabs, previous/next review navigation, and
   unsaved-draft protection
+- Exact dependency targeting with explicit unavailable/filtered-out states and
+  source-scan change notices instead of unrelated fallback objects
 - Ownership reporting and cross-view navigation
 - Bounded and complete live scans with progress, warnings, collector counts, and
   scan-report export
@@ -100,6 +102,12 @@ snapshot with the reviewed baseline, not live content or removal eligibility.
 
 ![Full-width Review Library workspace in dark mode](docs/images/review-workspace-dark.jpg)
 
+Dependency links retain the exact requested identity. A center-group mismatch
+offers explicit recovery instead of silently showing another object. This
+capture uses the app's own protected metadata, outside the broken-candidate group.
+
+![Explicit dependency-target recovery in dark mode](docs/images/dependency-targeting-dark.jpg)
+
 The directional map groups the app's real dashboard and lookup consumers by
 type, with on-demand expansion and a full evidence table alongside the map.
 
@@ -133,7 +141,7 @@ yarn validate
 ```
 
 The verified installable archive is written to
-`app/dist/content_hygiene-1.0.1.tar.gz`. Run `yarn release:prepare` to
+`app/dist/content_hygiene-1.0.2.tar.gz`. Run `yarn release:prepare` to
 perform the complete validation and update `SHA256SUMS`.
 
 ## Current limitations

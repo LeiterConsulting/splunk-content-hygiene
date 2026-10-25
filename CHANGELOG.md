@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.0.2 — 2026-10-25
+
+- Fixed native-host navigation encoding: spaces in object identities use `%20`
+  while literal plus signs remain `%2B`, preventing Reports with spaced names
+  from becoming unmatched identities during drill-through or reload
+- Prevented Dependency Explorer from silently substituting another center when
+  a requested object is unavailable or excluded by the center group; the exact
+  requested identity remains in the URL while loading and on failure
+- Added explicit unavailable/filtered-out recovery states, guarded history
+  navigation, and source-scan provenance on investigation links; a changed
+  inventory is disclosed rather than hidden by a rewritten object link
+- Kept graph impact, exports, and review actions unavailable until the requested
+  center resolves, including Reports, Alerts, and Saved Searches that share a
+  canonical saved-search identity
+- Corrected the review coordinator's REST request limit to `4 MiB`, with
+  package-policy and UTF-8 payload-boundary regression checks; the Python-side
+  defensive limit and conflict-safe review protocol are unchanged
+- Added focused navigation coverage for duplicate names, special characters,
+  large pickers, objects without relationships, replaced snapshots, and draft
+  protection during history navigation
+
 ## 1.0.1 — 2026-10-23
 
 - Replaced narrow, internally scrolling detail sidebars with full-width

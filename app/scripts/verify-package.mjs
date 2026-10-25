@@ -157,6 +157,11 @@ try {
         }
     }
 
+    const restmap = await readFile(path.join(inspectionDirectory, 'content_hygiene/default/restmap.conf'), 'utf8');
+    if (!/^max_content_length\s*=\s*4 MiB\s*$/m.test(restmap)) {
+        throw new Error('The review endpoint must declare its 4 MiB request limit with an explicit binary unit.');
+    }
+
     const textEntries = entries.filter((entry) =>
         /\.(?:js|html|md|conf|xml)$/i.test(entry)
     );

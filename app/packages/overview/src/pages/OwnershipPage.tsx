@@ -441,6 +441,7 @@ export function OwnershipPage({
                                                                 onClick={() =>
                                                                     navigateToView('dependencies', {
                                                                         object: contentObject.objectId,
+                                                                        scan: snapshot?.scan.scanId,
                                                                     })
                                                                 }
                                                             >
@@ -526,6 +527,7 @@ export function OwnershipPage({
                                                                 onClick={() =>
                                                                     navigateToView('dependencies', {
                                                                         object: contentObject.objectId,
+                                                                        scan: snapshot?.scan.scanId,
                                                                     })
                                                                 }
                                                             >

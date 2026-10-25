@@ -111,7 +111,7 @@ test('cross-view actions and browser navigation protect an unsaved review withou
     await user.click(screen.getByRole('button', { name: 'Keep editing' }));
     await user.click(screen.getByRole('button', { name: 'Explore dependencies' }));
     await user.click(screen.getByRole('button', { name: 'Discard draft and continue' }));
-    expect(navigateToView).toHaveBeenCalledWith('dependencies', { object: objects[0].objectId });
+    expect(navigateToView).toHaveBeenCalledWith('dependencies', { object: objects[0].objectId, scan: snapshot.scan.scanId });
     expect(pageProps.onSaveReview).not.toHaveBeenCalled();
 });
 

@@ -54,7 +54,7 @@ import {
 } from '../types';
 import { downloadCsv } from '../utils/downloadCsv';
 import { downloadJson } from '../utils/downloadJson';
-import { navigateToView, readQueryParam } from '../utils/navigation';
+import { navigateToView, readQueryParam, readQueryParams, serializeQuery } from '../utils/navigation';
 import { ownerLabel } from '../utils/objectLabels';
 
 const candidateFindingTypes = new Set([
@@ -297,6 +297,8 @@ export function DependencyPage({
     const inspectionTitle = useRef<HTMLHeadingElement | null>(null);
     const focusInspection = useRef(false);
     const [selectedId, setSelectedId] = useState(() => readQueryParam('object'));
+    const [requestedScanId, setRequestedScanId] = useState(() => readQueryParam('scan'));
+    const currentLocation = useRef(`${window.location.pathname}${window.location.search}${window.location.hash}`);
     const [inspectedId, setInspectedId] = useState('');
     const [query, setQuery] = useState(() => readQueryParam('query'));
     const [direction, setDirection] = useState(() => readQueryParam('direction') || 'all');
@@ -340,12 +342,17 @@ export function DependencyPage({
         [objects, centerGroup, candidateIds, reviewByObject, freshness],
     );
     const selectedFromId = index.objects.get(selectedId);
-    const selected =
-        selectedFromId && eligible.includes(selectedFromId)
-            ? selectedFromId
-            : (eligible.find(
-                  (item) => index.inbound.has(item.objectId) || index.outbound.has(item.objectId),
-              ) ?? eligible[0]);
+    const requestedOutsideGroup = Boolean(selectedFromId && !eligible.includes(selectedFromId));
+    // A supplied identity is a request, never permission to choose an unrelated
+    // object. Default centering is only for an entry without an object request.
+    let selected: ContentObject | undefined;
+    if (!isLoading) {
+        if (selectedId) {
+            if (!requestedOutsideGroup) { selected = selectedFromId; }
+        } else {
+            selected = eligible.find((item) => index.inbound.has(item.objectId) || index.outbound.has(item.objectId)) ?? eligible[0];
+        }
+    }
     const matches = useMemo(() => {
         const normalized = query.trim().toLowerCase().replace(/[_-]+/g, ' ');
         return eligible
@@ -407,9 +414,24 @@ export function DependencyPage({
     }, [selected, index, direction, allows]);
     const graphEdges = useMemo(() => relatedRows.map((row) => row.edge), [relatedRows]);
     const scan = snapshot?.scan;
-    const emptyTitle = snapshot
-        ? 'No objects match this center group'
-        : 'No verified inventory is cached';
+    let emptyTitle = 'No verified inventory is cached';
+    let emptyExplanation = 'Run a complete live scan from Settings to establish a verified baseline.';
+    if (snapshot) {
+        emptyTitle = 'No objects match this center group';
+        emptyExplanation = 'Clear filters or choose a broader group to continue.';
+    }
+    if (selectedId) {
+        emptyTitle = 'Requested object is unavailable';
+        emptyExplanation = 'The requested identity is not in the current verified inventory. It may have changed, be outside the scanning identity’s visibility, or belong to an earlier scan. This is not proof that it was deleted. Choose another object or inspect scan coverage; no substitute has been selected.';
+        if (requestedOutsideGroup) {
+            emptyTitle = 'Requested object is outside the center group';
+            emptyExplanation = 'This object exists in the current inventory but does not match the center group. Show it explicitly or choose another object; no substitute has been selected.';
+        }
+    }
+    if (isLoading) {
+        emptyTitle = 'Loading live inventory…';
+        emptyExplanation = 'The requested identity is preserved while the verified inventory loads.';
+    }
     const impact = useMemo(
         () =>
             selected && scan
@@ -436,9 +458,12 @@ export function DependencyPage({
     const pageRows = relatedRows.slice(currentPage * 25, currentPage * 25 + 25);
 
     useEffect(() => {
-        const params = new URLSearchParams(window.location.search);
+        const params = readQueryParams();
         const values = {
-            object: selected?.objectId ?? '',
+            // An automatic preview is not an explicit object request. Only
+            // deliberate selections become bookmarks and remain pinned.
+            object: selectedId,
+            scan: selectedId ? requestedScanId || scan?.scanId || '' : '',
             query,
             direction,
             group: centerGroup,
@@ -452,8 +477,34 @@ export function DependencyPage({
                 params.delete(key);
             }
         });
-        window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
-    }, [selected?.objectId, query, direction, centerGroup, relatedGroup, tab]);
+        const search = serializeQuery(params);
+        currentLocation.current = `${window.location.pathname}${search ? `?${search}` : ''}${window.location.hash}`;
+        window.history.replaceState(window.history.state, '', currentLocation.current);
+    }, [selectedId, selected?.objectId, requestedScanId, scan?.scanId, query, direction, centerGroup, relatedGroup, tab]);
+
+    useEffect(() => {
+        const restoreRequest = (): void => {
+            const destination = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+            const params = readQueryParams();
+            // Keep URL and visible center aligned if a review draft blocks Back.
+            window.history.replaceState(window.history.state, '', currentLocation.current);
+            navigate(() => {
+                currentLocation.current = destination;
+                window.history.replaceState(window.history.state, '', destination);
+                setSelectedId(params.get('object') ?? '');
+                setRequestedScanId(params.get('scan') ?? '');
+                setQuery(params.get('query') ?? '');
+                setDirection(params.get('direction') || 'all');
+                setCenterGroup(params.get('group') || 'all');
+                setRelatedGroup(params.get('related') || 'all');
+                const requestedTab = params.get('tab') ?? '';
+                setTab(['impact', 'changes', 'object', 'review'].includes(requestedTab) ? requestedTab : 'relationships');
+                setInspectedId(''); setTrail([]); setPage(0);
+            });
+        };
+        window.addEventListener('popstate', restoreRequest);
+        return () => window.removeEventListener('popstate', restoreRequest);
+    }, [navigate]);
 
     const drillTo = (id: string): void => navigate(() => {
         const item = index.objects.get(id);
@@ -467,13 +518,19 @@ export function DependencyPage({
             setCenterGroup('all');
         }
         setSelectedId(id);
+        setRequestedScanId(scan?.scanId ?? '');
         setInspectedId('');
         setQuery('');
         setPage(0);
         setTab('relationships');
     });
     const inspect = (id: string, nextTab = 'object'): void => {
-        const action = (): void => { focusInspection.current = nextTab === 'object'; setInspectedId(id); setTab(nextTab); };
+        const action = (): void => {
+            if (!selectedId && selected) {
+                setSelectedId(selected.objectId); setRequestedScanId(scan?.scanId ?? '');
+            }
+            focusInspection.current = nextTab === 'object'; setInspectedId(id); setTab(nextTab);
+        };
         if (id === detailId) { action(); } else { navigate(action); }
     };
     const clear = (): void => navigate(() => {
@@ -529,6 +586,7 @@ export function DependencyPage({
                                 onClick={() => navigate(() => {
                                     setCenterGroup('all');
                                     setSelectedId(id);
+                                    setRequestedScanId(scan?.scanId ?? '');
                                     setInspectedId('');
                                     setTrail((current) => current.slice(0, i));
                                     setPage(0);
@@ -553,7 +611,6 @@ export function DependencyPage({
                         value={centerGroup}
                         onChange={(event) => navigate(() => {
                             setCenterGroup(event.currentTarget.value);
-                            setSelectedId('');
                             setInspectedId('');
                             setTrail([]);
                             setPage(0);
@@ -574,10 +631,11 @@ export function DependencyPage({
                 <FilterField className="center-object-picker">
                     Selected object
                     <Select
-                        disabled={!options.length}
+                        disabled={isLoading || !options.length}
                         value={selected?.objectId ?? ''}
                         onChange={(event) => navigate(() => {
                             setSelectedId(event.currentTarget.value);
+                            setRequestedScanId(scan?.scanId ?? '');
                             setInspectedId('');
                             setTrail([]);
                             setPage(0);
@@ -588,6 +646,7 @@ export function DependencyPage({
                                 : undefined
                         }
                     >
+                        {!selected ? <option value="" disabled>Choose a center object</option> : null}
                         {options.map((item) => (
                             <option
                                 key={item.objectId}
@@ -627,17 +686,22 @@ export function DependencyPage({
                 </FilterField>
                 <StyledButton onClick={clear}>Clear filters</StyledButton>
             </FilterBar>
+            {!isLoading && requestedScanId && scan && requestedScanId !== scan.scanId ? (
+                <InlineNotice role="status">
+                    <strong>Inventory changed since this link was opened</strong>
+                    <p>The link came from scan {requestedScanId}; this view uses scan {scan.scanId}. The requested identity is preserved. Review current evidence before relying on an earlier finding.</p>
+                </InlineNotice>
+            ) : null}
             {!selected ? (
                 <Card>
                     <EmptyState>
                         <div>
-                            <strong>{isLoading ? 'Loading live inventory…' : emptyTitle}</strong>
-                            <p>
-                                {snapshot
-                                    ? 'Clear filters or choose a broader group to continue.'
-                                    : 'Run a complete live scan from Settings to establish a verified baseline.'}
-                            </p>
-                            <StyledButton onClick={clear}>Reset dependency scope</StyledButton>
+                            <strong>{emptyTitle}</strong>
+                            <p>{emptyExplanation}</p>
+                            {selectedId ? <p style={{ overflowWrap: 'anywhere' }}>Requested identity: {selectedId}</p> : null}
+                            {requestedOutsideGroup && !isLoading ? (
+                                <StyledButton $primary onClick={() => navigate(() => setCenterGroup('all'))}>Show requested object</StyledButton>
+                            ) : <StyledButton onClick={clear}>Reset dependency scope</StyledButton>}
                         </div>
                     </EmptyState>
                 </Card>

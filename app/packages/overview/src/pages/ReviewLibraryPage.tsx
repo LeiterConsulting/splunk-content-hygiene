@@ -576,7 +576,7 @@ export function ReviewLibraryPage({
                             </div>
                             <ButtonRow>
                                 <StyledButton $primary disabled={!objectById.has(selectedReview.objectId)}
-                                    onClick={() => navigate(() => navigateToView('dependencies', { object: selectedReview.objectId }))}>Explore dependencies</StyledButton>
+                                    onClick={() => navigate(() => navigateToView('dependencies', { object: selectedReview.objectId, scan: snapshot?.scan.scanId }))}>Explore dependencies</StyledButton>
                                 <StyledButton disabled={!objectById.has(selectedReview.objectId)}
                                     onClick={() => navigate(() => navigateToView('candidates', { object: selectedReview.objectId }))}>View candidate evidence</StyledButton>
                                 <ExportMenu label="Export this review" items={[
@@ -602,7 +602,7 @@ export function ReviewLibraryPage({
                                 objectId={selectedReview.objectId}
                                 comparison={freshness.get(selectedReview.objectId)!}
                                 canDrillTo={(id) => objectById.has(id)}
-                                onDrillTo={(id) => navigate(() => navigateToView('dependencies', { object: id }))}
+                                onDrillTo={(id) => navigate(() => navigateToView('dependencies', { object: id, scan: snapshot?.scan.scanId }))}
                             />
                         </WorkspaceTabs.Panel>
                         <WorkspaceTabs.Panel panelId="details" label="Object & usage details">
