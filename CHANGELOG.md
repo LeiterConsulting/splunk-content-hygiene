@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.1.0 — 2026-10-25
+
+- Added page/all-filtered candidate selection, explicit bulk-decision preview,
+  sequential ordinary review saves, cancellation, per-object results and exports
+- Preserved existing decisions by default, prohibited bulk restoration of archived
+  histories, and made active-review updates opt-in with appended notes, preserved
+  blank assignees, original revision checks and unchanged evidence baselines
+- Added a supported in-use/required-content report from current observed activity,
+  explicit Retain decisions, or deliberately selected starting objects; each reason
+  remains distinct and attributable
+- Added iterative all-hop outbound closure, deduplication, cycle handling,
+  conservative witness-path confidence, per-type grouping, bounded detail paths,
+  scoped filters, drill-through, compact CSV and full adjacency/coverage JSON
+- Disclosed implicit/uninventoried types, automatic lookups, private/dynamic/ad-hoc
+  consumers, stale usage, unresolved targets and traversal limits; the report is
+  not a complete migration manifest or an unused-content conclusion
+- Preserved usage-window/source summaries and unmapped-activity warnings in the
+  report and exports, including complete telemetry windows
+- Corrected dashboard CSS leaking into app-local modal paragraphs and inputs,
+  preserving native light/dark colors without restyling Splunk's own dialogs
+- Kept the existing coordinator, per-object history, read-only customer-content
+  boundary, native Splunk controls and classic/modern theme-inheriting hosts
+
 ## 1.0.2 — 2026-10-25
 
 - Fixed native-host navigation encoding: spaces in object identities use `%20`

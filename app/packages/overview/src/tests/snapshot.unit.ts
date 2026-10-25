@@ -187,6 +187,11 @@ test('reads reject a corrupted published snapshot and summary pages skip graph a
     await splunkInventoryClient.getLatestSnapshot('review-library');
     expect(requests.find((request) => /ch_objects$/.test(request.path))?.fields)
         .toBe('source:0,configuration_fingerprint:0');
+    requests = [];
+    const report = await splunkInventoryClient.getLatestSnapshot('in-use-content');
+    expect(report?.edges).toHaveLength(first.edges.length);
+    expect(requests.some((request) => /ch_edges$/.test(request.path))).toBe(true);
+    expect(requests.some((request) => /ch_owners$/.test(request.path))).toBe(false);
     collections.get('ch_objects')!.delete(Array.from(collections.get('ch_objects')!.keys())[0]);
     await expect(splunkInventoryClient.getLatestSnapshot()).rejects.toThrow(
         'integrity verification',

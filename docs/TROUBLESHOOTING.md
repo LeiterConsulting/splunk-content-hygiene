@@ -1,5 +1,34 @@
 # Troubleshooting
 
+## Bulk review skips objects or stops partway through
+
+Existing decisions are skipped by default. Archived/unverifiable histories are
+never restored in bulk. To change an active review, explicitly choose that option
+and inspect the preview; notes append and blank assignees preserve earlier values.
+A too-long combined note fails rather than truncating the earlier rationale.
+
+Each item is rechecked against the revision confirmed in the preview. A changed
+decision becomes a conflict, not an overwrite. The batch is not atomic: earlier
+confirmed saves remain. Cancellation, permission failures, inventory changes and
+unconfirmed responses stop further writes. Export the per-object results. Inspect
+unconfirmed/conflicting reviews individually before deciding whether to save again;
+the app does not automatically replay an uncertain write.
+
+## The required-content report is empty or incomplete
+
+Check the current inventory and usage window. A new inventory can make earlier
+usage historical; collect a fresh bounded usage window to obtain current roots.
+Zero observed roots is not proof of inactivity. Include active Retain decisions or
+explicitly select exact starting objects for a dependency-only investigation.
+
+Display filters narrow the table, not the closure. Choose the full JSON export
+for all supported identities, relationships and diagnostics; export coverage CSV
+alongside object CSV. A source-scan change notice, unresolved/missing definition,
+partial outbound manifest or traversal ceiling is an explicit limitation. The
+report does not discover implicit automatic lookups/props, every knowledge-object
+type, private/dynamic content, ad-hoc usage or external consumers, and is not a
+complete migration manifest.
+
 ## A dependency link cannot show its requested object
 
 Version 1.0.2 preserves the requested identity rather than opening an unrelated

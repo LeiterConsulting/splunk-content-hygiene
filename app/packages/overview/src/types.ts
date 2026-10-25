@@ -2,6 +2,7 @@ export type AppPage =
     | 'overview'
     | 'cleanup-candidates'
     | 'dependency-explorer'
+    | 'in-use-content'
     | 'review-library'
     | 'ownership'
     | 'settings';

@@ -80,7 +80,7 @@ const iconSizes = {
 for (const file of Object.keys(iconSizes)) {
     requiredEntries.push(`content_hygiene/static/${file}`, `content_hygiene/appserver/static/${file}`);
 }
-const views = ['Overview', 'CleanupCandidates', 'DependencyExplorer', 'ReviewLibrary', 'Ownership', 'Settings'];
+const views = ['Overview', 'CleanupCandidates', 'DependencyExplorer', 'InUseContent', 'ReviewLibrary', 'Ownership', 'Settings'];
 for (const view of views) {
     requiredEntries.push(`content_hygiene/default/data/ui/views/${view}.xml`);
 }

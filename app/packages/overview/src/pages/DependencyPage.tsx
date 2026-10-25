@@ -717,6 +717,7 @@ export function DependencyPage({
                             </div>
                             <ButtonRow>
                                 <StyledButton onClick={() => setTab('impact')}>Assess removal impact</StyledButton>
+                                <StyledButton onClick={() => navigate(() => navigateToView('inuse', { object: selected.objectId, scan: snapshot?.scan.scanId }))}>Required content report</StyledButton>
                                 <StyledButton $primary onClick={() => inspect(selected.objectId, 'review')}>Review center object</StyledButton>
                                 {reviewByObject.has(selected.objectId) ? <StyledButton onClick={() => navigate(() => navigateToView('reviews', { object: selected.objectId }))}>Open center in review library</StyledButton> : null}
                             </ButtonRow>

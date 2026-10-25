@@ -2,6 +2,7 @@
     <view name="Overview" default="true" icon="layoutoverview" />
     <view name="CleanupCandidates" icon="filemagnifier" />
     <view name="DependencyExplorer" icon="filenode" />
+    <view name="InUseContent" icon="filechart" />
     <view name="ReviewLibrary" icon="organizernotebook" />
     <view name="Ownership" icon="circlesfour" />
     <view name="Settings" icon="cog" />

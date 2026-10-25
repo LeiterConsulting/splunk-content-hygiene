@@ -306,6 +306,15 @@ export const Table = styled(DataTable)`
     td:first-child {
         min-width: 240px;
     }
+    &.candidate-selection-table th:first-child,
+    &.candidate-selection-table td:first-child {
+        min-width: 48px;
+        width: 48px;
+    }
+    &.candidate-selection-table th:nth-child(2),
+    &.candidate-selection-table td:nth-child(2) {
+        min-width: 240px;
+    }
     th {
         color: ${variables.contentColorDefault};
     }

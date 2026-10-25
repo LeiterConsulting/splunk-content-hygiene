@@ -101,6 +101,77 @@ Use the **Review decision** tab to store a stage, investigation note, and option
 assignee. Evidence, decision editing, and revision history have their own tabs.
 The underlying Splunk object is not changed.
 
+### Bulk candidate review
+
+Select rows, **Select all on this page**, or **Select all N filtered results**.
+Paging and sorting preserve selection; changing a filter or scan clears it.
+Choose **Review N selected**, enter a stage, optional shared note and assignee,
+then preview the exact identities, type counts and proposed saves/skips before
+confirming. Selection alone never saves a decision.
+
+Existing reviews are skipped by default, including archived decisions. Explicit
+active-review updates append the shared note, preserve an assignee left blank,
+and never silently reaffirm an earlier evidence baseline. Archived or unverifiable
+histories must be handled individually. Each new review captures available current
+evidence using the same policy as an individual save; missing evidence stays
+unverifiable. A shared decision is not removal approval.
+
+Saves are sequential, conflict checked, and not atomic. **Stop after current item**
+leaves completed saves intact and reports the remainder as not saved. Conflicts,
+unconfirmed saves, failures and skips remain distinct in the CSV/JSON receipt.
+Authentication failures or unconfirmed writes stop further saves. Retry only
+explicit failed items after recheck; inspect conflicts and unconfirmed outcomes
+individually. The result receipt includes each saved revision, actor and time.
+There is no persistent app-wide rule: newly discovered objects are not retained
+automatically by an earlier batch.
+
+## In-use and required content
+
+Open **In-use Content** from navigation or Overview. The default starting set is
+current attributable dashboard/saved-search activity plus active **Retain** review
+decisions. Choose activity kinds and whether saved-search activity must include a
+successful execution. Scheduled and manual saved-search runs cannot be separated
+by the available telemetry. Failed/skipped attempts are disclosed, not called
+successful runs. Historical, modified or expired observations are not silently
+reused as current activity.
+
+Retain remains a human decision, not proof of usage. The report records the
+reviewer, review date and evidence status, and still includes a retained identity
+whose current definition is no longer visible with an explicit missing-definition
+warning. Archived or unverifiable persisted decisions are not accepted as roots.
+**Retained content report** in Review Library starts with Retain decisions only.
+
+Use **Explicitly selected objects** to choose one or more exact starting identities
+without claiming usage. **Required content report** on an Explorer center opens
+that identity directly. The picker shows 200 matches; refine its search to reach
+other objects. Missing identities are disclosed, not replaced with a default.
+
+The report follows all supported outbound dependency hops, including macro,
+lookup and lookup-file chains, deduplicates identities, and handles cycles. App
+containment/ownership links are metadata, not required-content closure. Retaining
+an App object does not imply retaining every object in that app. Groups and display
+filters help browse the result; filtering a type/app does not alter the underlying
+closure. Each required row has one shortest witness path, with conservative path
+confidence. Inspect it or drill into Explorer to investigate further.
+
+Tables show 50 rows at a time. Only path presentation is bounded to 100 identities;
+the complete supported closure is still calculated. A 50,000-object or
+250,000-relationship traversal ceiling produces an explicit **Truncated** warning.
+Full JSON preserves parameters, root reasons, witness parents, all traversed
+relationships, the usage run/window and source summaries, and coverage diagnostics.
+Mapping and source warnings remain visible even when telemetry covers the complete
+requested window; complete time coverage does not mean every activity row maps to
+an object. Object CSV is grouped by type and uses
+compact parent/root IDs; export coverage CSV alongside it. A filtered CSV is
+explicitly labeled and is not the full dependency footprint.
+
+This is always a **partial shared static footprint**, not a complete migration
+manifest. Review the listed gaps: event types, tags, field extractions/aliases,
+calculated fields, transforms, workflow actions, navigation menus, automatic
+lookups and implicit props.conf dependencies are not inventoried/resolved. Private,
+dynamic, external and ad-hoc consumers may require more content. Missing activity
+or absence from this list never establishes inactivity or removal eligibility.
+
 ## Dependency Explorer
 
 Choose a center object to see inbound and outbound relationships. Each edge

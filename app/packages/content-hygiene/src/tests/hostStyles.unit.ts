@@ -46,3 +46,20 @@ test('corrects tagged portal inputs without changing native host inputs', () => 
     expect(native.backgroundColor).not.toBe(portal.backgroundColor);
     expect(native.borderTopWidth).not.toBe('0px');
 });
+
+test('app-local modal portals inherit theme text and input surfaces without changing native dialogs', () => {
+    document.body.innerHTML = `
+        <div data-content-hygiene-portal="true" style="color: rgb(235, 240, 245)">
+            <p id="own-summary">Selected objects</p>
+            <input data-test="textbox" id="own-assignee" />
+            <textarea id="own-note"></textarea>
+        </div>
+        <div><p id="native-summary">Host summary</p><input data-test="textbox" id="native-assignee" /></div>`;
+    const own = getComputedStyle(document.getElementById('own-assignee')!);
+    const native = getComputedStyle(document.getElementById('native-assignee')!);
+    expect(own.backgroundColor).toBe('rgba(0, 0, 0, 0)');
+    expect(getComputedStyle(document.getElementById('own-note')!).borderTopWidth).toBe('0px');
+    expect(native.backgroundColor).not.toBe(own.backgroundColor);
+    expect(getComputedStyle(document.getElementById('own-summary')!).color).toBe('inherit');
+    expect(getComputedStyle(document.getElementById('native-summary')!).color).not.toBe('inherit');
+});

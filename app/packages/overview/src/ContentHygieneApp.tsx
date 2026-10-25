@@ -35,6 +35,9 @@ const ReviewLibraryPage = lazy(() =>
 const SettingsPage = lazy(() =>
     import('./pages/SettingsPage').then((module) => ({ default: module.SettingsPage })),
 );
+const InUseContentPage = lazy(() =>
+    import('./pages/InUseContentPage').then((module) => ({ default: module.InUseContentPage })),
+);
 
 // Native controls use muted text for placeholders and default text for option
 // descriptions. Both must remain readable on selected/active menu surfaces as
@@ -57,6 +60,7 @@ export function ContentHygieneApp({
     reviewClient = splunkReviewClient,
 }: ContentHygieneAppProps): React.ReactElement {
     const [snapshot, setSnapshot] = useState<InventorySnapshot | null>(null);
+    const snapshotObjects = useMemo(() => new Map(snapshot?.objects.map((object) => [object.objectId, object]) ?? []), [snapshot]);
     const [access, setAccess] = useState({
         canCollect: inventoryClient !== splunkInventoryClient,
         canReview: reviewClient !== splunkReviewClient,
@@ -166,7 +170,7 @@ export function ContentHygieneApp({
 
     const handleSaveReview = async (input: ReviewInput): Promise<ReviewRecord> => {
         const evidence = input.captureEvidence
-            ? snapshot?.objects.find((object) => object.objectId === input.object.objectId)?.reviewEvidence
+            ? snapshotObjects.get(input.object.objectId)?.reviewEvidence
             : undefined;
         const saved = await reviewClient.upsertReview({ ...input, evidence });
         setReviews((current) =>
@@ -212,6 +216,10 @@ export function ContentHygieneApp({
     let content: React.ReactElement;
 
     switch (page) {
+        case 'in-use-content':
+            content = <InUseContentPage snapshot={snapshot} isLoading={isLoadingSnapshot}
+                reviews={usableReviews} reviewsVerified={!isLoadingReviews && !reviewLoadError} />;
+            break;
         case 'cleanup-candidates':
             content = (
                 <CandidatesPage

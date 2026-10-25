@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Checkbox from '@splunk/react-ui/Checkbox';
 import {
     ButtonRow,
     Card,
@@ -26,6 +27,7 @@ import {
 import { ResultPagination } from '../components/ResultPagination';
 import { PageHeader } from '../components/PageHeader';
 import { ReviewEditor } from '../components/ReviewEditor';
+import { BulkReviewPanel } from '../components/BulkReviewPanel';
 import { ExportMenu } from '../components/ExportMenu';
 import { WorkspaceTabs } from '../components/WorkspaceTabs';
 import { ReviewHistoryPanel } from '../components/ReviewHistoryPanel';
@@ -233,6 +235,7 @@ export function CandidatesPage({
     const [sortOrder, setSortOrder] = useState('confidence');
     const [query, setQuery] = useState(readQueryParam('query'));
     const [selectedId, setSelectedId] = useState(readQueryParam('object'));
+    const [bulkSelection, setBulkSelection] = useState<{ scope: string; ids: Set<string> }>({ scope: '', ids: new Set() });
     useSelectionLocation(selectedId);
     const [page, setPage] = useState(0);
     const findingsByObject = new Map<string, ContentFinding[]>();
@@ -312,6 +315,24 @@ export function CandidatesPage({
     const currentPage = Math.min(page, totalPages - 1);
     const pageStart = currentPage * PAGE_SIZE;
     const pageCandidates = filteredCandidates.slice(pageStart, pageStart + PAGE_SIZE);
+    // Paging/sorting preserve selection; a changed filter or scan cannot carry
+    // hidden identities into a new decision scope.
+    const bulkScope = JSON.stringify([snapshot?.scan.scanId, query, statusFilter, typeFilter, appFilter, reviewFilter, usageFilter]);
+    // Reset the interaction epoch before committing a different scope. Merely
+    // hiding old IDs would resurrect them when a filter was later cleared.
+    if (bulkSelection.scope !== bulkScope) { setBulkSelection({ scope: bulkScope, ids: new Set() }); }
+    const bulkIds = bulkSelection.scope === bulkScope ? bulkSelection.ids : new Set<string>();
+    const bulkObjects = filteredCandidates.filter((object) => bulkIds.has(object.objectId));
+    const bulkVisibleIds = new Set(bulkObjects.map((object) => object.objectId));
+    const allowedBulkIds = new Set(filteredCandidates.map((object) => object.objectId));
+    const selectBulk = (ids: string[], checked: boolean): void => setBulkSelection((current) => {
+        const next = new Set(current.scope === bulkScope ? [...current.ids].filter((id) => allowedBulkIds.has(id)) : []);
+        ids.forEach((id) => { if (checked) { next.add(id); } else { next.delete(id); } });
+        return { scope: bulkScope, ids: next };
+    });
+    const checkedOnPage = pageCandidates.filter((object) => bulkVisibleIds.has(object.objectId)).length;
+    let pageChecked: boolean | 'indeterminate' = false;
+    if (checkedOnPage > 0) { pageChecked = checkedOnPage === pageCandidates.length ? true : 'indeterminate'; }
     const selected = snapshot?.objects.find((contentObject) => contentObject.objectId === selectedId);
     const selectedIndex = filteredCandidates.findIndex((contentObject) => contentObject.objectId === selectedId);
     const { detailTitle, listTitle } = useSelectionFocus(selected?.objectId);
@@ -497,6 +518,13 @@ export function CandidatesPage({
             </FilterBar>
             </div>
 
+            {!selected ? <ButtonRow role="region" aria-label="Bulk candidate selection">
+                <span>{bulkObjects.length} selected of {filteredCandidates.length} filtered candidates</span>
+                <StyledButton disabled={!canWriteReviews || !filteredCandidates.length} onClick={() => selectBulk(filteredCandidates.map((object) => object.objectId), true)}>Select all {filteredCandidates.length} filtered results</StyledButton>
+                <StyledButton disabled={!bulkObjects.length} onClick={() => setBulkSelection({ scope: bulkScope, ids: new Set() })}>Clear selection</StyledButton>
+                <BulkReviewPanel objects={bulkObjects} scanId={snapshot?.scan.scanId ?? ''} reviews={reviews} canWrite={canWriteReviews} onSave={onSaveReview} />
+            </ButtonRow> : null}
+
             <DetailLayout>
                 <Card hidden={Boolean(selected)}>
                     <CardHeader>
@@ -522,9 +550,10 @@ export function CandidatesPage({
                         </EmptyState>
                     ) : (
                         <TableScroller>
-                            <Table>
+                            <Table className="candidate-selection-table">
                                 <thead>
                                     <tr>
+                                        <th scope="col"><Checkbox aria-label="Select all on this page" checked={pageChecked} disabled={!canWriteReviews} onChange={(_event, data) => selectBulk(pageCandidates.map((object) => object.objectId), data.checked)} /></th>
                                         <th scope="col">Object</th>
                                         <th scope="col">Type</th>
                                         <th scope="col">Owner</th>
@@ -543,6 +572,7 @@ export function CandidatesPage({
                                         );
                                         return (
                                             <tr key={contentObject.objectId}>
+                                                <td><Checkbox aria-label={`Select ${contentObject.name} in ${contentObject.app}`} checked={bulkVisibleIds.has(contentObject.objectId)} disabled={!canWriteReviews} onChange={(_event, data) => selectBulk([contentObject.objectId], data.checked)} /></td>
                                                 <td>
                                                     <RowButton
                                                         type="button"

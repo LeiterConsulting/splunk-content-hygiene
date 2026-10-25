@@ -15,11 +15,11 @@ body:has(#content_hygiene_host_row) { min-width: 0; }
 #content-hygiene-root { min-width: 0; }
 /* The host's light-dashboard heading rules otherwise override the inherited
    Splunk React theme. Do not hard-code a light or dark foreground here. */
-#content-hygiene-root :is(h1, h2, h3, h4, h5, h6, p) { color: inherit; }
+:is(#content-hygiene-root, [data-content-hygiene-portal="true"]) :is(h1, h2, h3, h4, h5, h6, p) { color: inherit; }
 /* SUI owns the themed input wrapper. Undo only native dashboard form rules
    leaking into its raw textbox/textarea, so borders are not doubled and dark
    placeholder/value text is not painted on a forced white input surface. */
-:is(#content-hygiene-root input[data-test="textbox"], #content-hygiene-root textarea, input[data-content-hygiene-filter="true"]) {
+:is(:is(#content-hygiene-root, [data-content-hygiene-portal="true"]) input[data-test="textbox"], :is(#content-hygiene-root, [data-content-hygiene-portal="true"]) textarea, input[data-content-hygiene-filter="true"]) {
     background: transparent;
     border: 0;
     box-shadow: none;
@@ -27,5 +27,5 @@ body:has(#content_hygiene_host_row) { min-width: 0; }
     margin: 0;
     padding: 0;
 }
-:is(#content-hygiene-root input[data-test="textbox"], input[data-content-hygiene-filter="true"]) { height: auto; min-height: 0; }
-:is(#content-hygiene-root input[data-test="textbox"], #content-hygiene-root textarea, input[data-content-hygiene-filter="true"]):not([disabled]) { color: inherit; }
+:is(:is(#content-hygiene-root, [data-content-hygiene-portal="true"]) input[data-test="textbox"], input[data-content-hygiene-filter="true"]) { height: auto; min-height: 0; }
+:is(:is(#content-hygiene-root, [data-content-hygiene-portal="true"]) input[data-test="textbox"], :is(#content-hygiene-root, [data-content-hygiene-portal="true"]) textarea, input[data-content-hygiene-filter="true"]):not([disabled]) { color: inherit; }

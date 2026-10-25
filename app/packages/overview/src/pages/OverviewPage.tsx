@@ -232,6 +232,7 @@ export function OverviewPage({
                 subtitle="Understand what was collected from Splunk, what has been analyzed, and where evidence is still missing."
                 actions={
                     <ButtonRow>
+                        <StyledButton onClick={() => navigateToView('inuse')}>In-use content report</StyledButton>
                         <ExportMenu label="Export environment summary" disabled={!snapshot} items={[
                             { label: 'Environment summary CSV', onClick: () =>
                                 downloadCsv(

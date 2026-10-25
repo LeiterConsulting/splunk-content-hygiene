@@ -2,6 +2,7 @@ const viewNames = {
     overview: 'Overview',
     candidates: 'CleanupCandidates',
     dependencies: 'DependencyExplorer',
+    inuse: 'InUseContent',
     reviews: 'ReviewLibrary',
     ownership: 'Ownership',
     settings: 'Settings',

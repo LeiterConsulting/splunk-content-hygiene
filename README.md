@@ -23,6 +23,11 @@ The app keeps customer content read-only:
   paginated per-app health composition
 - Cleanup-candidate filtering, evidence inspection, review stages, and CSV/JSON
   export
+- Bulk review of selected/page/all-filtered candidates with confirmation,
+  existing-decision protection, cancellation and per-object results
+- An in-use/required-content footprint grouped by type, combining current
+  attributable activity and explicit Retain decisions, or following deliberately
+  selected starting objects through their supported outbound dependencies
 - Grouped, expandable directional dependency exploration, multi-step drill-through, candidate-group
   and review-stage filters, graph-derived removal-impact simulation, ordered
   remediation guidance, and relationship/impact export
@@ -91,6 +96,21 @@ only the active Library entry; its decision and revision history remain availabl
 
 ## Screenshots
 
+The 1.1 required-content report keeps explicit selections separate from observed
+activity and Retain decisions. This capture starts from Content Hygiene's own
+application metadata: an App is not an app-wide retain rule, so containment does
+not expand its footprint. The partial-coverage warning remains visible.
+
+![Explicit required-content investigation in dark mode](docs/images/required-content-dark.jpg)
+
+[Light-mode report capture](docs/images/required-content-light.jpg) starts from
+the app's own Dependency Explorer dashboard through its **Required content report**
+action; neither capture uses demo data.
+
+Bulk review uses a native decision editor, followed by an exact-scope confirmation
+and per-object results. See the [bulk-review workflow](docs/USER_GUIDE.md#bulk-candidate-review)
+for scope, conflict, cancellation, and export behavior.
+
 The 1.0.1 Review Library gives a selected object the full workspace width,
 places investigation actions beside its title, and separates decisions,
 evidence, object details, and history into native tabs. These real-data captures
@@ -141,11 +161,16 @@ yarn validate
 ```
 
 The verified installable archive is written to
-`app/dist/content_hygiene-1.0.2.tar.gz`. Run `yarn release:prepare` to
+`app/dist/content_hygiene-1.1.0.tar.gz`. Run `yarn release:prepare` to
 perform the complete validation and update `SHA256SUMS`.
 
 ## Current limitations
 
+- The required-content report is a partial shared static footprint, not a complete
+  migration manifest. Implicit props/automatic lookups, uninventoried knowledge
+  object types, private/dynamic content and ad-hoc consumers remain explicit gaps.
+- Bulk review is not atomic or an app-wide retain rule. Existing decisions are
+  skipped by default; completed saves remain if later items fail or are cancelled.
 - Scans run in the initiating browser session and are not scheduled.
 - Each complete-scan collector is capped at 10,000 visible records and reports
   truncation.

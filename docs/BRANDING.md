@@ -31,7 +31,8 @@ are available in `appserver/static/brand/` for appropriately themed uses.
 Splunk owns the native header and navigation. The app does not draw a legacy
 header over modern navigation or hide native chrome. `default.xml` supplies
 semantic icons from the lowercase 10.4-compatible icon list: overview,
-investigation, relationships, review notebook, ownership, and settings.
+investigation, relationships, required-content report (`filechart`), review
+notebook, ownership, and settings.
 Classic Splunk retains its normal text navigation.
 
 The React workspace mounts into a standard Simple XML HTML panel. It inherits
@@ -41,9 +42,10 @@ automatic search; inventory and usage collection remain explicit actions.
 
 ## Validation and asset-cache troubleshooting
 
-Classic branding delivery is verified on Splunk Enterprise 10.2.8. The six
-modern navigation-item icons, expanded/collapsed sidebar, home launcher, app
-switcher, and light/dark workspace are browser-verified on 10.4.4. All six
+Classic branding delivery is verified on Splunk Enterprise 10.2.8. The seven
+modern navigation-item icons (including the 1.1 required-content report),
+expanded/collapsed sidebar, home launcher, app switcher, and light/dark workspace
+are browser-verified on 10.4.4. All six
 native branding variants match the packaged PNGs through both shared and
 signed-in-user namespaces; the Web static copies also match.
 

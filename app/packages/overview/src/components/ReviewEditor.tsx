@@ -287,7 +287,7 @@ export function ReviewEditor({
             <Modal open={confirmArchive} onRequestClose={() => setConfirmArchive(false)} returnFocus={archiveToggle}
                 style={{ width: 520, maxWidth: 'calc(100vw - 32px)' }}>
                 <Modal.Header title="Archive this library record?" />
-                <Modal.Body>{contentObject.name} will leave the active Review Library. Its decision and history are retained and can be restored from Archived reviews. No Splunk knowledge object will be changed.</Modal.Body>
+                <Modal.Body data-content-hygiene-portal="true">{contentObject.name} will leave the active Review Library. Its decision and history are retained and can be restored from Archived reviews. No Splunk knowledge object will be changed.</Modal.Body>
                 <Modal.Footer>
                     <StyledButton onClick={() => setConfirmArchive(false)}>Keep active</StyledButton>
                     <StyledButton $primary onClick={() => { setConfirmArchive(false); handleDelete().catch(() => undefined); }}>Archive record</StyledButton>

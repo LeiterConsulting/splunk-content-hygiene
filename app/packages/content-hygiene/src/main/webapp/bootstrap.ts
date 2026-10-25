@@ -6,6 +6,7 @@ const pages: Record<string, AppPage> = {
     Overview: 'overview',
     CleanupCandidates: 'cleanup-candidates',
     DependencyExplorer: 'dependency-explorer',
+    InUseContent: 'in-use-content',
     ReviewLibrary: 'review-library',
     Ownership: 'ownership',
     Settings: 'settings',

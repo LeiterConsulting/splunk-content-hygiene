@@ -278,6 +278,7 @@ export function ReviewLibraryPage({
                 subtitle="Build a durable, app-local investigation queue without modifying any Splunk knowledge object."
                 actions={!selectedReview ?
                     <ButtonRow>
+                        <StyledButton onClick={() => navigate(() => navigateToView('inuse', { activity: 'none' }))}>Retained content report</StyledButton>
                         {workflow.refresh ? <StyledButton type="button" disabled={isLoading}
                             onClick={() => workflow.refresh!().catch(() => undefined)}>Refresh library</StyledButton> : null}
                         <ExportMenu label="Export filtered reviews" disabled={!filteredReviews.length} items={[

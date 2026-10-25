@@ -48,7 +48,7 @@ export function ReviewNavigationProvider({ children }: { children: React.ReactNo
             returnFocus={() => origin.current?.isConnected && origin.current.focus()}
             style={{ width: 520, maxWidth: 'calc(100vw - 32px)' }}>
             <Modal.Header title="Leave unsaved review changes?" />
-            <Modal.Body>Your investigation note, stage, or reviewer has unsaved changes. Stay to save them, or discard this draft and continue. The saved decision will not be changed.</Modal.Body>
+            <Modal.Body data-content-hygiene-portal="true">Your investigation note, stage, or reviewer has unsaved changes. Stay to save them, or discard this draft and continue. The saved decision will not be changed.</Modal.Body>
             <Modal.Footer>
                 <StyledButton onClick={() => { const action = pending; draft.current.onDiscard?.(); draft.current = { ...draft.current, dirty: false }; origin.current = null; setPending(null); action?.(); }}>Discard draft and continue</StyledButton>
                 <StyledButton $primary onClick={() => setPending(null)}>Keep editing</StyledButton>
