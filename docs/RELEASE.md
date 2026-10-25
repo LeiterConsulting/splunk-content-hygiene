@@ -25,12 +25,18 @@ The archive is produced as
 `app/dist/content_hygiene-<version>.tar.gz`. Packaging starts from a clean stage,
 sets `COPYFILE_DISABLE=1`, removes `.DS_Store`, AppleDouble `._*`, and
 `__MACOSX` entries recursively, and verifies their absence after compression.
+From 1.1.1, both GNU tar and bsdtar produce portable USTAR with normalized root
+ownership, without extended attributes, ACLs or file flags. The verifier walks
+raw tar headers and rejects PAX, GNU/vendor extension records, links, invalid
+checksums and truncated payloads. A clean filename listing alone is insufficient:
+PAX headers can carry build-machine metadata without appearing as ordinary files.
+Packaging does not strip attributes from the original source tree.
 
 Inspect the archive before signing off:
 
 ```bash
-tar -tzf app/dist/content_hygiene-1.1.0.tar.gz
-shasum -a 256 app/dist/content_hygiene-1.1.0.tar.gz
+tar -tzf app/dist/content_hygiene-1.1.1.tar.gz
+shasum -a 256 app/dist/content_hygiene-1.1.1.tar.gz
 ```
 
 It must have exactly one top-level `content_hygiene/` directory and must not

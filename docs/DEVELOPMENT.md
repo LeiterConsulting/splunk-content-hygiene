@@ -23,7 +23,8 @@ yarn validate
 The validation sequence runs:
 
 1. Reproducible branding verification
-2. Jest component, host/theme, and service tests plus Python coordinator tests
+2. Jest component, host/theme, and service tests, Python coordinator tests, and
+   native-tar archive-policy regressions
 3. ESLint and Stylelint
 4. TypeScript compilation
 5. Production webpack builds
@@ -32,7 +33,11 @@ The validation sequence runs:
 
 The verifier requires a single `content_hygiene/` top-level directory and
 rejects dependencies, repository metadata, local Splunk configuration, tests,
-coverage, source maps, demonstration markers, and macOS metadata.
+coverage, source maps, demonstration markers, and macOS metadata. Raw USTAR
+header validation rejects PAX/extended-attribute records, unsupported record types,
+build-machine ownership, corruption and truncation even when `tar -t` shows
+only acceptable filenames. The native-tar regression runs on macOS locally and
+GNU tar in Linux CI, retaining the source fixture's extended attribute on macOS.
 
 ## Workspace layout
 

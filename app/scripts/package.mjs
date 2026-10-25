@@ -2,6 +2,7 @@ import { cp, mkdir, readFile, readdir, rm } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { assertCleanArchiveHeaders, cleanTarOptions } from './archive-policy.mjs';
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const workspaceDirectory = path.resolve(scriptDirectory, '..');
@@ -60,7 +61,8 @@ await rm(artifact, { force: true });
 
 const result = spawnSync(
     'tar',
-    ['-czf', artifact, '-C', packageStage, 'content_hygiene'],
+    [...cleanTarOptions(spawnSync('tar', ['--version'], { encoding: 'utf8' }).stdout?.includes('bsdtar')),
+        '-czf', artifact, '-C', packageStage, 'content_hygiene'],
     {
         env: { ...process.env, COPYFILE_DISABLE: '1' },
         encoding: 'utf8',
@@ -72,5 +74,7 @@ await rm(packageStage, { recursive: true, force: true });
 if (result.status !== 0) {
     throw new Error(result.stderr || 'Unable to create the Splunk app archive.');
 }
+
+assertCleanArchiveHeaders(await readFile(artifact));
 
 process.stdout.write(`${artifact}\n`);

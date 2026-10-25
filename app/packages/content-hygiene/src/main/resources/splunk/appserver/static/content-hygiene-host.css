@@ -13,6 +13,10 @@ body:has(#content_hygiene_host_row) { min-width: 0; }
 #content_hygiene_host_panel .dashboard-panel { margin: 0; border: 0; }
 #content_hygiene_host_panel .panel-body.html { padding: 0; }
 #content-hygiene-root { min-width: 0; }
+/* Keep native token colors, but apply foreground/background state changes
+   together. Interpolating them independently can briefly lose text contrast.
+   Only app-owned controls are affected; native host navigation is unchanged. */
+:is(#content-hygiene-root, [data-content-hygiene-portal="true"]) button { transition: none; }
 /* The host's light-dashboard heading rules otherwise override the inherited
    Splunk React theme. Do not hard-code a light or dark foreground here. */
 :is(#content-hygiene-root, [data-content-hygiene-portal="true"]) :is(h1, h2, h3, h4, h5, h6, p) { color: inherit; }

@@ -151,6 +151,7 @@ export function InUseContentPage({
     const [type, setType] = useState('all');
     const [app, setApp] = useState('all');
     const [query, setQuery] = useState('');
+    const [filterNotice, setFilterNotice] = useState('');
     const [page, setPage] = useState(0);
     const [inspectedId, setInspectedId] = useState('');
     const [requestedScanId] = useState(() => readQueryParam('scan'));
@@ -201,6 +202,30 @@ export function InUseContentPage({
                 .slice(0, 200),
         [snapshot, findStart],
     );
+    const typeOptions = useMemo(() => Object.keys(report?.groups ?? {}), [report]);
+    const appOptions = useMemo(
+        () => [...new Set(report?.rows.map((row) => row.app) ?? [])].sort(),
+        [report],
+    );
+    // Adjust only invalid selections before committing the new report. A
+    // loading/null snapshot is not evidence that a filter option disappeared.
+    // Clearing the stored selection also prevents it silently returning later.
+    if (report && !isLoading) {
+        const invalidType = type !== 'all' && !typeOptions.includes(type);
+        const invalidApp = app !== 'all' && !appOptions.includes(app);
+        if (invalidType || invalidApp) {
+            if (invalidType) {
+                setType('all');
+            }
+            if (invalidApp) {
+                setApp('all');
+            }
+            setPage(0);
+            setFilterNotice(
+                `Included ${invalidType && invalidApp ? 'type and app filters were' : `${invalidType ? 'type' : 'app'} filter was`} reset to All because ${invalidType && invalidApp ? 'those options are' : 'that option is'} not in the current footprint. Starting objects and dependency traversal are unchanged.`,
+            );
+        }
+    }
     const filtered = (report?.rows ?? []).filter(
         (row) =>
             (type === 'all' || row.objectType === type) &&
@@ -372,6 +397,9 @@ export function InUseContentPage({
                     </>
                 )}
             </FilterBar>
+            <div role="status" aria-live="polite" aria-atomic="true">
+                {filterNotice ? <InlineNotice>{filterNotice}</InlineNotice> : null}
+            </div>
             {mode === 'selected' ? (
                 <Card>
                     <CardHeader>
@@ -462,6 +490,7 @@ export function InUseContentPage({
                                 <StyledButton
                                     key={group}
                                     onClick={() => {
+                                        setFilterNotice('');
                                         setType(group);
                                         setPage(0);
                                         setInspectedId('');
@@ -587,6 +616,7 @@ export function InUseContentPage({
                                         type="search"
                                         value={query}
                                         onChange={(event) => {
+                                            setFilterNotice('');
                                             setQuery(event.currentTarget.value);
                                             setPage(0);
                                         }}
@@ -597,12 +627,13 @@ export function InUseContentPage({
                                     <Select
                                         value={type}
                                         onChange={(event) => {
+                                            setFilterNotice('');
                                             setType(event.currentTarget.value);
                                             setPage(0);
                                         }}
                                     >
                                         <option value="all">All types</option>
-                                        {Object.keys(report.groups).map((group) => (
+                                        {typeOptions.map((group) => (
                                             <option key={group} value={group}>
                                                 {group}
                                             </option>
@@ -614,22 +645,22 @@ export function InUseContentPage({
                                     <Select
                                         value={app}
                                         onChange={(event) => {
+                                            setFilterNotice('');
                                             setApp(event.currentTarget.value);
                                             setPage(0);
                                         }}
                                     >
                                         <option value="all">All apps</option>
-                                        {[...new Set(report.rows.map((row) => row.app))]
-                                            .sort()
-                                            .map((name) => (
-                                                <option key={name} value={name}>
-                                                    {name}
-                                                </option>
-                                            ))}
+                                        {appOptions.map((name) => (
+                                            <option key={name} value={name}>
+                                                {name}
+                                            </option>
+                                        ))}
                                     </Select>
                                 </FilterField>
                                 <StyledButton
                                     onClick={() => {
+                                        setFilterNotice('');
                                         setType('all');
                                         setApp('all');
                                         setQuery('');

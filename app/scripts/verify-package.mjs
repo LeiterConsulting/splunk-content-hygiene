@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { assertCleanArchiveHeaders } from './archive-policy.mjs';
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const workspaceDirectory = path.resolve(scriptDirectory, '..');
@@ -20,6 +21,7 @@ if (!appBuild) throw new Error('An explicit app build is required.');
 const hostScript = `ContentHygiene.build${appBuild}.js`;
 
 await access(artifact);
+assertCleanArchiveHeaders(await readFile(artifact));
 
 const result = spawnSync('tar', ['-tzf', artifact], {
     encoding: 'utf8',

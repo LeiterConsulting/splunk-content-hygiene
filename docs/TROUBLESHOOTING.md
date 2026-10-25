@@ -23,7 +23,13 @@ explicitly select exact starting objects for a dependency-only investigation.
 
 Display filters narrow the table, not the closure. Choose the full JSON export
 for all supported identities, relationships and diagnostics; export coverage CSV
-alongside object CSV. A source-scan change notice, unresolved/missing definition,
+alongside object CSV. From 1.1.1, a type/app selection no longer present in a
+settled footprint resets to **All** with a status notice; still-valid filters and
+search text remain. Use **Clear display filters** if a valid but narrow
+combination hides the rows you need. This never changes the starting set or
+underlying dependency traversal.
+
+A source-scan change notice, unresolved/missing definition,
 partial outbound manifest or traversal ceiling is an explicit limitation. The
 report does not discover implicit automatic lookups/props, every knowledge-object
 type, private/dynamic content, ad-hoc usage or external consumers, and is not a

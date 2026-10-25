@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.1.1 — 2026-10-25
+
+- Recover In-use Content type/app filters when a starting-set, activity or
+  inventory change removes their options. Preserve valid filters and search text,
+  reset only invalid selections, and announce the recovery without changing the
+  dependency closure or export scope.
+- Apply native Splunk button-state colors without foreground/background
+  interpolation that can briefly reduce text contrast. Keep styling scoped to
+  the app and its portals; native Splunk navigation remains unchanged.
+- Wrap header action groups before they compress page titles and descriptions
+  into narrow columns, including at increased browser zoom.
+- Produce portable USTAR archives with normalized ownership and no extended
+  attributes, ACLs, file flags, PAX or vendor metadata records. Verify raw tar
+  headers, including corruption/truncation checks, instead of relying only on
+  archive filenames. Published earlier release assets remain unchanged.
+- Add light/dark filter-recovery regressions and cross-platform archive-policy
+  tests. No customer-content write operations or review-protocol changes.
+- Validate the same build on Enterprise 10.2.5, 10.2.8 and 10.4.4, including
+  seven pages in both themes, real-data filter recovery, unchanged review rows,
+  representative file exports and bounded native accessibility checks. Document
+  those checks separately from earlier backend qualification and certification.
+
 ## 1.1.0 — 2026-10-25
 
 - Added page/all-filtered candidate selection, explicit bulk-decision preview,

@@ -27,9 +27,18 @@ the minimum is not a recommendation to downgrade or remain on an old patch.
 
 | Runtime | Purpose | Current evidence |
 | --- | --- | --- |
-| 10.2.5 | Exact minimum; classic navigation; coordinator and reported regressions | App 1.1.0 build 64: isolated Linux VM; core scan/dependency/review/permission workflows, native icon bytes, seven pages in light/dark, targeted 1024px layouts, and representative CSV/JSON delivery |
-| 10.2.8 | Representative 10.2 maintenance release and real-estate regression | App 1.1.0 build 64: real-data scans, review/bulk workflow, graph/required-content report, exports, light/dark |
-| 10.4.4 | Modern navigation, current theme host, and newer bundled runtime | App 1.1.0 build 64: native icons/navigation, real-data workflows, exports, light/dark |
+| 10.2.5 | Exact minimum; classic navigation; coordinator and reported regressions | App 1.1.1 build 67: isolated Linux VM; real installed-content scan, seven pages in light/dark, live filter recovery, 1024px layouts, native 200% zoom, keyboard review/draft flow, operator-assisted VoiceOver, and parsed CSV/JSON delivery |
+| 10.2.8 | Representative 10.2 maintenance release and real-estate regression | App 1.1.1 build 67: real-data scan, seven pages in light/dark, native keyboard filter recovery and selected-object investigations; existing decisions unchanged |
+| 10.4.4 | Modern navigation, current theme host, and newer bundled runtime | App 1.1.1 build 67: real-data scan, seven pages in light/dark, live filter recovery and selected-object investigations; existing decisions unchanged |
+
+The same checksum-identified 1.1.1 archive was installed on all three runtimes
+without a restart. Inventory identities, published object/relationship counts,
+resolved endpoints and original review rows were independently checked. No new
+review records were saved for this UI/packaging patch. The coordinator,
+permission boundaries, request-size enforcement and concurrent-write protocol
+are unchanged; their exact-minimum runtime qualification was performed with
+1.1.0 build 64, not repeated as new backend testing for 1.1.1. Native launcher
+icons and classic/modern navigation also retain that earlier qualification.
 
 An isolated VM exercises actual installed Splunk content and telemetry, not a
 packaged demonstration dataset. Its small inventory and short event history do
@@ -37,11 +46,29 @@ not qualify large-estate performance or establish inactivity. An emulated VM
 provides functional compatibility evidence, not a production benchmark or
 vendor certification of the host architecture.
 
-The 10.2.5 browser pass confirmed representative environment-summary CSV and JSON
-downloads end-to-end. The saved files were parsed and checked against inventory
-counts; the JSON also matched the live published scan identity and preserved
-partial-analysis disclosures. This is representative export evidence, not a
-claim that every browser, export context, or dataset size was exercised.
+The 1.1.1 minimum-version browser pass confirmed required-content CSV and JSON
+downloads end-to-end. Parsed object identities matched across formats; JSON
+matched the live published scan identity and retained coverage gaps and traversed
+relationships. The earlier 1.1.0 pass also qualified environment-summary CSV/JSON.
+This is representative export evidence, not a claim that every browser, export
+context, or dataset size was exercised.
+
+## Bounded accessibility checks
+
+The 1.1.1 pass covered all seven pages in both themes on each representative
+runtime, with targeted 1024px layouts and an actual native Chrome 200% zoom pass
+in light/dark mode. The zoom check found and verified a fix for compressed page
+headings. Native keyboard checks exercised dropdown selection, an export menu,
+review text entry, confirmation-button focus, keeping a draft and discarding
+only that unsaved draft. An operator confirmed VoiceOver announced the report
+heading and the Starting set control's name/value on the minimum runtime.
+
+The app uses native Splunk UI Toolkit controls and theme tokens. Button colors
+change without intermediate foreground/background interpolation. These targeted
+checks are not a formal WCAG audit, full assistive-technology/browser matrix, or
+certification of Splunk's own navigation chrome. At increased zoom the classic
+Splunk toolbar can wrap independently of the app; the app does not override the
+host toolbar's layout or colors.
 
 ## Maintenance releases are not individual release gates
 

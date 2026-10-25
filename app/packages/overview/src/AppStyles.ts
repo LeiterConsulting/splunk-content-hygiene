@@ -52,15 +52,19 @@ export const HeaderRow = styled.header`
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
+    flex-wrap: wrap;
     gap: ${variables.spacingLarge};
     margin-bottom: ${variables.spacingLarge};
     > div:first-child {
         min-width: 0;
-        flex: 1;
+        flex: 1 1 28rem;
     }
 
     @media (width <= 760px) {
         flex-direction: column;
+        > div:first-child {
+            flex-basis: auto;
+        }
     }
 `;
 
@@ -94,6 +98,10 @@ export const StyledButton = styled(ActionButton).attrs(({ $primary, appearance }
     max-width: 100%;
     white-space: normal;
     overflow-wrap: anywhere;
+
+    /* Native token colors remain authoritative, without intermediate low-
+       contrast foreground/background interpolation on theme or state changes. */
+    transition: none;
 `;
 
 export const ScanBanner = styled.section<{ $state?: 'ready' | 'warning' | 'error' | 'unknown' }>`

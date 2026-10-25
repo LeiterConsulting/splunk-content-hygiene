@@ -64,11 +64,14 @@ the shared cache; access is restricted to explicit hygiene roles.
    connectivity check succeeds.
 
 The support baseline is Splunk Enterprise **10.2.5 or later** on a standalone
-Linux x86-64 search head with KV Store. App 1.1.0's core workflows and all seven
-pages in light/dark modes are validated in an isolated 10.2.5 VM, alongside
-larger real-data browser validation on 10.2.8 and 10.4.4 covering classic/modern
-navigation and native launcher icons. Maintenance patches do not each require
-separate release qualification without a known regression. See the
+Linux x86-64 search head with KV Store. App 1.1.1 build 67 is validated on
+10.2.5, 10.2.8 and 10.4.4: all seven pages in light/dark modes, real-data scans,
+filter recovery and preservation of existing decisions. Targeted native-browser
+checks include actual 200% zoom, keyboard review/draft flows and operator-assisted
+VoiceOver announcements. These are bounded checks, not accessibility certification.
+Classic/modern navigation and native launcher icons retain their earlier runtime
+qualification. Maintenance patches do not each require separate release
+qualification without a known regression. See the
 [compatibility policy](docs/COMPATIBILITY.md)
 for the tested matrix and deployment boundaries, and
 [Installation](docs/INSTALLATION.md) for upgrade and verification details.
@@ -166,7 +169,7 @@ yarn validate
 ```
 
 The verified installable archive is written to
-`app/dist/content_hygiene-1.1.0.tar.gz`. Run `yarn release:prepare` to
+`app/dist/content_hygiene-1.1.1.tar.gz`. Run `yarn release:prepare` to
 perform the complete validation and update `SHA256SUMS`.
 
 ## Current limitations

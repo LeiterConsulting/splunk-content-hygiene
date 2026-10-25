@@ -154,6 +154,13 @@ filters help browse the result; filtering a type/app does not alter the underlyi
 closure. Each required row has one shortest witness path, with conservative path
 confidence. Inspect it or drill into Explorer to investigate further.
 
+When a starting-set, activity or inventory change removes a selected type/app
+from the footprint, that display filter resets to **All** with a status notice.
+Valid selections and search text are preserved. A loading inventory is not
+treated as a missing option. The reset does not change starting objects,
+dependency traversal or the full JSON export, and an obsolete selection does
+not silently return when earlier options reappear.
+
 Tables show 50 rows at a time. Only path presentation is bounded to 100 identities;
 the complete supported closure is still calculated. A 50,000-object or
 250,000-relationship traversal ceiling produces an explicit **Truncated** warning.
