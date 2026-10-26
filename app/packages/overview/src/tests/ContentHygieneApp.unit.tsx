@@ -16,8 +16,9 @@ async function selectChoice(
     user: ReturnType<typeof userEvent.setup>,
     label: string,
     option: string,
+    scope: Pick<typeof screen, 'getByRole'> = screen,
 ): Promise<void> {
-    const trigger = screen.getByRole('combobox', { name: label });
+    const trigger = scope.getByRole('combobox', { name: label });
     await user.click(trigger);
     const filter = screen.queryByRole('combobox', { name: 'Filter' });
     if (filter) {
@@ -615,15 +616,20 @@ test('persists candidate confirmation workflow records in the app-local review l
     );
 
     await screen.findByText('Live inventory cache ready');
-    await user.click(screen.getByRole('button', { name: 'Retired Host Report' }));
+    await user.click(within(screen.getByRole('table')).getByRole('button', { name: 'Retired Host Report' }));
     await user.click(screen.getByRole('tab', { name: 'Review decision' }));
-    await selectChoice(user, 'Confirmation stage', 'Investigating');
-    await user.type(screen.getByRole('textbox', { name: 'Assigned reviewer' }), 'platform-team');
-    await user.type(
-        screen.getByRole('textbox', { name: 'Investigation note' }),
+    const editor = within(screen.getByRole('tabpanel', { name: 'Review decision' }));
+    await selectChoice(user, 'Confirmation stage', 'Investigating', editor);
+    await user.type(editor.getByRole('textbox', { name: 'Assigned reviewer' }), 'platform-team');
+    // Paste the note through the real input handler; this workflow checks
+    // persistence, while reviewer entry still covers character-by-character edits.
+    await user.click(editor.getByRole('textbox', { name: 'Investigation note' }));
+    await user.paste('Confirm the dashboard reference with its owner.');
+    expect(editor.getByRole('textbox', { name: 'Investigation note' })).toHaveValue(
         'Confirm the dashboard reference with its owner.',
     );
-    await user.click(screen.getByRole('button', { name: 'Add to review library' }));
+    expect(editor.getByRole('status')).toHaveTextContent('Unsaved review changes.');
+    await user.click(editor.getByRole('button', { name: 'Add to review library' }));
 
     expect(
         await screen.findByText('Review record saved to the app-local library.'),
@@ -647,7 +653,7 @@ test('persists candidate confirmation workflow records in the app-local review l
 
     expect(await screen.findByRole('heading', { name: 'Review Library' })).toBeInTheDocument();
     expect(await screen.findByText('platform-team')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Retired Host Report' }));
+    await user.click(within(screen.getByRole('table')).getByRole('button', { name: 'Retired Host Report' }));
     expect(screen.getByRole('textbox', { name: 'Investigation note' })).toHaveValue(
         'Confirm the dashboard reference with its owner.',
     );
@@ -702,7 +708,7 @@ test('broadens center scope when drilling to a related object outside the review
 });
 
 test.each(['light', 'dark'] as const)(
-    'link-style graph and table buttons retain an untinted surface when focused in %s mode',
+    'link-style graph buttons retain an untinted surface when focused in %s mode',
     async (colorScheme) => {
         const user = userEvent.setup();
         render(
@@ -713,16 +719,36 @@ test.each(['light', 'dark'] as const)(
                 />
             </SplunkThemeProvider>,
         );
-        const graphButton = (await screen.findAllByRole('button', { name: /^Inspect / }))[0];
+        const graph = within(await screen.findByRole('region', {
+            name: 'Dependency graph centered on Daily Error Review',
+        }));
+        const graphButton = graph.getByRole('button', { name: 'Inspect Daily Error Review' });
         // Graph inspection opens a readable full-width object view and moves focus there.
         expect(window.getComputedStyle(graphButton).backgroundColor).toBe('rgba(0, 0, 0, 0)');
         expect(
             window.getComputedStyle(within(graphButton).getByText('Saved Search')).whiteSpace,
-        ).toBe('nowrap');
+        ).toBe('normal');
         await user.click(graphButton);
         expect(screen.getByRole('complementary').querySelector('h2')).toHaveFocus();
-        await user.click(screen.getByRole('tab', { name: /^Relationships/ }));
-        const rowButton = screen.getByRole('button', { name: 'Retired Host Report' });
+    },
+);
+
+// Table and graph inspection have independent style/focus contracts. Exercise
+// each directly rather than adding an unrelated tab round-trip to one deadline.
+test.each(['light', 'dark'] as const)(
+    'link-style relationship table buttons retain an untinted surface when focused in %s mode',
+    async (colorScheme) => {
+        const user = userEvent.setup();
+        render(
+            <SplunkThemeProvider family="enterprise" colorScheme={colorScheme}>
+                <ContentHygieneApp
+                    page="dependency-explorer"
+                    inventoryClient={clientWithSnapshot()}
+                />
+            </SplunkThemeProvider>,
+        );
+        const table = within(await screen.findByRole('table'));
+        const rowButton = table.getByRole('button', { name: 'Retired Host Report' });
         await user.click(rowButton);
         expect(screen.getByRole('complementary').querySelector('h2')).toHaveFocus();
         expect(window.getComputedStyle(rowButton).backgroundColor).toBe('rgba(0, 0, 0, 0)');

@@ -13,15 +13,16 @@ export interface CoverageContext {
     collectors: Record<string, boolean>;
     identityKnown: boolean;
 }
-const targets: ReferenceTarget[] = ['macro', 'lookup', 'lookup_file', 'saved_search', 'data_model', 'index', 'sourcetype'];
+const targets: ReferenceTarget[] = ['macro', 'lookup', 'lookup_file', 'saved_search', 'data_model', 'index', 'sourcetype', 'automatic_lookup'];
 const searchableSources = ['saved_searches', 'macros', 'dashboards', 'data_models'];
-const contentCollectors = [...searchableSources, 'lookup_definitions', 'lookup_files', 'indexes', 'sourcetypes'];
+const contentCollectors = [...searchableSources, 'lookup_definitions', 'lookup_files', 'indexes', 'sourcetypes', 'automatic_lookups'];
 
 export function referenceTarget(object: ContentObject): ReferenceTarget | null {
     const values: Record<string, ReferenceTarget> = {
         Macro: 'macro', 'Lookup Definition': 'lookup', 'Lookup File': 'lookup_file',
         'Saved Search': 'saved_search', Report: 'saved_search', Alert: 'saved_search',
         'Data Model': 'data_model', Index: 'index', Sourcetype: 'sourcetype',
+        'Automatic Lookup': 'automatic_lookup',
     };
     return values[object.objectType] ?? null;
 }
@@ -76,7 +77,7 @@ export function buildCoverageResolver(context: CoverageContext): (
         const own = outgoing.get(object.objectId);
         const outboundReasons = [...(own?.messages ?? [])];
         if (object.objectType === 'Sourcetype') {
-            outboundReasons.push('Search-time transformations and implicit lookups are not collected for sourcetypes.');
+            outboundReasons.push('Only separately inventoried automatic props lookup rules are assessed. Other search-time transformations, renames and invoking-app scope are unverified for sourcetypes.');
         }
         if (!context.identityKnown) { outboundReasons.push('Scanning identity/roles could not be verified.'); }
         if (object.objectType !== 'App' && !parentKnown) {
@@ -102,11 +103,19 @@ export function buildCoverageResolver(context: CoverageContext): (
             const examples = [...(generic?.examples ?? []), ...(named?.examples ?? [])];
             let required: string[] = [];
             if (object.objectType === 'App') { required = contentCollectors; }
-            else if (type) { required = [...searchableSources, ...(type === 'lookup_file' ? ['lookup_definitions'] : [])]; }
+            else if (type) { required = [...searchableSources,
+                ...(type === 'lookup_file' ? ['lookup_definitions'] : []),
+                ...(type === 'lookup' ? ['automatic_lookups'] : [])]; }
             const missing = required.filter((collector) => context.collectors[collector] !== true);
             const reasons: string[] = [];
             if (!type && object.objectType !== 'App') {
                 reasons.push('Incoming navigation links and external callers are outside the supported static target model.');
+            }
+            if (type === 'automatic_lookup') {
+                reasons.push('Automatic lookup callers are conditional. Implicit/wildcard event domains, props precedence, renames and inherited invocation namespaces are not exhaustively mapped.');
+            }
+            if (type === 'lookup' || type === 'lookup_file') {
+                reasons.push('Other implicit props consumers, including calculated fields and extraction/transformation rules, are not inventoried.');
             }
             if (missing.length) { reasons.push(`Potential source catalogs are incomplete: ${missing.join(', ')}.`); }
             if (count) { reasons.push(`${count} visible source object(s) could contain additional ${type?.replace(/_/g, ' ')} references in this namespace.`); }

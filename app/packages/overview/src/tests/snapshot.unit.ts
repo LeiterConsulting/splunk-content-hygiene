@@ -13,7 +13,9 @@ jest.mock('@splunk/splunk-utils/url', () => ({
 type Row = Record<string, any>;
 const collections = new Map<string, Map<string, Row>>();
 let failEdges = false;
-let requests: Array<{ path: string; method: string; query?: string | null; fields?: string | null }> = [];
+let failAutomatic = false;
+let automaticEntries: Row[] = [];
+let requests: Array<{ path: string; method: string; query?: string | null; fields?: string | null; offset?: string | null }> = [];
 const reply = (data: unknown, status = 200): Response =>
     ({ status, text: async () => JSON.stringify(data), json: async () => data }) as Response;
 function matches(row: Row, query: Row): boolean {
@@ -28,6 +30,8 @@ function matches(row: Row, query: Row): boolean {
 beforeEach(() => {
     collections.clear();
     failEdges = false;
+    failAutomatic = false;
+    automaticEntries = [];
     requests = [];
     globalThis.fetch = jest.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
         if (init.signal?.aborted) {
@@ -37,7 +41,7 @@ beforeEach(() => {
         }
         const url = new URL(String(input), 'https://lab.test');
         const method = init.method ?? 'GET';
-        requests.push({ path: url.pathname, method, query: url.searchParams.get('query'), fields: url.searchParams.get('fields') });
+        requests.push({ path: url.pathname, method, query: url.searchParams.get('query'), fields: url.searchParams.get('fields'), offset: url.searchParams.get('offset') });
         const kv = url.pathname.match(/\/storage\/collections\/data\/([^/]+)(.*)$/);
         if (kv) {
             const [, collection, suffix] = kv;
@@ -108,6 +112,12 @@ beforeEach(() => {
             content: { disabled: false },
         };
         let entries: Row[] = [];
+        if (url.pathname.endsWith('/data/props/lookups')) {
+            if (failAutomatic) { return reply({}, 403); }
+            const offset = Number(url.searchParams.get('offset') ?? 0);
+            const count = Number(url.searchParams.get('count') ?? 200);
+            return reply({ entry: automaticEntries.slice(offset, offset + count), paging: { total: automaticEntries.length } });
+        }
         if (url.pathname.endsWith('/apps/local')) {
             entries = [app];
         }
@@ -131,6 +141,36 @@ beforeEach(() => {
         }
         return reply({ entry: entries, paging: { total: entries.length } });
     }) as jest.Mock;
+});
+
+test('native automatic lookup collection paginates, excludes private identities, fingerprints mappings and never stores raw declarations', async () => {
+    automaticEntries = Array.from({ length: 201 }, (_, index) => ({
+        name: `events : LOOKUP-example-${index}`,
+        acl: { app: 'example', owner: 'nobody', sharing: index === 200 ? 'user' : 'app' },
+        content: { stanza: 'events', attribute: `LOOKUP-example-${index}`, transform: 'owners', type: 'LOOKUP', value: 'owners key OUTPUT private_output_marker', 'lookup.field.output.0': 'owner' },
+    }));
+    const result = await splunkInventoryClient.runFullScan();
+    expect(result.scan.collectorCounts.automatic_lookups).toBe(200);
+    expect(result.scan.collectorTotals.automatic_lookups).toBe(201);
+    expect(requests.filter((row) => row.path.endsWith('/data/props/lookups')).map((row) => row.offset)).toEqual(['0', '200']);
+    const automatic = result.objects.filter((row) => row.objectType === 'Automatic Lookup');
+    expect(automatic).toHaveLength(200);
+    expect(automatic[0].configurationFingerprint).toMatchObject({ version: 2, digest: expect.stringMatching(/^[a-f0-9]{64}$/) });
+    expect(result.edges.filter((row) => row.relation === 'uses_lookup')).toHaveLength(200);
+    const stored = JSON.stringify(Array.from(collections.get('ch_objects')!.values()));
+    expect(stored).not.toContain('private_output_marker');
+    expect(stored).not.toContain('LOOKUP-example-200');
+    expect(requests.filter((row) => row.method !== 'GET').every((row) => row.path.includes('/storage/collections/data/'))).toBe(true);
+});
+
+test('a failed automatic lookup collector cannot replace a complete published baseline', async () => {
+    const first = await splunkInventoryClient.runFullScan();
+    failAutomatic = true;
+    const partial = await splunkInventoryClient.runFullScan();
+    expect(partial.scan.scanId).toBe(first.scan.scanId);
+    expect(partial.scan.retainedBaseline).toBe(true);
+    expect(partial.latestCheck?.warnings.join(' ')).toContain('Automatic lookup rules (props)');
+    expect(partial.latestCheck?.analysisStatus).toBe('partial');
 });
 
 test('interrupted persistence and cancellation preserve the complete baseline; bounded scans cannot replace it', async () => {

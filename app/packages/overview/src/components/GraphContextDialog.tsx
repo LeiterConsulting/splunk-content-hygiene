@@ -1,0 +1,221 @@
+import React, { useState } from 'react';
+import Modal from '@splunk/react-ui/Modal';
+import styled from 'styled-components';
+import { variables } from '@splunk/themes';
+import { DefinitionList, InlineNotice, RowButton, SmallText, StyledButton } from '../AppStyles';
+import { DependencyIndex, GraphLink, GraphNode } from '../services/dependencyGraph';
+import { isPotentialRelation } from '../utils/dependencySemantics';
+import { ResultPagination } from './ResultPagination';
+import { StatusBadge } from './StatusBadge';
+
+const ContextFacts = styled(DefinitionList)`
+    grid-template-columns: minmax(90px, 0.3fr) minmax(0, 1fr);
+    @media (width <= 480px) {
+        grid-template-columns: minmax(0, 1fr);
+        dd {
+            margin-bottom: ${variables.spacingSmall};
+        }
+    }
+`;
+const ContextList = styled.ul`
+    display: grid;
+    gap: ${variables.spacingMedium};
+    padding-left: ${variables.spacingLarge};
+    li {
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
+    p {
+        white-space: pre-wrap;
+    }
+`;
+
+export type GraphContext = { node: GraphNode } | { link: GraphLink };
+
+/** Read-only, portal-based context: never clipped by the graph's scroll area. */
+export function GraphContextDialog({
+    context,
+    open,
+    index,
+    onClose,
+    onInspect,
+    returnFocus,
+}: {
+    context: GraphContext | null;
+    open: boolean;
+    index: DependencyIndex;
+    onClose: () => void;
+    onInspect: (id: string) => void;
+    returnFocus: () => void;
+}): React.ReactElement {
+    const [page, setPage] = useState(0);
+    const node = context && 'node' in context ? context.node : null;
+    const link = context && 'link' in context ? context.link : null;
+    const ids = node?.memberIds ?? [];
+    const references = link?.edges ?? [];
+    const total = link ? references.length : ids.length;
+    const currentPage = Math.min(page, Math.max(0, Math.ceil(total / 25) - 1));
+    const inspect = (id: string): void => {
+        onClose();
+        onInspect(id);
+    };
+    const name = (id: string): string => index.objects.get(id)?.name ?? id;
+    const nodeTitle = node?.memberIds ? 'Grouped object context' : 'Object context';
+    return (
+        <Modal
+            open={open}
+            onRequestClose={onClose}
+            returnFocus={returnFocus}
+            style={{ width: 760, maxWidth: 'calc(100vw - 32px)' }}
+        >
+            <Modal.Header title={link ? 'Relationship context' : nodeTitle} />
+            <Modal.Body
+                data-content-hygiene-portal="true"
+                style={{ maxHeight: '65vh', overflowY: 'auto', overflowWrap: 'anywhere' }}
+            >
+                {node ? (
+                    <>
+                        <ContextFacts>
+                            <dt>Name</dt>
+                            <dd>{node.name}</dd>
+                            <dt>Type</dt>
+                            <dd>{node.objectType}</dd>
+                            <dt>App</dt>
+                            <dd>{node.app}</dd>
+                            {!node.memberIds ? (
+                                <>
+                                    <dt>Identity</dt>
+                                    <dd>{node.id}</dd>
+                                    <dt>Status</dt>
+                                    <dd>
+                                        <StatusBadge status={node.status} />
+                                    </dd>
+                                </>
+                            ) : null}
+                        </ContextFacts>
+                        {!node.resolved && !node.memberIds ? (
+                            <InlineNotice>
+                                This target is unresolved. Its label and status are captured
+                                context, not proof that an object is missing or safe to remove.
+                            </InlineNotice>
+                        ) : null}
+                        {node.memberIds ? (
+                            <>
+                                <p>
+                                    {ids.length} objects in this displayed group. Inspect a member
+                                    for its full evidence; the graph center does not change.
+                                </p>
+                                <ResultPagination
+                                    page={currentPage}
+                                    pageSize={25}
+                                    total={total}
+                                    onChange={setPage}
+                                />
+                                <ContextList>
+                                    {ids
+                                        .slice(currentPage * 25, (currentPage + 1) * 25)
+                                        .map((id) => (
+                                            <li key={id}>
+                                                <RowButton onClick={() => inspect(id)}>
+                                                    {name(id)}
+                                                </RowButton>
+                                                <SmallText>
+                                                    {index.objects.get(id)?.objectType ??
+                                                        'Unresolved target'}{' '}
+                                                    · {index.objects.get(id)?.app ?? 'Unknown app'}
+                                                </SmallText>
+                                                <SmallText>{id}</SmallText>
+                                            </li>
+                                        ))}
+                                </ContextList>
+                            </>
+                        ) : null}
+                    </>
+                ) : null}
+                {link ? (
+                    <>
+                        <ContextFacts>
+                            <dt>Relationship</dt>
+                            <dd>{link.label}</dd>
+                            <dt>Confidence</dt>
+                            <dd>{link.confidence} — weakest captured confidence</dd>
+                            <dt>References</dt>
+                            <dd>
+                                {references.length} captured reference
+                                {references.length === 1 ? '' : 's'}
+                            </dd>
+                        </ContextFacts>
+                        <InlineNotice>
+                            {references.some((edge) => isPotentialRelation(edge.relation))
+                                ? 'Potential implicit relationship — not observed execution. Confirm props precedence, field availability and invoking-app context before treating this as a runtime dependency.'
+                                : 'Captured static relationship — not proof of runtime execution or removal eligibility.'}
+                        </InlineNotice>
+                        <p>
+                            Full endpoints, explanations and source locations are listed below.
+                            Grouped arrows can represent several distinct objects or relationship
+                            types.
+                        </p>
+                        <ResultPagination
+                            page={currentPage}
+                            pageSize={25}
+                            total={total}
+                            onChange={setPage}
+                        />
+                        <ContextList>
+                            {references
+                                .slice(currentPage * 25, (currentPage + 1) * 25)
+                                .map((edge) => (
+                                    <li key={edge.edgeId}>
+                                        <ContextFacts>
+                                            <dt>From</dt>
+                                            <dd>
+                                                <RowButton onClick={() => inspect(edge.sourceId)}>
+                                                    {name(edge.sourceId)}
+                                                </RowButton>
+                                                <SmallText>{edge.sourceId}</SmallText>
+                                            </dd>
+                                            <dt>To</dt>
+                                            <dd>
+                                                <RowButton onClick={() => inspect(edge.targetId)}>
+                                                    {name(edge.targetId)}
+                                                </RowButton>
+                                                <SmallText>{edge.targetId}</SmallText>
+                                            </dd>
+                                            <dt>Relation</dt>
+                                            <dd>
+                                                {edge.relation.replace(/_/g, ' ')} ·{' '}
+                                                {edge.confidence} confidence
+                                                {isPotentialRelation(edge.relation)
+                                                    ? ' · potential, not observed'
+                                                    : ''}
+                                            </dd>
+                                            <dt>Evidence</dt>
+                                            <dd style={{ whiteSpace: 'pre-wrap' }}>
+                                                {edge.evidence || 'No explanation recorded'}
+                                            </dd>
+                                            <dt>Source location</dt>
+                                            <dd>{edge.sourceLocation || 'Not recorded'}</dd>
+                                            <dt>Resolution</dt>
+                                            <dd>
+                                                {edge.resolved
+                                                    ? 'Resolved in the captured catalog'
+                                                    : 'Unresolved in the captured catalog'}
+                                            </dd>
+                                        </ContextFacts>
+                                    </li>
+                                ))}
+                        </ContextList>
+                    </>
+                ) : null}
+            </Modal.Body>
+            <Modal.Footer>
+                {node && !node.memberIds ? (
+                    <StyledButton onClick={() => inspect(node.id)}>Inspect object</StyledButton>
+                ) : null}
+                <StyledButton $primary onClick={onClose}>
+                    Close context
+                </StyledButton>
+            </Modal.Footer>
+        </Modal>
+    );
+}

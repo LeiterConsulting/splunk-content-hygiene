@@ -3,6 +3,8 @@ import {
     buildGraphModel,
     GRAPH_NODE_HEIGHT,
     GRAPH_NODE_WIDTH,
+    GRAPH_LABEL_HEIGHT,
+    GRAPH_LABEL_WIDTH,
     graphLinkPath,
 } from '../services/dependencyGraph';
 import { analyzeInventory } from '../services/analysis';
@@ -148,4 +150,48 @@ test('aggregate confidence stays conservative and self-loop arrows end outside t
     expect(graphLinkPath(center, center)).toMatch(
         new RegExp(`, ${center.x + GRAPH_NODE_WIDTH * 0.75} ${center.y}$`),
     );
+});
+
+test('relationship context slots never overlap cards or each other, including cycles and fan-in', () => {
+    const objects = Array.from({ length: 35 }, (_unused, i) => makeObject(`object-${i}`));
+    const edges = objects.slice(1).flatMap((item) => [
+        makeEdge('object-0', item.objectId, 'may_apply_automatic_lookup'),
+        makeEdge(item.objectId, 'object-0', 'uses_lookup'),
+    ]);
+    edges.push(makeEdge('object-0', 'object-0'));
+    const model = buildGraphModel('object-0', buildDependencyIndex(objects, edges), edges, {
+        ...options, grouping: 'none', expandedNodes: new Set(['object-1', 'object-2']),
+    });
+    const bytes = JSON.stringify(edges);
+    model.labels.forEach((label) => {
+        expect(label.x).toBeGreaterThanOrEqual(0);
+        expect(label.y).toBeGreaterThanOrEqual(64);
+        expect(label.x + GRAPH_LABEL_WIDTH).toBeLessThanOrEqual(model.width);
+        expect(label.y + GRAPH_LABEL_HEIGHT).toBeLessThanOrEqual(model.height);
+        model.nodes.forEach((node) => {
+            expect(label.x + GRAPH_LABEL_WIDTH <= node.x || node.x + GRAPH_NODE_WIDTH <= label.x ||
+                label.y + GRAPH_LABEL_HEIGHT <= node.y || node.y + GRAPH_NODE_HEIGHT <= label.y).toBe(true);
+        });
+        model.labels.filter((other) => other.link.id !== label.link.id).forEach((other) => {
+            expect(Math.abs(label.x - other.x) >= GRAPH_LABEL_WIDTH ||
+                Math.abs(label.y - other.y) >= GRAPH_LABEL_HEIGHT).toBe(true);
+        });
+        expect(label.link.edges.length).toBeGreaterThan(0);
+        const source = model.nodes.find((node) => node.id === label.link.source)!;
+        const target = model.nodes.find((node) => node.id === label.link.target)!;
+        expect(graphLinkPath(source, target, label)).toContain(
+            `${label.x + GRAPH_LABEL_WIDTH / 2} ${label.y + GRAPH_LABEL_HEIGHT / 2}`,
+        );
+    });
+    expect(JSON.stringify(edges)).toBe(bytes);
+});
+
+test('grouped relationship context preserves every original endpoint and source location', () => {
+    const objects = Array.from({ length: 1001 }, (_unused, i) => makeObject(`object-${i}`));
+    const edges = objects.slice(1).map((item) => makeEdge(item.objectId, 'object-0'));
+    const model = buildGraphModel('object-0', buildDependencyIndex(objects, edges), edges, options);
+    expect(model.labels).toHaveLength(1);
+    expect(model.links[0].edges).toEqual(edges);
+    expect(model.links[0].edges[999].sourceId).toBe('object-1000');
+    expect(model.links[0].edges[999].sourceLocation).toBe('search:1');
 });

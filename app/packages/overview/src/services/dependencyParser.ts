@@ -2,7 +2,21 @@ import { ConfidenceLevel } from '../types';
 import { hasUnboundedIndexScope } from './indexScope';
 
 export type ReferenceTarget =
-    'macro' | 'lookup' | 'lookup_file' | 'saved_search' | 'data_model' | 'index' | 'sourcetype';
+    'macro' | 'lookup' | 'lookup_file' | 'saved_search' | 'data_model' | 'index' | 'sourcetype' | 'automatic_lookup';
+export interface EventSelector {
+    field: 'sourcetype' | 'host' | 'source';
+    value: string;
+    sourceLocation: string;
+}
+export interface AutomaticLookupRule {
+    stanza: string;
+    attribute: string;
+    transform: string;
+    scopeField: EventSelector['field'];
+    scopeValue: string;
+    exactScope: boolean;
+    disabled: boolean;
+}
 export interface ParsedReference {
     targetType: ReferenceTarget;
     targetName: string;
@@ -11,11 +25,16 @@ export interface ParsedReference {
     evidence: string;
     sourceLocation: string;
     macroArity?: number;
+    /** Invocation namespace for a potential exported automatic-lookup binding. */
+    contextApp?: string;
 }
 export interface ParsedSource {
     references: ParsedReference[];
     warnings: string[];
     gaps?: ParserCoverageGap[];
+    eventSelectors?: EventSelector[];
+    hasEventSearch?: boolean;
+    automaticLookup?: AutomaticLookupRule;
 }
 export interface ParserCoverageGap {
     targets: ReferenceTarget[] | 'all';
@@ -174,6 +193,8 @@ export function parseSpl(sourceText: string, sourceLocation = 'search', assessIn
         gaps.push({ message, targets, sourceLocation });
     };
     const references: ParsedReference[] = [];
+    const eventSelectors: EventSelector[] = [];
+    let hasEventSearch = false;
     const add = (
         token: Token | undefined,
         targetType: ReferenceTarget,
@@ -204,11 +225,27 @@ export function parseSpl(sourceText: string, sourceLocation = 'search', assessIn
     let command = 'search';
     let negations = [false];
     let pendingNot = false;
+    let queryStart = true;
+    let eventBased = false;
     const consumed = new Set<number>();
     const resourceArguments = new Set<number>();
-    const commandStack: Array<{ command: string; negations: boolean[] }> = [];
+    const commandStack: Array<{ command: string; negations: boolean[]; queryStart: boolean; eventBased: boolean }> = [];
     const filterCommands = new Set(['search', 'tstats', 'mstats', 'from']);
     const initialCommands = new Set([...filterCommands, 'lookup', 'inputlookup', 'outputlookup', 'savedsearch', 'datamodel']);
+    const addConstraint = (field: string, token: Token | undefined, rawField = field): void => {
+        if (command === 'search' && eventBased && rawField === field && ['sourcetype', 'host', 'source'].includes(field)) {
+            if (token?.value && !/[$*?{}]/.test(token.value) && !/^(CASE|TERM)$/i.test(token.value) && !'|[](),'.includes(token.value)) {
+                eventSelectors.push({ field: field as EventSelector['field'], value: token.value,
+                    sourceLocation: `${sourceLocation}:${token.offset}` });
+            } else {
+                warn(`Dynamic or unavailable event ${field} selector at ${sourceLocation}`, ['automatic_lookup']);
+            }
+        }
+        if (field === 'host' || field === 'source') { return; }
+        add(field === 'datamodel' && token ? { ...token, value: token.value.split('.')[0] } : token,
+            field === 'datamodel' ? 'data_model' : field as ReferenceTarget,
+            field === 'datamodel' ? 'uses' : 'searches');
+    };
     tokens.forEach((token, index) => {
         if (consumed.has(index)) {
             return;
@@ -218,18 +255,22 @@ export function parseSpl(sourceText: string, sourceLocation = 'search', assessIn
             warn(`Runtime token in SPL expression at ${sourceLocation}:${token.offset}`);
         }
         if (token.value === '[' && !token.quoted) {
-            commandStack.push({ command, negations });
+            commandStack.push({ command, negations, queryStart, eventBased });
             command = 'search';
             negations = [false];
             pendingNot = false;
             expectCommand = true;
             explicitCommand = false;
+            queryStart = true;
+            eventBased = false;
             return;
         }
         if (token.value === ']' && !token.quoted) {
             const previous = commandStack.pop();
             command = previous?.command ?? 'search';
             negations = previous?.negations ?? [false];
+            queryStart = previous?.queryStart ?? false;
+            eventBased = previous?.eventBased ?? false;
             pendingNot = false;
             expectCommand = false;
             return;
@@ -267,6 +308,11 @@ export function parseSpl(sourceText: string, sourceLocation = 'search', assessIn
             return;
         }
         if (token.macro) {
+            // An unexpanded macro can generate a search or alter its event fields.
+            // Keep explicit references, but do not treat later fields as props scopes.
+            hasEventSearch = true;
+            eventBased = false;
+            queryStart = false;
             pendingNot = false;
             const invocation = token.value.match(/^([\w.:/-]+)(?:\(([\s\S]*)\))?$/);
             if (invocation) {
@@ -292,6 +338,15 @@ export function parseSpl(sourceText: string, sourceLocation = 'search', assessIn
             // Only a pipe (or a recognized initial generating command) changes
             // command context; filter parentheses do not become target names.
             command = !token.value.includes('=') && (explicitCommand || initialCommands.has(name)) ? name : 'search';
+            if (queryStart) {
+                eventBased = command === 'search';
+                queryStart = false;
+            } else if (command !== 'search') {
+                // A later command may replace sourcetype/host/source or transform
+                // the event stream. Only untouched search filters are selectors.
+                eventBased = false;
+            }
+            hasEventSearch ||= eventBased;
             if (['map', 'loadjob', 'script', 'run', 'rest'].includes(command)) {
                 warn(`Runtime or external ${command} command is outside static dependency coverage at ${sourceLocation}:${token.offset}`);
             }
@@ -352,19 +407,22 @@ export function parseSpl(sourceText: string, sourceLocation = 'search', assessIn
             );
         }
         if (filterCommands.has(command)) {
-            if (/^(index|sourcetype|datamodel)$/i.test(token.value) && tokens[index + 1]?.value.toUpperCase() === 'IN' && tokens[index + 2]?.value === '(') {
+            if (/^(index|sourcetype|datamodel|host|source)$/i.test(token.value) && tokens[index + 1]?.value.toUpperCase() === 'IN' && tokens[index + 2]?.value === '(') {
                 const type = token.value.toLowerCase();
                 let next = index + 3;
                 while (next < tokens.length && tokens[next].value !== ')' && !'|[]('.includes(tokens[next].value)) {
                     const member = tokens[next];
                     if (member.value !== ',' && !excluded) {
                         resourceArguments.add(next);
-                        add(type === 'datamodel' ? { ...member, value: member.value.split('.')[0] } : member, type === 'datamodel' ? 'data_model' : (type as ReferenceTarget), type === 'datamodel' ? 'uses' : 'searches');
+                        addConstraint(type, member, token.value);
                     }
                     next += 1;
                 }
                 if (tokens[next]?.value !== ')') {
-                    warn(`Unsupported or unterminated ${type} IN list at ${sourceLocation}:${token.offset}`, [type === 'datamodel' ? 'data_model' : type as ReferenceTarget]);
+                    let target = type as ReferenceTarget;
+                    if (type === 'datamodel') { target = 'data_model'; }
+                    else if (['host', 'source'].includes(type)) { target = 'automatic_lookup'; }
+                    warn(`Unsupported or unterminated ${type} IN list at ${sourceLocation}:${token.offset}`, [target]);
                 } else {
                     for (let item = index + 1; item <= next; item += 1) {consumed.add(item);}
                 }
@@ -375,31 +433,21 @@ export function parseSpl(sourceText: string, sourceLocation = 'search', assessIn
             if (excluded) {
                 return;
             }
-            const constraint = token.value.match(/^(index|sourcetype|datamodel)=(.*)$/i);
+            const constraint = token.value.match(/^(index|sourcetype|datamodel|host|source)=(.*)$/i);
             if (constraint) {
                 if (!constraint[2]) { resourceArguments.add(index + 1); }
                 const valueToken = constraint[2]
                     ? { ...token, value: constraint[2] }
                     : tokens[index + 1];
                 const type = constraint[1].toLowerCase();
-                add(
-                    type === 'datamodel' && valueToken
-                        ? { ...valueToken, value: valueToken.value.split('.')[0] }
-                        : valueToken,
-                    type === 'datamodel' ? 'data_model' : (type as ReferenceTarget),
-                    type === 'datamodel' ? 'uses' : 'searches',
-                );
+                addConstraint(type, valueToken, constraint[1]);
             } else if (
-                /^(index|sourcetype|datamodel)$/i.test(token.value) &&
+                /^(index|sourcetype|datamodel|host|source)$/i.test(token.value) &&
                 tokens[index + 1]?.value === '='
             ) {
                 const type = token.value.toLowerCase();
                 resourceArguments.add(index + 2);
-                add(
-                    tokens[index + 2],
-                    type === 'datamodel' ? 'data_model' : (type as ReferenceTarget),
-                    type === 'datamodel' ? 'uses' : 'searches',
-                );
+                addConstraint(type, tokens[index + 2], token.value);
             }
         }
     });
@@ -407,21 +455,27 @@ export function parseSpl(sourceText: string, sourceLocation = 'search', assessIn
         !gaps.some((gap) => gap.targets === 'all' || gap.targets.includes('index'))) {
         warn(`Implicit/default index scope is not established for every query branch at ${sourceLocation}`, ['index']);
     }
-    return { references, warnings: [...new Set(warnings)], gaps };
+    return { references, warnings: [...new Set(warnings)], gaps, eventSelectors, hasEventSearch };
 }
 
 export function parseDashboard(text: string, sourceLocation = 'dashboard'): ParsedSource {
     const references: ParsedReference[] = [];
     const warnings: string[] = [];
     const gaps: ParserCoverageGap[] = [];
+    const eventSelectors: EventSelector[] = [];
+    let hasEventSearch = false;
     const warn = (message: string, path = sourceLocation, targets: ReferenceTarget[] | 'all' = 'all'): void => {
         warnings.push(message); gaps.push({ message, targets, sourceLocation: path });
     };
-    const search = (query: string, path: string): void => {
+    const search = (query: string, path: string, eventSource = true): void => {
         const parsed = parseSpl(query, path);
         references.push(...parsed.references);
         warnings.push(...parsed.warnings);
         gaps.push(...(parsed.gaps ?? []));
+        if (eventSource) {
+            eventSelectors.push(...(parsed.eventSelectors ?? []));
+            hasEventSearch ||= parsed.hasEventSearch === true;
+        }
     };
     const savedSearch = (name: string, path: string): void => {
         if (dynamicName.test(name)) {
@@ -467,7 +521,7 @@ export function parseDashboard(text: string, sourceLocation = 'dashboard'): Pars
                     ['ds.search', 'ds.chain'].includes(String(record.type)) &&
                     typeof options?.query === 'string'
                 ) {
-                    search(options.query, `${path}.options.query`);
+                    search(options.query, `${path}.options.query`, record.type !== 'ds.chain');
                 }
                 if (String(record.type) === 'ds.search' && typeof options?.query !== 'string') {
                     warn(`Studio search query is unavailable at ${path}`, path);
@@ -496,6 +550,8 @@ export function parseDashboard(text: string, sourceLocation = 'dashboard'): Pars
                     references.push(...studio.references);
                     warnings.push(...studio.warnings);
                     gaps.push(...(studio.gaps ?? []));
+                    eventSelectors.push(...(studio.eventSelectors ?? []));
+                    hasEventSearch ||= studio.hasEventSearch === true;
                 }
             }
             [...document.querySelectorAll('search[ref]')].forEach((element, index) =>
@@ -508,13 +564,13 @@ export function parseDashboard(text: string, sourceLocation = 'dashboard'): Pars
                 savedSearch(element.textContent ?? '', `${sourceLocation}.savedsearch[${index}]`),
             );
             [...document.querySelectorAll('query')].forEach((element, index) =>
-                search(element.textContent ?? '', `${sourceLocation}.query[${index}]`),
+                search(element.textContent ?? '', `${sourceLocation}.query[${index}]`, !element.parentElement?.hasAttribute('base')),
             );
         }
     } else {
         warn('XML parser unavailable; dashboard dependencies are incomplete');
     }
-    return { references, warnings: [...new Set(warnings)], gaps };
+    return { references, warnings: [...new Set(warnings)], gaps, eventSelectors, hasEventSearch };
 }
 
 /** Parse authoritative model constraints/calculations, not regenerated preview searches. */
@@ -522,6 +578,7 @@ export function parseDataModel(text: string, sourceLocation = 'description'): Pa
     const references: ParsedReference[] = [];
     const warnings: string[] = [];
     const gaps: ParserCoverageGap[] = [];
+    let hasEventSearch = false;
     const warn = (message: string, path: string, targets: ReferenceTarget[] | 'all' = 'all'): void => {
         warnings.push(message); gaps.push({ message, targets, sourceLocation: path });
     };
@@ -529,6 +586,7 @@ export function parseDataModel(text: string, sourceLocation = 'description'): Pa
         if (typeof query !== 'string') { warn(`Data-model search is unavailable at ${path}`, path); return; }
         const parsed = parseSpl(query, path, false);
         references.push(...parsed.references); warnings.push(...parsed.warnings); gaps.push(...(parsed.gaps ?? []));
+        hasEventSearch ||= parsed.hasEventSearch === true;
     };
     try {
         const definition = JSON.parse(text);
@@ -563,6 +621,7 @@ export function parseDataModel(text: string, sourceLocation = 'description'): Pa
             try {
                 const scoped = parseSpl(queryFor(object), `${path}.effectiveSearch`);
                 warnings.push(...scoped.warnings); gaps.push(...(scoped.gaps ?? []));
+                hasEventSearch ||= scoped.hasEventSearch === true;
             } catch { warn(`Data-model inherited source scope could not be established at ${path}`, path); }
             if (object.baseSearch !== undefined) { search(object.baseSearch, `${path}.baseSearch`); }
             if (!Array.isArray(object.constraints)) { warn(`Data-model constraints are unavailable at ${path}`, path); }
@@ -589,7 +648,7 @@ export function parseDataModel(text: string, sourceLocation = 'description'): Pa
     } catch {
         warn('Data-model JSON could not be parsed; dependencies are incomplete', sourceLocation);
     }
-    return { references, warnings: [...new Set(warnings)], gaps };
+    return { references, warnings: [...new Set(warnings)], gaps, hasEventSearch };
 }
 
 export const extractSplReferences = (text: string, path?: string): ParsedReference[] =>

@@ -174,8 +174,9 @@ explicitly labeled and is not the full dependency footprint.
 
 This is always a **partial shared static footprint**, not a complete migration
 manifest. Review the listed gaps: event types, tags, field extractions/aliases,
-calculated fields, transforms, workflow actions, navigation menus, automatic
-lookups and implicit props.conf dependencies are not inventoried/resolved. Private,
+calculated fields, non-lookup transforms, workflow actions, navigation menus and
+other implicit props.conf dependencies are not inventoried/resolved. Automatic
+lookups have bounded potential coverage described below, not runtime closure. Private,
 dynamic, external and ad-hoc consumers may require more content. Missing activity
 or absence from this list never establishes inactivity or removal eligibility.
 
@@ -190,6 +191,43 @@ Review Library stage. Select a resolved related object to continue the
 investigation as a multi-step drill-through. Cross-view links preserve the
 selected object context.
 
+### Automatic lookups and implicit props
+
+After upgrading to 1.2, run a **complete scan**. In Explorer, use **Find center
+object** to search for a props rule and choose its **Automatic Lookup** entry
+under **Selected object**. Its name identifies the stanza and
+`LOOKUP-*` class; the app namespace is part of its identity. Follow its configured
+lookup definition and backing file, or inspect inbound possible callers. You can
+also start at a search/dashboard or lookup and follow the chain in either
+direction. Use **Assess removal impact**, **Required content report**, or the
+existing review actions at the top of the selected object.
+
+“May apply” means a positive exact sourcetype, host or source event selector
+matches a visible rule. It does **not** mean Splunk executed the rule: confirm
+input fields, props precedence, sourcetype renames and the invoking app. An
+exported rule can have several potential lookup-definition bindings in different
+apps. Pattern stanzas, broad searches, macro/data-model caller context, other
+props families and private/hidden configuration remain gaps. No match is not
+proof of non-use. The app never runs the inventoried search to establish a match.
+
+The new catalog uses existing read permissions. A denied or truncated collector
+is not an empty catalog and cannot replace an established complete baseline.
+Matching is also bounded to 250 inferred links per source and 50,000 per scan;
+omitted possibilities are disclosed in diagnostics. The map retains its normal
+grouping, render budget and evidence-table pagination.
+
+Potential status follows every hop of a chosen report/impact path, including
+the final lookup file. Details say **Potential implicit dependency** or
+**Potential implicit path**; CSV includes an explicit potential-path column and
+JSON retains relations, confidence and coverage. This does not turn a potential
+caller into observed usage or a removal recommendation.
+
+Existing review decisions are not changed. New rules, configuration or neighbors
+can make their evidence need re-review; inspect **Changes since review** and
+reaffirm explicitly only after investigation. Do not delete or edit review KV
+records to force a Current badge. Automatic rules and lookup inbound coverage
+remain partial where implicit applicability is not established.
+
 The **Relationships** tab puts consumers on the left and dependencies on the
 right. Inspect a card to update its details without changing the center. Use
 **Center on this object** or table **Drill in** to continue the path. High-degree
@@ -199,6 +237,23 @@ the contained map. The map discloses represented and omitted counts; the
 paginated evidence table and full filtered exports remain available. The center
 picker shows up to 200 matches; refine its search to reach any other object.
 Filters and the reset action remain available even when a group is empty.
+
+Graph cards wrap names across three lines and reserve a separate area for status
+and actions. Hover or keyboard-focus a name for its full name, type and app.
+**Details** opens the complete object context without moving the graph center;
+group Details lists individual members in pages of 25. **Inspect object** opens
+the existing full-width investigation workspace.
+
+Relationship labels wrap in reserved lanes between cards, above the connector
+graphics. Hover or focus a label for its endpoints and full relationship names,
+or click/press Enter for **Relationship context**: complete endpoint identities,
+weakest confidence, potential/configured explanation, evidence and source
+locations. An arrow representing multiple relation types shows **+N more**;
+grouped arrows retain every underlying reference, paginated 25 at a time in the
+dialog. Escape or **Close context** returns keyboard focus to the invoking
+control. Only one quick preview is shown at a time; graph previews close while
+full context is open so they cannot cover the dialog. Opening or closing context changes no filters, graph center, saved
+decisions or customer objects.
 
 A supplied object link never falls back to another graph center. While inventory
 loads its exact identity is retained. If the object is outside the center group,
@@ -210,7 +265,7 @@ a notice identifies when Explorer is using a different inventory snapshot.
 Related-object filters never silently change a requested center.
 
 The map and evidence tables use the full workspace width. Inspecting a graph
-card or relationship opens **Selected object**, with its identity and actions at
+card name or an object in the relationship table opens **Selected object**, with its identity and actions at
 the top. **Review decision** applies to that inspected object; its title names
 the object explicitly. **Review center object** instead selects the graph center
 for review. Switching tabs preserves an in-progress review draft.

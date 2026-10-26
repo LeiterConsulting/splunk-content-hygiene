@@ -25,6 +25,10 @@
       "enum": [
         "references",
         "uses",
+        "uses_file",
+        "uses_lookup",
+        "may_use_lookup",
+        "may_apply_automatic_lookup",
         "reads",
         "writes",
         "invokes",

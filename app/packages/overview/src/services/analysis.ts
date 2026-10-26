@@ -8,13 +8,15 @@ import {
     parseDataModel,
 } from './dependencyParser';
 import { PrivateObjectCount, SourceCoverageGap } from './dependencyCoverage';
+import { buildAutomaticLookupMatcher, parseAutomaticLookup } from './automaticLookups';
+import { isPotentialRelation } from '../utils/dependencySemantics';
 
 export { extractSplReferences, extractDashboardReferences } from './dependencyParser';
 export type { ParsedReference } from './dependencyParser';
 
 export interface RawAnalysisSource {
     objectId: string;
-    kind: 'spl' | 'dashboard' | 'lookup' | 'data_model';
+    kind: 'spl' | 'dashboard' | 'lookup' | 'data_model' | 'automatic_lookup';
     text: string;
     sourceLocation: string;
     failure?: string;
@@ -28,6 +30,7 @@ export interface AnalysisCompleteness {
     data_models: boolean;
     indexes: boolean;
     sourcetypes: boolean;
+    automatic_lookups?: boolean;
 }
 export interface InventoryAnalysis {
     objects: ContentObject[];
@@ -69,6 +72,7 @@ function objectGroup(objectType: string): ReferenceTarget | null {
     if (objectType === 'Sourcetype') {
         return 'sourcetype';
     }
+    if (objectType === 'Automatic Lookup') { return 'automatic_lookup'; }
     return null;
 }
 
@@ -99,6 +103,7 @@ function resolveReference(
     source: ContentObject,
     index: ReferenceIndex,
 ): Resolution {
+    const app = reference.contextApp ?? source.app;
     const primary =
         index.get(referenceKey(reference.targetType, reference.targetName, reference.macroArity)) ??
         [];
@@ -108,7 +113,7 @@ function resolveReference(
             ? (index.get(referenceKey('lookup', reference.targetName)) ?? [])
             : [];
     const candidates = [...primary, ...alternatives];
-    const sameApp = candidates.filter((item) => item.app === source.app);
+    const sameApp = candidates.filter((item) => item.app === app);
     const privateMatches = source.owner
         ? sameApp.filter((item) => item.sharing === 'user' && item.owner === source.owner)
         : [];
@@ -136,6 +141,7 @@ function parseSource(source: RawAnalysisSource): ParsedSource {
         return { references: [], warnings: [source.failure],
             gaps: [{ targets: source.failureTargets ?? 'all', message: source.failure, sourceLocation: source.sourceLocation }] };
     }
+    if (source.kind === 'automatic_lookup') { return parseAutomaticLookup(source.text, source.sourceLocation); }
     if (source.kind === 'data_model') { return parseDataModel(source.text, source.sourceLocation); }
     if (source.kind === 'lookup') {
         return {
@@ -176,8 +182,9 @@ function targetCoverageComplete(
         data_model: 'data_models',
         index: 'indexes',
         sourcetype: 'sourcetypes',
+        automatic_lookup: 'automatic_lookups',
     };
-    return completeness[collectorByTarget[targetType]];
+    return completeness[collectorByTarget[targetType]] === true;
 }
 
 function missingTargetId(targetType: ReferenceTarget, app: string, targetName: string): string {
@@ -251,10 +258,22 @@ export function analyzeInventory(
         `${collector}\0${app}\0${collector === 'macros' ? `${name.replace(/\(\d+\)$/, '')}::${name.match(/\((\d+)\)$/)?.[1] ?? arity}` : name}`;
     const privateNames = new Set(visibility?.privateTargets?.map((row) => privateNameKey(row.collector, row.app, row.name)) ?? []);
     const privateCounts = new Map(visibility?.privateObjects.map((row) => [`${row.collector}\0${row.app}`, row.count]) ?? []);
+    const privateAnyNames = new Set(visibility?.privateTargets?.map((row) => `${row.collector}\0${row.name}`) ?? []);
+    const privateAnyCollectors = new Set(visibility?.privateObjects.filter((row) => row.count > 0).map((row) => row.collector) ?? []);
     const collectorByTarget: Record<ReferenceTarget, string> = {
         macro: 'macros', lookup: 'lookup_definitions', lookup_file: 'lookup_files', saved_search: 'saved_searches',
-        data_model: 'data_models', index: 'indexes', sourcetype: 'sourcetypes',
+        data_model: 'data_models', index: 'indexes', sourcetype: 'sourcetypes', automatic_lookup: 'automatic_lookups',
     };
+    const sourceParses = parsedSources ?? new Map<RawAnalysisSource, ParsedSource>();
+    sources.forEach((source) => { if (!sourceParses.has(source)) { sourceParses.set(source, parseSource(source)); } });
+    const automaticRules = sources.flatMap((source) => {
+        const object = objectById.get(source.objectId); const rule = sourceParses.get(source)?.automaticLookup;
+        return object && rule ? [{ object, rule }] : [];
+    });
+    const automatic = buildAutomaticLookupMatcher(automaticRules, objects, {
+        complete: completeness.automatic_lookups === true,
+        privatePossible: visibility?.privateObjects.some((row) => row.collector === 'automatic_lookups' && row.count > 0) ?? false,
+    });
     const parserCounts: Record<string, number> = {
         spl: 0,
         dashboard: 0,
@@ -266,7 +285,15 @@ export function analyzeInventory(
         if (!sourceObject || (!source.text.trim() && !source.failure)) {
             return;
         }
-        const parsed = parsedSources?.get(source) ?? parseSource(source);
+        const original = sourceParses.get(source)!;
+        const parsed = source.kind === 'automatic_lookup'
+            ? automatic.bindings(sourceObject, original) : automatic.callers(sourceObject, original);
+        if (parsed.automaticLookup) {
+            const rule = parsed.automaticLookup;
+            sourceObject.evidence.push(`Search-time props rule: [${rule.stanza}] ${rule.attribute}; lookup definition ${rule.transform}.`,
+                rule.exactScope ? 'Caller inference uses only positive exact event selectors; applicability is not proof of execution.' :
+                    'This props scope uses a pattern not evaluated by the exact-selector matcher; caller coverage remains unverified.');
+        }
         const { references } = parsed;
         const gaps = parsed.gaps ?? parsed.warnings.map((message) => ({ targets: 'all' as const, message, sourceLocation: source.sourceLocation }));
         coverageGaps.push(...gaps.map((gap) => ({ ...gap, sourceId: source.objectId, app: sourceObject.app })));
@@ -286,20 +313,30 @@ export function analyzeInventory(
             const resolution = resolveReference(reference, sourceObject, referenceIndex);
             const targetCollectors = [collectorByTarget[reference.targetType],
                 ...(reference.targetType === 'lookup_file' && reference.relation !== 'uses_file' ? ['lookup_definitions'] : [])];
-            const privatePossible = targetCollectors.some((collector) => visibility?.privateTargets
-                ? privateNames.has(privateNameKey(collector, sourceObject.app, reference.targetName, reference.macroArity))
-                : (privateCounts.get(`${collector}\0${sourceObject.app}`) ?? 0) > 0);
+            const contextApp = reference.contextApp ?? sourceObject.app;
+            const exportedAutomatic = sourceObject.objectType === 'Automatic Lookup' && sourceObject.sharing === 'global' && !reference.contextApp;
+            // Absence in an exported rule's own app does not prove it is broken
+            // when a different invoking app can supply the named definition.
+            if (exportedAutomatic && !resolution.object) { resolution.ambiguous = true; }
+            const privatePossible = targetCollectors.some((collector) => {
+                if (visibility?.privateTargets) {
+                    return exportedAutomatic ? privateAnyNames.has(`${collector}\0${reference.targetName}`)
+                        : privateNames.has(privateNameKey(collector, contextApp, reference.targetName, reference.macroArity));
+                }
+                return exportedAutomatic ? privateAnyCollectors.has(collector)
+                    : (privateCounts.get(`${collector}\0${contextApp}`) ?? 0) > 0;
+            });
             if (privatePossible) { resolution.object = null; resolution.ambiguous = true; }
             const targetId =
                 resolution.object?.objectId ??
-                missingTargetId(reference.targetType, sourceObject.app, reference.targetName);
+                missingTargetId(reference.targetType, contextApp, reference.targetName);
             const resolved = Boolean(resolution.object);
             const coverageComplete =
                 targetCoverageComplete(reference.targetType, completeness) &&
                 (reference.targetType !== 'lookup_file' ||
                     reference.relation === 'uses_file' ||
                     completeness.lookup_definitions);
-            const canAssertMissing = !resolved && !resolution.ambiguous && coverageComplete;
+            const canAssertMissing = !resolved && !resolution.ambiguous && coverageComplete && !isPotentialRelation(reference.relation);
             if (resolution.ambiguous) {
                 coverageGaps.push({ sourceId: source.objectId, app: sourceObject.app,
                     targets: reference.targetType === 'lookup_file' && reference.relation !== 'uses_file'
@@ -308,7 +345,7 @@ export function analyzeInventory(
                     message: 'Namespace visibility or multiple candidates prevent deterministic target resolution.' });
             }
             let { confidence } = reference;
-            if (resolution.ambiguous || (!resolved && !coverageComplete)) {
+            if (resolution.ambiguous || (!resolved && (!coverageComplete || isPotentialRelation(reference.relation)))) {
                 confidence = 'unknown';
             } else if (
                 resolved &&

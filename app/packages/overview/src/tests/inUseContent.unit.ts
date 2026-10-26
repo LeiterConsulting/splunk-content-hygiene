@@ -155,7 +155,9 @@ test('records unresolved references and never claims complete migration coverage
     const result = buildInUseReport(input, [], { ...options, selectedIds: ['a'] }, now);
     expect(result.rows.find((row) => row.objectId === 'missing')?.inInventory).toBe(false);
     expect(result.coverage).toBe('partial');
-    expect(result.gaps.join(' ')).toMatch(/Automatic lookups/);
+    expect(result.gaps.join(' ')).toMatch(/Automatic props lookup rules/);
+    expect(result.gaps.join(' ')).toMatch(/Patterns, precedence, renames/);
+    expect(result.gaps.join(' ')).toMatch(/snapshot predates automatic lookup collection/);
     expect(result.gaps.join(' ')).toMatch(/unresolved/);
 });
 test('cycles, diamonds and multiple roots terminate with one deduplicated shortest witness', () => {

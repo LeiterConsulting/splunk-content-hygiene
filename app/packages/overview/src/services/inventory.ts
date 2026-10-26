@@ -262,6 +262,13 @@ const objectCollectors: ObjectCollectorDefinition[] = [
         objectType: 'Lookup Definition',
     },
     {
+        id: 'automatic_lookups',
+        label: 'Automatic lookup rules (props)',
+        endpoint: 'data/props/lookups',
+        namespace: { owner: '-', app: '-' },
+        objectType: 'Automatic Lookup',
+    },
+    {
         id: 'lookup_files',
         label: 'Lookup files',
         endpoint: 'data/lookup-table-files',
@@ -600,6 +607,11 @@ function analysisSourceForEntry(
         text = stringValue(content.description);
         kind = 'data_model';
         sourceLocation = 'description';
+    } else if (collector.id === 'automatic_lookups') {
+        text = JSON.stringify(Object.fromEntries(['stanza', 'attribute', 'transform', 'type', 'value', 'disabled']
+            .filter((key) => content[key] !== undefined).map((key) => [key, content[key]])));
+        kind = 'automatic_lookup';
+        sourceLocation = 'props.conf';
     }
 
     const expectedFields: Record<string, string> = { saved_searches: 'search', macros: 'definition', dashboards: 'eai:data', data_models: 'description' };
@@ -1612,6 +1624,7 @@ async function runInventoryScan(
         data_models: false,
         indexes: false,
         sourcetypes: false,
+        automatic_lookups: false,
     };
     const warnings: string[] = [];
     const errors: string[] = [];
@@ -1651,7 +1664,7 @@ async function runInventoryScan(
         collector_totals: {},
         collector_versions: {
             rest_inventory: '0.2.0',
-            dependency_analysis: '1.0.0',
+            dependency_analysis: '1.2.0',
             classification: '1.0.0',
             review_evidence: '1.0.0',
         },

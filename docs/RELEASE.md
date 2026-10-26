@@ -32,11 +32,19 @@ checksums and truncated payloads. A clean filename listing alone is insufficient
 PAX headers can carry build-machine metadata without appearing as ordinary files.
 Packaging does not strip attributes from the original source tree.
 
+Preserve the checksum-identified archive used for native qualification. The
+Splunk webpack base configuration generates a random styled-components isolation
+identifier, so rebuilding unchanged source can change archive bytes. Investigate
+any difference; do not silently replace accepted checksums or published assets.
+If promoting a preserved qualified archive after a rebuild, verify the exact
+payload difference, re-run package policy and AppInspect on the selected archive,
+and regenerate its checksum before committing.
+
 Inspect the archive before signing off:
 
 ```bash
-tar -tzf app/dist/content_hygiene-1.1.1.tar.gz
-shasum -a 256 app/dist/content_hygiene-1.1.1.tar.gz
+tar -tzf app/dist/content_hygiene-1.2.0.tar.gz
+shasum -a 256 app/dist/content_hygiene-1.2.0.tar.gz
 ```
 
 It must have exactly one top-level `content_hygiene/` directory and must not

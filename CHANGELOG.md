@@ -1,5 +1,36 @@
 # Changelog
 
+## 1.2.0 — 2026-10-25
+
+- Reserve collision-free space for wrapped graph relationship labels, separate
+  node names from status/actions, and add hover/focus previews plus persistent,
+  keyboard-accessible object/group/relationship context with full identities,
+  evidence and source locations. Context browsing does not change review state.
+- Keep one graph preview active at a time and suppress background previews while
+  full context is open, including mixed mouse-hover and keyboard activation.
+- Keep UI persistence tests focused on real save/reopen behavior, with scoped
+  accessible queries and real paste input. Test graph/table inspection contracts
+  independently in both themes without increasing timeouts or dropping assertions.
+- Inventory native automatic `LOOKUP-*` rules through the paginated read-only
+  props REST catalog, preserving app/ACL identity, canonical transform binding,
+  configuration fingerprints and explicit collection/parse/resolution gaps.
+- Add potential exact-event-selector caller links and exported-rule app-context
+  alternatives without treating regex patterns, transformed fields, reusable
+  invocation contexts or other implicit props as resolved runtime dependencies.
+- Propagate potential status and weakest confidence through multi-hop footprint
+  and removal-impact witnesses, explanations and CSV/JSON exports.
+- Bound inferred links, retain indexed namespace/scope resolution and conservative
+  private/collision handling, and preserve all saved decisions and baselines.
+- Separate configured and potential consumer counts in impact follow-ups; a
+  potential-only caller cannot establish that a dependency will become orphaned.
+- Keep other knowledge-object families and implicit applicability explicitly
+  unverified; this is a bounded first increment of coverage follow-up #8.
+- Validate build 69 against real native catalogs on Enterprise 10.2.5, 10.2.8 and
+  10.4.4, including the affected workflows in both themes, unchanged original
+  review rows and representative native CSV/JSON downloads. Preserve timeout,
+  partial-coverage and compatibility qualifications rather than claiming runtime
+  execution or universal implicit coverage.
+
 ## 1.1.1 — 2026-10-25
 
 - Recover In-use Content type/app filters when a starting-set, activity or

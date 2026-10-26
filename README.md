@@ -31,6 +31,8 @@ The app keeps customer content read-only:
 - Grouped, expandable directional dependency exploration, multi-step drill-through, candidate-group
   and review-stage filters, graph-derived removal-impact simulation, ordered
   remediation guidance, and relationship/impact export
+- Native automatic-lookup rule inventory, configured lookup-definition/file
+  chains, and explicitly potential caller links from exact event selectors
 - A persistent Review Library with triage, investigation, owner-confirmation,
   eligibility, retain, and blocked stages, with independent review-evidence
   validity, scoped coverage, change explanations, explicit reaffirmation,
@@ -48,7 +50,7 @@ The app keeps customer content read-only:
   partial, and unavailable source coverage
 
 The complete scan inventories installed apps, saved searches, dashboards,
-macros, lookup definitions and files, data models, indexes, sourcetypes, and
+macros, automatic lookup rules, lookup definitions and files, data models, indexes, sourcetypes, and
 users visible to the initiating Splunk user. Private objects are excluded from
 the shared cache; access is restricted to explicit hygiene roles.
 
@@ -64,7 +66,20 @@ the shared cache; access is restricted to explicit hygiene roles.
    connectivity check succeeds.
 
 The support baseline is Splunk Enterprise **10.2.5 or later** on a standalone
-Linux x86-64 search head with KV Store. App 1.1.1 build 67 is validated on
+Linux x86-64 search head with KV Store. The 1.2 automatic-lookup increment
+(build 69) has targeted real-data qualification on 10.2.5, 10.2.8 and 10.4.4: native
+automatic-lookup collection, dependency/impact investigations, required-content
+reporting and Review Library in both themes, preserved decisions, and parsed
+representative CSV/JSON downloads. This is bounded static coverage, not execution
+telemetry or a large-estate performance benchmark.
+
+Release 1.2.0 (build 72) adds wrapped labels, opaque
+relationship surfaces, hover/focus previews and full-context dialogs. Targeted
+real-data UI checks cover Enterprise 10.2.8 and 10.4.4 in both themes. The minimum
+runtime evidence above is distinct from these final UI checks; see the exact
+qualification scope in the compatibility policy below.
+
+App 1.1.1 build 67 retains its broader qualification on
 10.2.5, 10.2.8 and 10.4.4: all seven pages in light/dark modes, real-data scans,
 filter recovery and preservation of existing decisions. Targeted native-browser
 checks include actual 200% zoom, keyboard review/draft flows and operator-assisted
@@ -96,6 +111,12 @@ references, and potential inbound references. **Current** means the supported
 shared static scope matches a recent reviewed baseline—not that no hidden,
 private, dynamic, or external consumer exists. Removal-impact planning retains
 its wider, conservative blockers.
+
+After upgrading to 1.2, run a complete scan to collect automatic lookup rules.
+Follow **Automatic Lookup** entries in Explorer to their configured definition
+and file. **May apply** and **may use** links remain explicitly potential through
+multi-hop reports, impact explanations and exports. New evidence may require
+re-review; the scan does not change your saved decision or reaffirm its baseline.
 
 Concurrent saves cannot silently replace one another. A conflicting editor keeps
 its draft and offers comparison with the latest saved revision. Archiving removes
@@ -169,14 +190,16 @@ yarn validate
 ```
 
 The verified installable archive is written to
-`app/dist/content_hygiene-1.1.1.tar.gz`. Run `yarn release:prepare` to
+`app/dist/content_hygiene-1.2.0.tar.gz`. Run `yarn release:prepare` to
 perform the complete validation and update `SHA256SUMS`.
 
 ## Current limitations
 
 - The required-content report is a partial shared static footprint, not a complete
-  migration manifest. Implicit props/automatic lookups, uninventoried knowledge
-  object types, private/dynamic content and ad-hoc consumers remain explicit gaps.
+  migration manifest. Automatic lookup callers are possible exact event-scope
+  matches, not observed use. Pattern scopes, other implicit props, uninventoried
+  types, private/dynamic content and ad-hoc consumers remain explicit gaps. See
+  [automatic lookup investigations](docs/USER_GUIDE.md#automatic-lookups-and-implicit-props).
 - Bulk review is not atomic or an app-wide retain rule. Existing decisions are
   skipped by default; completed saves remain if later items fail or are cancelled.
 - Scans run in the initiating browser session and are not scheduled.

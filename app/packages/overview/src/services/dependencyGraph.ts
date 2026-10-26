@@ -49,17 +49,27 @@ export interface GraphLink {
     label: string;
     confidence: string;
     evidence: string;
+    edges: DependencyEdge[];
+}
+export interface GraphLinkLabel {
+    link: GraphLink;
+    x: number;
+    y: number;
 }
 export interface GraphModel {
     nodes: GraphNode[];
     links: GraphLink[];
+    labels: GraphLinkLabel[];
     width: number;
     height: number;
     representedObjects: number;
     omittedObjects: number;
 }
 export const GRAPH_NODE_WIDTH = 280;
-export const GRAPH_NODE_HEIGHT = 136;
+export const GRAPH_NODE_HEIGHT = 208;
+export const GRAPH_COLUMN_GAP = 232;
+export const GRAPH_LABEL_WIDTH = 208;
+export const GRAPH_LABEL_HEIGHT = 76;
 export const GRAPH_NODE_BUDGET = 60;
 
 function nodeFor(
@@ -198,7 +208,9 @@ export function buildGraphModel(
                     ? existing.confidence
                     : edge.confidence,
             evidence: existing ? `${existing.evidence}; ${edge.evidence}` : edge.evidence,
+            edges: existing?.edges ?? [],
         });
+        links.get(key)!.edges.push(edge);
     });
     const levels = Array.from(new Set(nodes.map((node) => node.level))).sort((a, b) => a - b);
     const columns = levels.map((level) =>
@@ -210,29 +222,81 @@ export function buildGraphModel(
     columns.forEach((column, columnIndex) =>
         column.forEach((node, rowIndex) => {
             Object.assign(node, {
-                x: 24 + columnIndex * 440,
+                x: 24 + columnIndex * (GRAPH_NODE_WIDTH + GRAPH_COLUMN_GAP),
                 // Expanding a hub must not push the center below the viewport.
-                y: 64 + rowIndex * 160,
+                y: 64 + rowIndex * (GRAPH_NODE_HEIGHT + 40),
             });
         }),
     );
+    const nodeById = new Map(nodes.map((node) => [node.id, node]));
+    const occupied = new Map<number, Set<number>>();
+    // Each relationship gets a distinct label slot in a reserved inter-column
+    // corridor. Labels are HTML controls, not SVG text under crossing arrows.
+    const labels = Array.from(links.values()).map((link) => {
+        const source = nodeById.get(link.source)!;
+        const target = nodeById.get(link.target)!;
+        const x =
+            Math.min(source.x, target.x) +
+            GRAPH_NODE_WIDTH +
+            (GRAPH_COLUMN_GAP - GRAPH_LABEL_WIDTH) / 2;
+        const slots = occupied.get(x) ?? new Set<number>();
+        const stride = GRAPH_LABEL_HEIGHT + 12;
+        const preferred = Math.max(
+            0,
+            Math.round(
+                ((source.y + target.y) / 2 + GRAPH_NODE_HEIGHT / 2 - GRAPH_LABEL_HEIGHT / 2 - 64) /
+                    stride,
+            ),
+        );
+        let slot = preferred;
+        for (let offset = 0; slots.has(slot); offset += 1) {
+            const lower = preferred - offset - 1;
+            const upper = preferred + offset + 1;
+            slot = lower >= 0 && !slots.has(lower) ? lower : upper;
+        }
+        slots.add(slot);
+        occupied.set(x, slots);
+        return { link, x, y: 64 + slot * stride };
+    });
     return {
         nodes,
         links: Array.from(links.values()),
-        width: levels.length * 440,
-        height: rows * 160 + 100,
+        labels,
+        width: levels.length * (GRAPH_NODE_WIDTH + GRAPH_COLUMN_GAP) + 24,
+        height: Math.max(
+            rows * (GRAPH_NODE_HEIGHT + 40) + 100,
+            ...labels.map((label) => label.y + GRAPH_LABEL_HEIGHT + 24),
+        ),
         representedObjects: renderedId.size - 1,
         omittedObjects: omitted.size,
     };
 }
 
 /** Arrows end at card boundaries, never underneath the node. */
-export function graphLinkPath(source: GraphNode, target: GraphNode): string {
+export function graphLinkPath(
+    source: GraphNode,
+    target: GraphNode,
+    label?: GraphLinkLabel,
+): string {
     const forward = target.x >= source.x;
     const sx = source.x + (forward ? GRAPH_NODE_WIDTH : 0);
     const tx = target.x + (forward ? 0 : GRAPH_NODE_WIDTH);
     const sy = source.y + GRAPH_NODE_HEIGHT / 2;
     const ty = target.y + GRAPH_NODE_HEIGHT / 2;
+    if (label) {
+        const lx = label.x + GRAPH_LABEL_WIDTH / 2;
+        const ly = label.y + GRAPH_LABEL_HEIGHT / 2;
+        if (source.id === target.id) {
+            const topX = source.x + GRAPH_NODE_WIDTH * 0.75;
+            return `M ${sx} ${sy} C ${lx} ${sy}, ${lx} ${ly}, ${lx} ${ly} C ${lx + 40} ${ly}, ${topX + 90} ${source.y - 48}, ${topX} ${source.y}`;
+        }
+        if (source.x === target.x) {
+            return `M ${sx} ${sy} C ${lx} ${sy}, ${lx} ${ly}, ${lx} ${ly} C ${lx} ${ly}, ${lx} ${ty}, ${target.x + GRAPH_NODE_WIDTH} ${ty}`;
+        }
+        const bend = Math.max(30, Math.min(Math.abs(lx - sx), Math.abs(tx - lx)) / 2);
+        const sign = forward ? 1 : -1;
+        return `M ${sx} ${sy} C ${sx + sign * bend} ${sy}, ${lx - sign * bend} ${ly}, ${lx} ${ly} C ${lx + sign * bend} ${ly}, ${tx - sign * bend} ${ty}, ${tx} ${ty}`;
+    }
     if (source.id === target.id) {
         const topX = source.x + GRAPH_NODE_WIDTH * 0.75;
         return `M ${sx} ${sy} C ${sx + 90} ${sy}, ${topX + 90} ${source.y - 64}, ${topX} ${source.y}`;

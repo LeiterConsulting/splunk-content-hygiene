@@ -56,6 +56,7 @@ import { downloadCsv } from '../utils/downloadCsv';
 import { downloadJson } from '../utils/downloadJson';
 import { navigateToView, readQueryParam, readQueryParams, serializeQuery } from '../utils/navigation';
 import { ownerLabel } from '../utils/objectLabels';
+import { isPotentialRelation } from '../utils/dependencySemantics';
 
 const candidateFindingTypes = new Set([
     'cleanup_candidate',
@@ -170,6 +171,7 @@ function exportRelationships(
             'Related usage observations',
             'Related last observed',
             'Relation',
+            'Potential implicit relationship',
             'Confidence',
             'Resolved',
             'Evidence',
@@ -191,6 +193,7 @@ function exportRelationships(
             row.contentObject?.usageEvidence?.observationCount ?? '',
             row.contentObject?.lastUsed ?? '',
             row.edge.relation,
+            isPotentialRelation(row.edge.relation),
             row.edge.confidence,
             row.edge.resolved,
             row.edge.evidence,
@@ -226,6 +229,7 @@ function exportRemovalImpact(selected: ContentObject, analysis: RemovalImpactAna
             'Relation',
             'Confidence',
             'Likely outcome',
+            'Path contains potential implicit relationship',
             'Evidence',
         ],
         rows.map((affected) => [
@@ -251,6 +255,7 @@ function exportRemovalImpact(selected: ContentObject, analysis: RemovalImpactAna
             affected?.relation ?? '',
             affected?.confidence ?? '',
             affected?.likelyOutcome ?? '',
+            affected?.conditional ?? false,
             affected?.evidence ?? '',
         ]),
     );
@@ -708,7 +713,7 @@ export function DependencyPage({
             ) : (
                 <DetailLayout>
                     <Card>
-                        <WorkspaceHeader>
+                        <WorkspaceHeader style={{ overflowWrap: 'anywhere' }}>
                             <div>
                                 <SmallText>Dependency graph center</SmallText>
                                 <DetailTitle>{selected.name}</DetailTitle>
@@ -722,6 +727,12 @@ export function DependencyPage({
                                 {reviewByObject.has(selected.objectId) ? <StyledButton onClick={() => navigate(() => navigateToView('reviews', { object: selected.objectId }))}>Open center in review library</StyledButton> : null}
                             </ButtonRow>
                         </WorkspaceHeader>
+                        {selected.objectType === 'Automatic Lookup' || relatedRows.some((row) => isPotentialRelation(row.edge.relation)) ? (
+                            <InlineNotice>
+                                <strong>Configuration is not execution evidence</strong>
+                                <p>Automatic lookup rules define search-time enrichment. “May apply” and “may use” links are potential event-scope or invoking-app matches. Confirm props precedence, renames, fields and namespace overrides before treating a path as a runtime dependency.</p>
+                            </InlineNotice>
+                        ) : null}
                     </Card>
                     <div>
                         <TabLayout
@@ -829,6 +840,7 @@ export function DependencyPage({
                                                                             ' ',
                                                                         )}
                                                                     </div>
+                                                                    {isPotentialRelation(row.edge.relation) ? <SmallText>Potential — not observed execution</SmallText> : null}
                                                                 </td>
                                                                 <td>
                                                                     {row.edge.confidence}

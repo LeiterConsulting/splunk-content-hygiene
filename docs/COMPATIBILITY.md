@@ -31,6 +31,55 @@ the minimum is not a recommendation to downgrade or remain on an old patch.
 | 10.2.8 | Representative 10.2 maintenance release and real-estate regression | App 1.1.1 build 67: real-data scan, seven pages in light/dark, native keyboard filter recovery and selected-object investigations; existing decisions unchanged |
 | 10.4.4 | Modern navigation, current theme host, and newer bundled runtime | App 1.1.1 build 67: real-data scan, seven pages in light/dark, live filter recovery and selected-object investigations; existing decisions unchanged |
 
+### 1.2.0 coverage increment
+
+The same checksum-identified build 69 candidate was installed without a restart
+on all three representative runtimes. Native `data/props/lookups` GET catalogs,
+rule/definition relationships, potential callers, resolved endpoints and original
+review records were independently checked against real installed content.
+Dependency Explorer, removal impact, required-content reporting and Review
+Library were exercised in light and dark modes; layouts and controls were checked
+at the observed desktop viewports. A real three-hop rule/definition/CSV chain
+retained potential status in details and downloaded CSV/JSON, with exact identity
+parity. A representative downloaded removal-impact JSON retained conditional
+paths and execution caveats. These are targeted feature checks, not a repeat of
+all seven-page, accessibility or backend permission/concurrency qualification.
+
+The emulated minimum-version VM hit a bounded persistence timeout during warm-up
+and one bounded inventory-read timeout. It retained its previous baseline and
+showed the failure rather than substituting data. A fresh complete scan and
+subsequent view checks passed without relaxing request limits. This VM is
+functional compatibility evidence, not production performance qualification.
+Shared real-estate scans and source catalogs completed without these failures.
+No review decisions or customer knowledge objects were changed for this increment;
+native user theme preferences were restored after testing.
+
+### 1.2.0 graph-readability qualification
+
+The graph-readability increment has targeted native-browser checks on Enterprise
+10.2.8 and 10.4.4 in both themes: wrapped long names, opaque relationship labels,
+keyboard previews, full object/relationship context, focus return, dense-group/member
+pagination, captured evidence/source locations and contained graph zoom. Final
+build 72 repeated both-theme context checks on both runtimes after correcting
+background-preview layering; dense-group pagination and graph zoom also retain
+their earlier increment checks and automated regressions. These UI-only checks
+reuse the existing cached inventory; they do not repeat minimum-version VM,
+backend, permission, export or accessibility qualification. The build 69 minimum
+runtime evidence above remains distinct. Test-harness timing improvements do not
+change the final build 72 production payload or its review-persistence protocol.
+
+The 1.2.0 automated release gate passes 348 checks: 312 overview tests, 15 native
+host tests, 12 backend tests and 9 archive-policy tests, with no skipped test cases or
+increased UI timeouts. Lint, type checks, branding, production build and package
+verification pass. Pre-cert AppInspect reports zero errors, failures or future
+failures, with three reviewed advisories (native SplunkJS telemetry, the legacy
+Python-migration notice and KV Store configuration); one `app.manifest`-based
+check is skipped. The build retains webpack's
+bundle-size advisories. These are release checks, not Splunk Cloud certification
+or a production-scale performance benchmark.
+
+### Earlier 1.1.1 qualification
+
 The same checksum-identified 1.1.1 archive was installed on all three runtimes
 without a restart. Inventory identities, published object/relationship counts,
 resolved endpoints and original review rows were independently checked. No new

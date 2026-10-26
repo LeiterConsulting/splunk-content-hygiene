@@ -60,6 +60,19 @@ Unresolved targets remain valuable evidence and are not discarded.
 `belongs_to` points from app-scoped content to its containing app. These are
 configuration relationships, not observed executions.
 
+Automatic Lookup objects use their native props rule identity and app namespace,
+not a generated sourcetype identity. `uses_lookup` records a configured rule's
+literal lookup definition. `may_apply_automatic_lookup` records a possible
+event-selector caller; `may_use_lookup` records a possible exported-rule binding
+in another invoking app. These `may_*` relations never prove execution or a
+broken target. There is no broad sourcetype-to-rule join across app namespaces.
+
+Derived report witnesses include `conditional: true` if any relationship in their
+chosen path is potential, including later lookup-definition/file hops. This flag
+and the weakest path confidence are preserved in CSV/JSON; the original edge
+relation remains the authoritative configuration-vs-potential distinction.
+No review migration or rewrite is performed when the catalog expands.
+
 ## Findings
 
 A finding references an object and records a finding type, evidence-backed
@@ -161,3 +174,8 @@ affected objects, shortest known paths, likely outcomes, cross-app scope,
 dependency follow-ups, evidence caveats, readiness, and an ordered
 change-control plan. They are exportable but are not persisted as authority to
 remove content.
+
+Consumer follow-ups separate `knownDependentCount` (configured relationships)
+from `potentialDependentCount` (additional possible implicit callers). A
+potential-only relationship is not an orphaning conclusion; its applicability
+must be verified independently. Readiness and recommendations remain conservative.

@@ -8,7 +8,7 @@ This app does not delete, disable, reassign, archive, or rewrite customer
 objects. Settings includes an explicit bounded metadata inventory that persists
 normalized records and scan status in application-owned KV Store collections.
 The complete scan paginates supported REST endpoints, extracts explicit SPL and
-dashboard dependencies, and stores conservative findings. Every view reads the
+dashboard dependencies plus native automatic lookup rules, and stores conservative findings. Every view reads the
 latest live KV Store snapshot. On-demand usage scans can add attributable
 saved-search and dashboard observations plus explicit source coverage from
 native Splunk telemetry. Missing or partial evidence remains unknown; the
@@ -39,10 +39,20 @@ returned configuration/ACL and declared outbound/potential inbound references.
 Partial object coverage cannot establish Current,
 and stale confirmations cannot qualify an object for change planning.
 
+Version 1.2 adds native read-only `LOOKUP-*` rule inventory, configured
+lookup-definition/file chains and potential caller links from positive exact
+event selectors. “May apply”/“may use” paths are configuration possibilities,
+not observed execution. That distinction propagates through required-content,
+removal-impact and CSV/JSON reports. Pattern scopes, props precedence, renames,
+input fields, reusable invocation context and other props families remain
+unverified. Run a complete scan after upgrading. Saved decisions, notes,
+assignees and evidence baselines are preserved; changed evidence needs explicit
+investigation/reaffirmation. No customer objects or permissions are changed.
+
 ## Requirements
 
-- Splunk Enterprise with browser validation on 10.2.8 and 10.4.4, including
-  native navigation, launcher icons, and both light/dark workspace themes
+- Splunk Enterprise 10.2.5 or later on a standalone Linux x86-64 search head;
+  representative browser qualification covers 10.2.5, 10.2.8 and 10.4.4
 - KV Store enabled on the search head
 - An administrative user for installation and inventory scans
 

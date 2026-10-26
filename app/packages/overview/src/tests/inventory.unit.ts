@@ -3,6 +3,7 @@ import {
     normalizeObjectEntry,
     stableRecordKey,
 } from '../services/inventory';
+import { ConfigurationFingerprint } from '../types';
 
 test('builds stable identities that distinguish private user namespaces', () => {
     const sharedObjectId = canonicalObjectId(
@@ -124,4 +125,18 @@ test('includes owner namespace in private user-scoped object identity', () => {
     expect(normalized.object_id).toBe(
         'saved_search::search::user:analyst::Daily Error Review'
     );
+});
+
+test('automatic lookup mapping changes retain identity while changing configuration evidence', () => {
+    const collector = { id: 'automatic_lookups', label: 'Automatic lookup rules (props)', endpoint: 'data/props/lookups', objectType: 'Automatic Lookup' };
+    const entry = { name: 'events : LOOKUP-enrich', acl: { app: 'example', owner: 'nobody', sharing: 'app' },
+        content: { stanza: 'events', attribute: 'LOOKUP-enrich', transform: 'owners', type: 'LOOKUP', value: 'owners key OUTPUT owner', 'lookup.field.output.0': 'owner' } };
+    const first = normalizeObjectEntry(entry, collector, 'scan-one', '2026-10-25T11:00:00Z');
+    const second = normalizeObjectEntry({ ...entry, content: { ...entry.content, 'lookup.field.output.0': 'team' } }, collector, 'scan-two', '2026-10-25T12:00:00Z');
+    expect(first.object_id).toBe('automatic_lookup::example::events : LOOKUP-enrich');
+    expect(second.object_id).toBe(first.object_id);
+    const firstFingerprint = first.configuration_fingerprint as ConfigurationFingerprint;
+    const secondFingerprint = second.configuration_fingerprint as ConfigurationFingerprint;
+    expect(secondFingerprint.digest).not.toBe(firstFingerprint.digest);
+    expect(secondFingerprint.accessDigest).toBe(firstFingerprint.accessDigest);
 });

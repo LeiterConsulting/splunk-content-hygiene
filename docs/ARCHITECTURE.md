@@ -2,7 +2,7 @@
 
 Splunk Content Hygiene is a client-driven Splunk UI Toolkit application. It
 uses the current Splunk Web session to call supported Splunk REST endpoints,
-normalizes visible content, analyzes explicit dependencies, and persists the
+normalizes visible content, analyzes explicit and bounded potential dependencies, and persists the
 result in app-local KV Store collections.
 
 ```text
@@ -44,7 +44,7 @@ normalization + dependency analysis       coverage + attribution
 ## Inventory
 
 Collectors query apps, saved searches, dashboards, macros, lookup definitions,
-lookup files, data models, indexes, sourcetypes, and users. Bounded mode limits
+lookup files, automatic lookup rules, data models, indexes, sourcetypes, and users. Bounded mode limits
 each content collector to 100 records. Complete mode requests 200 records per
 page and stops at 10,000 records per collector, marking the result incomplete
 when the visible total exceeds that cap.
@@ -71,6 +71,51 @@ Simple XML uses structured elements. Unsupported and malformed sources retain
 per-object diagnostics. Exact-name indexes apply same-app and global-export
 visibility rules rather than guessing at foreign app-scoped targets. Explicit
 lookup-filename and app-membership relationships use `uses_file` and `belongs_to`.
+
+### Automatic lookups and implicit props
+
+The paginated native `data/props/lookups` GET catalog supplies `LOOKUP-*` rule
+identities, ACL namespace, stanza and canonical transform name. Returned rule
+fields are fingerprinted before the raw declaration is discarded. No customer
+SPL is dispatched and no arbitrary props file or filesystem is read. The
+canonical transform is checked against the returned declaration; malformed or
+dynamic values remain gaps rather than guessed broken dependencies.
+
+Rules bind to lookup definitions (`uses_lookup`), which retain their existing
+configured file edges. A namespace/scope index matches positive exact
+`sourcetype`, `host` or `source` event selectors in saved searches and dashboard
+base searches. Ordinary SPL field-value filters compare case-insensitively;
+matching includes possible case variants while retaining each original props
+identity. CASE/TERM directives remain unverified. Selectors after a transform or unexpanded
+macro, negative/wildcard filters, non-event generators and dashboard post-process
+queries are not treated as original event scope. Macro/data-model invocation
+contexts are disclosed rather than assigned their definition app.
+
+`may_apply_automatic_lookup` and exported-rule `may_use_lookup` bindings are
+potential configuration possibilities, not execution telemetry. Same-app and
+global visibility resolution retains ambiguity/private-shadow protections.
+Exported rules can bind differently in another invoking app; alternative visible
+definition contexts remain potential and no missing originating-app definition
+alone proves the exported rule broken.
+
+Matching is capped at 250 inferred edges per source and 50,000 per scan, with
+explicit gaps when capped. Customer regex is not executed: pattern props stanzas,
+precedence, sourcetype renames, inherited scopes and input-field availability
+remain unverified. Other props families and uninventoried source types remain
+separate coverage limitations. Collection, parsing and resolution stay distinct.
+
+Potential status and weakest path confidence propagate through multi-hop
+required-content and removal-impact witnesses, UI details and CSV/JSON exports.
+New catalog/configuration/adjacency evidence can change review validity, never
+the stored stage, note, assignee or evidence baseline. Existing snapshots remain
+readable; run a complete scan after upgrading to collect the new catalog.
+
+The source contracts are documented in Splunk's
+[knowledge REST endpoint reference](https://help.splunk.com/en/splunk-enterprise/rest-api-reference/9.4/knowledge-endpoints/knowledge-endpoint-descriptions)
+(`data/props/lookups`) and
+[props.conf specification](https://help.splunk.com/en/splunk-enterprise/administer/admin-manual/10.4/configuration-file-reference/10.4.0-configuration-file-reference/props.conf).
+SPL case behavior is documented in
+[Use fields to search](https://help.splunk.com/en/splunk-enterprise/search/search-tutorial/9.0/part-4-searching-the-tutorial-data/use-fields-to-search).
 
 ## Usage evidence
 
@@ -101,7 +146,8 @@ Dependency Explorer performs a cycle-safe breadth-first traversal against the
 persisted, unfiltered edge set. Starting from the selected object, it follows
 inbound edges to direct consumers and then continues through their consumers up
 to the selected one-to-five-hop depth. Each affected object retains its
-shortest known path, relation, confidence, source evidence, and likely outcome.
+shortest known path, relation, weakest path confidence, potential-path status,
+source evidence, and likely outcome.
 Traversal is capped at 500 affected objects and reports truncation rather than
 silently presenting a complete result.
 

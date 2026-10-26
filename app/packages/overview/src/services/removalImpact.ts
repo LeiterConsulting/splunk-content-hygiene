@@ -9,6 +9,7 @@ import {
 } from '../types';
 import { evidenceWindowFresh, usageSourceForObject, usageValidity } from './usage';
 import { compareReviewEvidence } from './reviewEvidence';
+import { isPotentialRelation, weakestDependencyConfidence } from '../utils/dependencySemantics';
 
 export type RemovalImpactLevel = 'critical' | 'high' | 'medium' | 'low' | 'unknown';
 
@@ -27,6 +28,7 @@ export interface ImpactedObject {
     direct: boolean;
     relation: string;
     confidence: ConfidenceLevel;
+    conditional: boolean;
     evidence: string;
     sourceLocation: string | null;
     pathObjectIds: string[];
@@ -45,6 +47,7 @@ export interface DependencyFollowUp {
     confidence: ConfidenceLevel;
     evidence: string;
     knownDependentCount: number;
+    potentialDependentCount: number;
     potentiallyOrphaned: boolean;
     recommendation: string;
 }
@@ -84,6 +87,8 @@ interface TraversalItem {
     depth: number;
     pathObjectIds: string[];
     pathNames: string[];
+    conditional: boolean;
+    confidence: ConfidenceLevel;
 }
 
 const MAX_AFFECTED_OBJECTS = 500;
@@ -123,6 +128,12 @@ function likelyOutcome(
             return `${dependentLabel} belongs to the selected app. Removing the app package can remove its bundled configuration and make this object unavailable. Local overrides, data, and external integrations still require separate review.`;
         case 'uses_file':
             return `${dependentLabel} would lose its backing lookup file; readers and writers using the definition can fail or lose enrichment.`;
+        case 'uses_lookup':
+            return `${dependentLabel} names this lookup definition for automatic search-time enrichment. Removing it can lose output fields or cause lookup errors when the rule executes; configuration alone does not prove execution.`;
+        case 'may_apply_automatic_lookup':
+            return `${dependentLabel} may lose automatically enriched fields if its events match this props rule and the lookup executes. Confirm event scope, precedence and field availability before assuming an impact.`;
+        case 'may_use_lookup':
+            return `${dependentLabel} may bind this lookup definition in an invoking app. Confirm the effective app namespace and overrides before assuming this is the runtime target.`;
         case 'references':
         case 'invokes':
             return `${dependentLabel} may fail to load or execute when its ${dependencyType} reference is no longer available.`;
@@ -150,6 +161,8 @@ function typeSpecificPreparation(selected: ContentObject): string {
         case 'Lookup Definition':
         case 'Lookup File':
             return 'Migrate lookup readers and writers together, validate field compatibility, and confirm refresh ownership before retiring the lookup.';
+        case 'Automatic Lookup':
+            return 'Review the props LOOKUP class and event scope, effective invoking-app definition, input/output fields, precedence and all potential callers before changing automatic enrichment through a separate approved process.';
         case 'Data Model':
             return 'Migrate searches, pivots, and acceleration consumers and preserve rollback details before retiring the data model.';
         case 'Index':
@@ -200,15 +213,17 @@ export function analyzeRemovalImpact(
     const reviewByObject = new Map(reviews.map((review) => [review.objectId, review]));
     const inboundByTarget = new Map<string, DependencyEdge[]>();
     const inboundSourceIdsByTarget = new Map<string, Set<string>>();
+    const potentialSourceIdsByTarget = new Map<string, Set<string>>();
 
     edges.forEach((edge) => {
         const inbound = inboundByTarget.get(edge.targetId) ?? [];
         inbound.push(edge);
         inboundByTarget.set(edge.targetId, inbound);
 
-        const sourceIds = inboundSourceIdsByTarget.get(edge.targetId) ?? new Set<string>();
+        const consumers = isPotentialRelation(edge.relation) ? potentialSourceIdsByTarget : inboundSourceIdsByTarget;
+        const sourceIds = consumers.get(edge.targetId) ?? new Set<string>();
         sourceIds.add(edge.sourceId);
-        inboundSourceIdsByTarget.set(edge.targetId, sourceIds);
+        consumers.set(edge.targetId, sourceIds);
     });
 
     const affectedObjects: ImpactedObject[] = [];
@@ -219,6 +234,8 @@ export function analyzeRemovalImpact(
             depth: 0,
             pathObjectIds: [selected.objectId],
             pathNames: [selected.name],
+            conditional: false,
+            confidence: 'high',
         },
     ];
     let truncated = false;
@@ -253,6 +270,8 @@ export function analyzeRemovalImpact(
                 const name = dependent?.name ?? unresolved.name;
                 const pathObjectIds = [edge.sourceId, ...current.pathObjectIds];
                 const pathNames = [name, ...current.pathNames];
+                const conditional = current.conditional || isPotentialRelation(edge.relation);
+                const confidence = weakestDependencyConfidence(current.confidence, edge.confidence);
                 const impacted: ImpactedObject = {
                     objectId: edge.sourceId,
                     name,
@@ -264,18 +283,19 @@ export function analyzeRemovalImpact(
                     depth: nextDepth,
                     direct: nextDepth === 1,
                     relation: edge.relation,
-                    confidence: edge.confidence,
+                    confidence,
+                    conditional,
                     evidence: edge.evidence,
                     sourceLocation: edge.sourceLocation,
                     pathObjectIds,
                     pathNames,
-                    likelyOutcome: likelyOutcome(
+                    likelyOutcome: `${conditional ? 'Potential impact only. ' : ''}${likelyOutcome(
                         dependent,
                         dependency?.name ?? current.pathNames[0],
                         dependency?.objectType ?? selected.objectType,
                         edge,
                         nextDepth,
-                    ),
+                    )}`,
                     resolved: Boolean(dependent) && edge.resolved,
                     protected: dependent?.protected ?? false,
                 };
@@ -285,6 +305,8 @@ export function analyzeRemovalImpact(
                     depth: nextDepth,
                     pathObjectIds,
                     pathNames,
+                    conditional,
+                    confidence,
                 });
             });
         }
@@ -303,6 +325,9 @@ export function analyzeRemovalImpact(
 
     const directDependents = affectedObjects.filter(({ direct }) => direct);
     const indirectDependents = affectedObjects.filter(({ direct }) => !direct);
+    const potentialDirectCount = directDependents.filter(({ conditional }) => conditional).length;
+    const potentialIndirectCount = indirectDependents.filter(({ conditional }) => conditional).length;
+    const potentialAffectedCount = potentialDirectCount + potentialIndirectCount;
     const protectedAffectedCount = affectedObjects.filter((affected) => affected.protected).length;
     const unresolvedAffectedCount = affectedObjects.filter(({ resolved }) => !resolved).length;
     const affectedAppCount = new Set(affectedObjects.map(({ app }) => app)).size;
@@ -312,9 +337,13 @@ export function analyzeRemovalImpact(
         const dependency = objectById.get(edge.targetId);
         const unresolved = unresolvedIdentity(edge.targetId);
         const knownDependentCount = inboundSourceIdsByTarget.get(edge.targetId)?.size ?? 0;
+        const known = inboundSourceIdsByTarget.get(edge.targetId);
+        const potentialDependentCount = [...(potentialSourceIdsByTarget.get(edge.targetId) ?? [])].filter((id) => !known?.has(id)).length;
         const potentiallyOrphaned =
             Boolean(dependency) &&
             knownDependentCount === 1 &&
+            potentialDependentCount === 0 &&
+            !isPotentialRelation(edge.relation) &&
             !platformResourceTypes.has(dependency!.objectType);
         let recommendation =
             'Retain and validate this dependency independently; removing its consumer does not establish that the dependency is unused.';
@@ -324,6 +353,8 @@ export function analyzeRemovalImpact(
         } else if (platformResourceTypes.has(dependency.objectType)) {
             recommendation =
                 'Treat this shared platform resource as a separate administrative decision; do not include it in the same removal change.';
+        } else if (potentialDependentCount > 0 || isPotentialRelation(edge.relation)) {
+            recommendation = `${knownDependentCount} configured consumers and ${potentialDependentCount} additional potential callers are captured. Verify implicit applicability before assuming consumption or orphaning; retain and investigate this dependency separately.`;
         } else if (potentiallyOrphaned) {
             recommendation =
                 'Re-scan after the selected object is retired, then independently assess whether this dependency became orphaned.';
@@ -341,6 +372,7 @@ export function analyzeRemovalImpact(
             confidence: edge.confidence,
             evidence: edge.evidence,
             knownDependentCount,
+            potentialDependentCount,
             potentiallyOrphaned,
             recommendation,
         };
@@ -415,10 +447,10 @@ export function analyzeRemovalImpact(
         }
     } else if (directDependents.length > 0) {
         readiness = 'dependencies_present';
-        readinessLabel = 'Known dependencies require remediation';
-        summary = `Address ${directDependents.length} known direct dependent${
-            directDependents.length === 1 ? '' : 's'
-        } before considering removal.`;
+        readinessLabel = potentialDirectCount > 0 ? 'Potential dependencies require verification' : 'Known dependencies require remediation';
+        summary = potentialDirectCount > 0
+            ? `Verify ${potentialDirectCount} potential direct caller(s) and address ${directDependents.length - potentialDirectCount} supported direct configuration dependency/dependencies before considering removal. Potential matches are not confirmed consumption.`
+            : `Address ${directDependents.length} known direct dependent${directDependents.length === 1 ? '' : 's'} before considering removal.`;
     } else if (
         selectedReview?.stage !== 'confirmed_eligible' ||
         !reviewEvidenceCurrent ||
@@ -451,21 +483,21 @@ export function analyzeRemovalImpact(
     const potentialConsequences: string[] = [];
     if (directDependents.length > 0) {
         potentialConsequences.push(
-            `${directDependents.length} object${
+            potentialDirectCount > 0 ? `${directDependents.length} captured direct relationships include ${potentialDirectCount} potential implicit matches; verify them before assuming consumption.` : `${directDependents.length} object${
                 directDependents.length === 1 ? '' : 's'
             } directly reference or consume the selected object.`,
         );
     }
     if (indirectDependents.length > 0) {
         potentialConsequences.push(
-            `${indirectDependents.length} additional object${
+            potentialIndirectCount > 0 ? `${indirectDependents.length} captured indirect paths include ${potentialIndirectCount} potential implicit paths within ${maxDepth} hops; these are not proven runtime effects.` : `${indirectDependents.length} additional object${
                 indirectDependents.length === 1 ? '' : 's'
             } sit on a downstream dependency path within ${maxDepth} hops.`,
         );
     }
     if (affectedAppCount > 1) {
         potentialConsequences.push(
-            `Known impact crosses ${affectedAppCount} app namespaces, so coordination may extend beyond the selected object's owner.`,
+            `${potentialAffectedCount > 0 ? 'Captured possible impact' : 'Known impact'} crosses ${affectedAppCount} app namespaces, so coordination may extend beyond the selected object's owner.`,
         );
     }
     if (protectedAffectedCount > 0) {
@@ -505,8 +537,11 @@ export function analyzeRemovalImpact(
 
     const caveats = [
         'This is a read-only simulation from the latest persisted live scan; it does not remove or modify Splunk content.',
-        'Only explicit relationships supported by the current parsers are included. Dynamic SPL, tokens, navigation links, external integrations, and unobserved usage can add impact.',
+        'Supported explicit relationships and labeled potential automatic lookup matches are included. Other implicit props, dynamic SPL, tokens, navigation links, external integrations, and unobserved usage can add impact.',
     ];
+    if (potentialAffectedCount > 0 || outboundEdges.some((edge) => isPotentialRelation(edge.relation))) {
+        caveats.push('Potential implicit paths are possibilities, not confirmed consumers or observed execution. Verify props precedence, renames, field availability and invoking-app bindings before remediation decisions.');
+    }
     if (!analysisComplete) {
         caveats.push(
             'The latest scan is partial, contains collector warnings, or has incomplete analysis.',
@@ -573,7 +608,7 @@ export function analyzeRemovalImpact(
             title: 'Address direct dependents first',
             detail:
                 directDependents.length > 0
-                    ? `Update, replace, or separately retire the ${directDependents.length} known direct dependent${directDependents.length === 1 ? '' : 's'} and validate each changed object before proceeding.`
+                    ? `${potentialDirectCount > 0 ? `First verify the ${potentialDirectCount} potential caller(s); they are not confirmed consumers. ` : ''}Address the ${directDependents.length - potentialDirectCount} supported direct configuration dependencies through separate approved change control, and validate any confirmed affected object before proceeding.`
                     : 'No direct dependents are captured; independently search for references outside the supported graph before proceeding.',
             objectIds: directDependents.map(({ objectId }) => objectId),
             blocking: directDependents.length > 0,
@@ -584,7 +619,7 @@ export function analyzeRemovalImpact(
             title: 'Validate cascading and cross-app effects',
             detail:
                 indirectDependents.length > 0
-                    ? `Walk the ${indirectDependents.length} known indirect impact path${indirectDependents.length === 1 ? '' : 's'} with affected app owners and confirm the complete chain remains functional.`
+                    ? `Walk the ${indirectDependents.length} captured indirect impact path${indirectDependents.length === 1 ? '' : 's'} with affected app owners, verify any potential implicit hop, and confirm which complete chains require remediation.`
                     : 'No indirect impact path is captured within the selected depth; record that scope and its parser limitations.',
             objectIds: indirectDependents.map(({ objectId }) => objectId),
             blocking: protectedAffectedCount > 0,

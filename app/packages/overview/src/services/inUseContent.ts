@@ -1,6 +1,7 @@
 import { ContentObject, DependencyEdge, InventorySnapshot, ReviewRecord } from '../types';
 import { compareReviewEvidence } from './reviewEvidence';
 import { usageSourceForObject, usageValidity } from './usage';
+import { isPotentialRelation } from '../utils/dependencySemantics';
 
 export interface InUseOptions {
     activity: 'all' | 'dashboard_view' | 'saved_search_execution' | 'none';
@@ -34,6 +35,7 @@ export interface InUseRow {
         relation: string;
         depth: number;
         confidence: DependencyEdge['confidence'];
+        conditional: boolean;
     };
     usage: ContentObject['usageEvidence'];
     usageValidity: string;
@@ -56,7 +58,7 @@ export interface InUseReport {
 const implicitGaps = [
     'This is a supported shared static dependency footprint, not a complete migration manifest or proof that excluded objects are unused.',
     'Event types, tags, field extractions, field aliases, calculated fields, transforms, workflow actions and navigation menus are not inventoried.',
-    'Automatic lookups and implicit props.conf dependencies are not resolved.',
+    'Automatic props lookup rules and exact-selector caller matches cover only part of search-time props. Patterns, precedence, renames, field availability and inherited invocation contexts remain unverified; potential paths do not establish execution.',
     'Ad-hoc searches, private content, dynamic SPL/tokens and external consumers may require additional objects.',
     'App-containment and ownership links are metadata, not dependency closure. Retaining an app is not an app-wide retain rule.',
     'Each required object has one shortest supported witness path; the exported relationships also preserve other traversed paths.',
@@ -73,6 +75,9 @@ export function buildInUseReport(
     const objects = new Map(snapshot.objects.map((object) => [object.objectId, object]));
     const rows = new Map<string, InUseRow>();
     const gaps = new Set(implicitGaps);
+    if (!Object.prototype.hasOwnProperty.call(snapshot.scan.collectorCounts, 'automatic_lookups')) {
+        gaps.add('This snapshot predates automatic lookup collection. Run a new complete scan to assess that catalog.');
+    }
     const maxObjects = Math.max(1, options.maxObjects ?? 50000);
     const maxEdges = Math.max(1, options.maxEdges ?? 250000);
     let truncated = false;
@@ -265,6 +270,7 @@ export function buildInUseReport(
                                 parent.via?.confidence ?? 'high',
                                 edge.confidence,
                             ),
+                            conditional: parent.via?.conditional === true || isPotentialRelation(edge.relation),
                         };
                         queue.push(row.objectId);
                     }
@@ -276,6 +282,10 @@ export function buildInUseReport(
         gaps.add(
             `${unresolved} traversed references are unresolved or point outside the visible inventory.`,
         );
+    }
+    const conditional = [...rows.values()].filter((row) => row.via?.conditional).length;
+    if (conditional) {
+        gaps.add(`${conditional} included identities have a shortest witness path containing a potential automatic lookup relationship; inclusion is not proof of runtime use or an unconditional requirement.`);
     }
     const missing = [...rows.values()].filter((row) => !row.inInventory).length;
     if (missing) {

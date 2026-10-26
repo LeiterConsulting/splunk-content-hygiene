@@ -52,7 +52,7 @@ function reasonLabel(row: InUseRow): string {
                 return 'Explicit starting object';
             })
             .join(' + ') ||
-        `Required by a starting object (${row.via?.confidence ?? 'unknown'} witness confidence)`
+        `${row.via?.conditional ? 'Potential requirement' : 'Required by a starting object'} (${row.via?.confidence ?? 'unknown'} witness confidence)`
     );
 }
 function exportRows(report: InUseReport, rows: InUseRow[], scope: string): void {
@@ -73,6 +73,7 @@ function exportRows(report: InUseReport, rows: InUseRow[], scope: string): void 
             'Relation',
             'Depth',
             'Witness path confidence',
+            'Witness contains potential implicit dependency',
             'Observations',
             'Last observed',
             'Usage run ID',
@@ -105,6 +106,7 @@ function exportRows(report: InUseReport, rows: InUseRow[], scope: string): void 
                 row.via?.relation ?? '',
                 row.via?.depth ?? 0,
                 row.via?.confidence ?? '',
+                row.via?.conditional ?? false,
                 row.usage?.observationCount ?? '',
                 row.usage?.lastObserved ?? '',
                 row.usage?.usageRunId ?? '',
@@ -118,7 +120,7 @@ function exportRows(report: InUseReport, rows: InUseRow[], scope: string): void 
                 report.scanId,
                 report.coverage,
                 report.truncated,
-                'Shared static footprint only; implicit, private, dynamic and ad-hoc consumers unverified. Export coverage CSV or full JSON for all diagnostics.',
+                'Shared static footprint only; potential props paths are conditional, not proof of execution. Other implicit, private, dynamic and ad-hoc consumers remain unverified. Export coverage CSV or full JSON for diagnostics.',
             ];
         }),
     );
@@ -560,6 +562,10 @@ export function InUseContentPage({
                                 <div>
                                     <dt>Outbound coverage</dt>
                                     <dd>{inspected.outboundCoverage}</dd>
+                                </div>
+                                <div>
+                                    <dt>Witness applicability</dt>
+                                    <dd>{inspected.via?.conditional ? 'Potential implicit dependency — not observed execution' : 'Supported configuration path or explicit starting object'}</dd>
                                 </div>
                             </FactGrid>
                             <EvidenceList>

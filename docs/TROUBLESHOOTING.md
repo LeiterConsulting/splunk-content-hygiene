@@ -31,9 +31,33 @@ underlying dependency traversal.
 
 A source-scan change notice, unresolved/missing definition,
 partial outbound manifest or traversal ceiling is an explicit limitation. The
-report does not discover implicit automatic lookups/props, every knowledge-object
-type, private/dynamic content, ad-hoc usage or external consumers, and is not a
+report includes bounded potential automatic lookup links, not full implicit
+props closure, every knowledge-object type, private/dynamic content, ad-hoc usage
+or external consumers, and is not a
 complete migration manifest.
+
+## Automatic lookup links are missing or marked potential
+
+Run a complete scan after upgrading to 1.2, then inspect **Automatic lookup rules
+(props)** in the scan report. An older cached scan has no new catalog; a failed,
+denied or capped collector does not establish absence. An established complete
+baseline stays visible after an incomplete check. Use existing authorized read
+access; do not grant customer-content write access or weaken private-object ACLs.
+
+Choose the exact Automatic Lookup identity and namespace in Explorer. Literal
+rule-to-definition bindings are distinct from possible callers. Only positive
+exact original-event selectors are matched: patterns, negative filters, broad
+searches, non-event generators, transformed fields and post-process queries do
+not establish an exact scope. Macro/data-model caller namespaces, props
+precedence, renames, field availability and other implicit props remain unverified.
+Exported rules may have different possible definition targets by invoking app.
+See the [investigation workflow](USER_GUIDE.md#automatic-lookups-and-implicit-props).
+
+Potential status is deliberate and propagates through downstream report paths;
+it is not a collector error or evidence of actual execution. Missing from the
+map is never proof that a rule or lookup can be removed. Review source diagnostics
+for the 250-links-per-source/50,000-per-scan matching ceilings. New evidence can
+change review validity without altering the saved decision or its baseline.
 
 ## A dependency link cannot show its requested object
 

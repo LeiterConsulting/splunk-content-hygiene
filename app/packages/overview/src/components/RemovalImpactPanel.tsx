@@ -91,7 +91,7 @@ export function RemovalImpactPanel({
                     <div>
                         <CardTitle>Impact of removal</CardTitle>
                         <SmallText>
-                            Simulates the known blast radius for {selected.name} without changing
+                            Simulates captured and potential impact for {selected.name} without changing
                             Splunk content. Relationship-view filters do not reduce this impact
                             analysis.
                         </SmallText>
@@ -127,13 +127,13 @@ export function RemovalImpactPanel({
                         <SummaryMetric
                             label="Direct dependents"
                             value={analysis.directDependents.length.toLocaleString()}
-                            hint="Known objects that immediately consume this object"
+                            hint={`${analysis.directDependents.filter((item) => item.conditional).length} potential implicit matches included; confirm applicability`}
                             accent={analysis.directDependents.length > 0 ? 'negative' : 'positive'}
                         />
                         <SummaryMetric
                             label="Indirect dependents"
                             value={analysis.indirectDependents.length.toLocaleString()}
-                            hint={`Known cascading impact within ${analysis.maxDepth} ${plural(
+                            hint={`Captured/potential paths within ${analysis.maxDepth} ${plural(
                                 analysis.maxDepth,
                                 'hop',
                             )}`}
@@ -142,7 +142,7 @@ export function RemovalImpactPanel({
                         <SummaryMetric
                             label="Affected apps"
                             value={analysis.affectedAppCount.toLocaleString()}
-                            hint="App namespaces represented in the known blast radius"
+                            hint="App namespaces represented in captured/potential paths"
                             accent={analysis.affectedAppCount > 1 ? 'warning' : 'neutral'}
                         />
                         <SummaryMetric
@@ -215,6 +215,7 @@ export function RemovalImpactPanel({
                                         <td>
                                             {affected.direct ? 'Direct' : `${affected.depth} hops`}
                                             <div>{affected.confidence} confidence</div>
+                                            {affected.conditional ? <SmallText>Potential implicit path</SmallText> : null}
                                         </td>
                                         <td>{affected.pathNames.join(' → ')}</td>
                                         <td>{affected.likelyOutcome}</td>
@@ -328,7 +329,7 @@ export function RemovalImpactPanel({
                                 <tr>
                                     <th scope="col">Dependency</th>
                                     <th scope="col">Relationship</th>
-                                    <th scope="col">Known consumers</th>
+                                    <th scope="col">Configured / potential consumers</th>
                                     <th scope="col">Follow-up</th>
                                     <th scope="col">Action</th>
                                 </tr>
@@ -346,7 +347,7 @@ export function RemovalImpactPanel({
                                             {followUp.relation}
                                             <div>{followUp.confidence} confidence</div>
                                         </td>
-                                        <td>{followUp.knownDependentCount}</td>
+                                        <td>{followUp.knownDependentCount} configured<SmallText>{followUp.potentialDependentCount} potential</SmallText></td>
                                         <td>{followUp.recommendation}</td>
                                         <td>
                                             <StyledButton
