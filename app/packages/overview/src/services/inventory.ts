@@ -1185,6 +1185,8 @@ function scanRecordToSummary(record: KvScanRecord): ScanSummary {
         collectorTotals,
         collectorNativeCounts: Object.fromEntries(Object.entries(asRecord(record.collector_native_counts))
             .map(([key, value]) => [key, numberValue(value)])),
+        collectorVersions: Object.fromEntries(Object.entries(asRecord(record.collector_versions))
+            .filter((entry): entry is [string, string] => typeof entry[1] === 'string')),
         analysisStatus:
             record.analysis_status === 'complete' ||
             record.analysis_status === 'partial' ||
@@ -1841,9 +1843,9 @@ async function runInventoryScan(
         collector_totals: {},
         collector_versions: {
             rest_inventory: '0.2.0',
-            dependency_analysis: '1.3.0',
+            dependency_analysis: '1.4.0',
             knowledge_catalogs: '1.0.0',
-            field_lineage: '1.0.0',
+            field_lineage: '1.1.0',
             classification: '1.0.0',
             review_evidence: '1.0.0',
         },

@@ -17,6 +17,24 @@ The app keeps customer content read-only:
   collections.
 - Every finding carries reasons, evidence, and a suggested investigation step.
 
+## Version 1.4.0 — declared extraction outputs
+
+[Release 1.4.0, build 79](https://github.com/LeiterConsulting/splunk-content-hygiene/releases/tag/v1.4.0) adds bounded, names-only attribution for inline `EXTRACT-*`
+captures and unambiguous search-time transform `REGEX`, literal `FORMAT` and
+`DELIMS`/`FIELDS` declarations. Existing Explorer/Library details expose expandable
+source locations, capture numbers and declared inputs without caching patterns
+or event values. This is declared provenance, not regex execution or field
+availability. Unsupported/dynamic cases remain explicit gaps.
+
+New scans use coverage policy `shared-static-v4`; v1/v2/v3 decisions and captured
+baselines remain readable and unchanged. A scan never reaffirms a decision.
+Build 79 passes 680 automated checks and pre-cert AppInspect with zero
+errors/failures, three reviewed warnings and one manifest skip. Native catalog/
+cache and schema comparisons, targeted Light/Dark checks and 22 actual report
+downloads cover Enterprise 10.2.5, 10.2.8 and 10.4.4. Original review records and
+captured baselines remain unchanged. See the [qualification and limits](docs/COMPATIBILITY.md#140-extraction-output-qualification),
+including emulated-VM cold-load timeouts and bounded native Library coverage.
+
 ## Version 1.3.0 — dependency accuracy
 
 [Release 1.3.0, build 77](https://github.com/LeiterConsulting/splunk-content-hygiene/releases/tag/v1.3.0) adds shared
@@ -41,7 +59,7 @@ workflow. Real CSV/JSON retains potential-path provenance and partial coverage.
 Saved decisions and evidence baselines remain unchanged. Earlier candidates
 73/74 qualify event/tag coverage only; they do not contain installed field coverage.
 See the [compatibility scope](docs/COMPATIBILITY.md#130-dependency-accuracy-qualification)
-and [field-lineage investigation guide](docs/USER_GUIDE.md#declared-field-lineage-13).
+and [field-lineage investigation guide](docs/USER_GUIDE.md#declared-field-lineage).
 
 ## What it includes
 
@@ -96,7 +114,7 @@ the shared cache; access is restricted to explicit hygiene roles.
    connectivity check succeeds.
 
 The support baseline is Splunk Enterprise **10.2.5 or later** on a standalone
-Linux x86-64 search head with KV Store. Release 1.3.0 **build 77** has targeted
+Linux x86-64 search head with KV Store. Release 1.4.0 **build 79** has targeted
 real-data qualification on **10.2.5, 10.2.8 and 10.4.4**: fresh bounded/full scans,
 native catalog/cache and schema comparisons, field/dependency investigations,
 required-content and removal-impact exports, and the existing Review Library in
@@ -142,8 +160,8 @@ shared static scope matches a recent reviewed baseline—not that no hidden,
 private, dynamic, or external consumer exists. Removal-impact planning retains
 its wider, conservative blockers.
 
-After upgrading to 1.3, run a complete scan to collect the expanded shared
-event/tag and field catalogs alongside automatic lookup rules. Follow configured
+After upgrading to 1.4, run a complete scan to collect output attribution and
+the expanded shared event/tag and field catalogs alongside automatic lookup rules. Follow configured
 definitions and declared field paths in Explorer. **May apply**, **may read** and
 **may use** links remain explicitly potential through
 multi-hop reports, impact explanations and exports. New evidence may require
@@ -221,7 +239,7 @@ yarn validate
 ```
 
 The verified installable archive is written to
-`app/dist/content_hygiene-<VERSION>.tar.gz` (currently 1.3.0, build 77).
+`app/dist/content_hygiene-<VERSION>.tar.gz` (currently 1.4.0, build 79).
 Run `yarn release:prepare` to
 perform the complete validation and update `SHA256SUMS`.
 
@@ -233,8 +251,9 @@ perform the complete validation and update `SHA256SUMS`.
   types, private/dynamic content and ad-hoc consumers remain explicit gaps. See
   [automatic lookup investigations](docs/USER_GUIDE.md#automatic-lookups-and-implicit-props).
 - Declared field-lineage paths do not establish effective values or runtime
-  use. Inline PCRE capture interpretation, unsupported expressions, cross-scope
-  precedence, alias chaining and EVAL-to-EVAL chaining are not inferred.
+  use. Capture attribution is a bounded names-only subset, not PCRE compilation
+  or matching. Unsupported/dynamic outputs and expressions, cross-scope
+  precedence, alias chaining and EVAL-to-EVAL chaining remain unverified.
 - Bulk review is not atomic or an app-wide retain rule. Existing decisions are
   skipped by default; completed saves remain if later items fail or are cancelled.
 - Scans run in the initiating browser session and are not scheduled.

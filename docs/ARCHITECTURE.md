@@ -117,7 +117,7 @@ The source contracts are documented in Splunk's
 SPL case behavior is documented in
 [Use fields to search](https://help.splunk.com/en/splunk-enterprise/search/search-tutorial/9.0/part-4-searching-the-tutorial-data/use-fields-to-search).
 
-### Unreleased event-type/tag extension
+### Event-type/tag and field coverage
 
 Native `saved/eventtypes` and `configs/conf-tags` GET catalogs provide
 authoritative per-entry ACL/namespace and paging totals. `search/tags` summaries
@@ -157,10 +157,21 @@ lookup event-input mappings can depend on earlier declared field phases. Positiv
 exact original-event selectors witness possible props callers without proving
 field consumption. Reusable sources do not inherit their owning app as a caller.
 Per-source/scan edges, producer-index entries and candidate visits are bounded;
-every reached ceiling adds a coverage gap. Inline PCRE, expression execution,
+every reached ceiling adds a coverage gap. PCRE compilation/matching, expression execution,
 cross-transform availability, full props precedence and effective values remain
 outside the supported contract. Installed/native qualification is build-specific;
 see the compatibility policy rather than treating decoder tests as runtime proof.
+
+The 1.4 development increment adds a bounded lexical capture-declaration reader,
+not a regex engine. It recognizes supported named groups and numbering while
+skipping literals/classes/comments; unsupported control/numbering constructs
+discard incomplete output guesses. Inline source clauses retain inputs without
+asserting same-phase availability. Search-time transforms require unambiguous
+REGEX/FORMAT or DELIMS/FIELDS attribution and safe native key-cleaning semantics;
+index-time/routing and dynamic output mechanisms remain outside the producer set.
+Compact names/positions project through the existing cache and potential matcher.
+Shared/private overrides are rechecked without exporting private identities.
+Policy v4 preserves v1/v2/v3 baselines, and older snapshots request recollection.
 
 The native shapes and search-time ordering are documented in the
 [10.2 knowledge REST reference](https://help.splunk.com/en/splunk-enterprise/rest-api-reference/10.2/knowledge-endpoints/knowledge-endpoint-descriptions)

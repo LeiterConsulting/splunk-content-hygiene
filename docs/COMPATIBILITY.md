@@ -27,9 +27,63 @@ the minimum is not a recommendation to downgrade or remain on an old patch.
 
 | Runtime | Purpose | Current evidence |
 | --- | --- | --- |
-| 10.2.5 | Exact minimum; classic navigation; coordinator and reported regressions | App 1.3.0 build 77: isolated Linux VM; fresh bounded/full scans, native catalog/cache and schema parity, field/dependency investigations and CSV/JSON in light/dark; earlier broader 1.1.1 checks remain distinct below |
-| 10.2.8 | Representative 10.2 maintenance release and real-estate regression | App 1.3.0 build 77: real-data scans, native catalog/cache and schema parity, targeted light/dark field/dependency/Library investigations and exports; original decisions unchanged |
-| 10.4.4 | Modern navigation, current theme host, and newer bundled runtime | App 1.3.0 build 77: real-data scans, native catalog/cache and schema parity, targeted light/dark field/dependency/Library investigations and exports; original decisions unchanged |
+| 10.2.5 | Exact minimum; classic navigation; coordinator and reported regressions | App 1.4.0 build 79: isolated Linux VM; fresh bounded/full scans, native catalog/cache and schema parity, output/dependency investigations and CSV/JSON in light/dark; earlier broader 1.1.1 checks remain distinct below |
+| 10.2.8 | Representative 10.2 maintenance release and real-estate regression | App 1.4.0 build 79: real-data scans, native catalog/cache and schema parity, targeted light/dark output/dependency/Library investigations and exports; original decisions unchanged |
+| 10.4.4 | Modern navigation, current theme host, and newer bundled runtime | App 1.4.0 build 79: real-data scans, native catalog/cache and schema parity, targeted light/dark output/dependency/Library investigations and exports; original decisions unchanged |
+
+### 1.4.0 extraction-output qualification
+
+The exact release build 79 archive was installed without a restart on all three
+representative runtimes. Fresh bounded checks retained the prior full baseline;
+complete scans, native catalog/cache attribution, declaration positions, potential
+edge provenance and local JSON Schema comparisons passed. Original review rows,
+revision journals and captured baselines remained unchanged through installation,
+scanning and UI/export checks. Native appearance preferences were restored.
+
+| Runtime | Attributed shared inline definitions | Attributed shared transforms | Observed complete-scan duration |
+| --- | ---: | ---: | ---: |
+| 10.2.5 | 22 | 0 eligible examples | 33.691 seconds |
+| 10.2.8 | 39 | 77 | 14.499 seconds |
+| 10.4.4 | 21 | 0 eligible examples | 4.572 seconds |
+
+These are single lab observations, not load-time promises or production-scale
+benchmarks. The 10.2.8 transform set includes 22 named-REGEX, 54 literal-FORMAT
+and one DELIMS/FIELDS attribution. On the other two estates, existing shared
+transforms remain excluded by their index-time/routing configuration rather than
+fabricating search-time outputs. Non-default inline source clauses were absent
+from these native captures and are covered by adversarial synthetic contracts.
+
+Targeted native light/dark checks cover inline details, persistent graph context,
+wrapped output locations, field-name disclosure and existing/empty Review Library
+states on all three runtimes. The larger estate additionally exercises transform
+attribution, matched producer context and a 16-position declaration list in both
+themes. Tested desktop viewports were 1280×720 and 1434×940; captured field facts
+had no horizontal overflow, graph labels did not overlap cards/other labels, and
+sampled field/label text contrast exceeded 4.5:1. New field-specific Library
+review/baseline rendering uses both-theme synthetic contracts; no live review was
+created or reaffirmed solely to test it.
+
+Two cold page loads in the emulated minimum-version VM reached the existing
+20-second inventory-read timeout. Warm retries passed without increasing request
+limits or replaying a scan; the failed attempts are retained separately from
+accepted captures. This is not evidence of production load-time performance.
+
+Actual CSV/JSON downloads are compared with the native cached identities/facts,
+potential edge provenance, required-content witnesses, removal impact and retained
+review stages. Impact remains blocked where coverage is incomplete. All 680
+automated checks pass (643 overview, 16 host, 12 server, 9 archive), along with
+lint/stylelint, types, branding, production build and portable-package checks.
+AppInspect 4.3.1 pre-cert reports zero errors/failures/future failures, three
+reviewed warnings and one manifest skip, with the existing trusted-library cache
+explicitly used without updating it. These checks are not Cloud, full
+accessibility, backend-concurrency or production-scale certification.
+
+The native-qualified release SHA-256 is
+`63946c830f18d0734c4277c1c8dfbffaa75e43e430458c2c947b884c3777432d`.
+The published 1.3.0 archive is preserved unchanged. Release 1.4.0 does not make
+broader #8 coverage complete. PCRE compilation,
+matching, field values, full effective props precedence and dynamic outputs remain
+unverified; customer content stays read-only.
 
 ### 1.2.0 coverage increment
 

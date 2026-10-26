@@ -220,9 +220,10 @@ unchanged by scans. Moving from the earlier coverage policy to the expanded
 policy can require **Needs re-review**; inspect the changes and explicitly reaffirm
 only after investigation. Do not edit review KV rows to force a Current badge.
 
-### Declared field lineage (1.3)
+### Declared field lineage
 
-Run a complete scan after upgrading to 1.3. Explorer can select **Field
+Run a complete scan after upgrading to 1.4 to collect output
+attribution; earlier field inventories remain readable. Explorer can select **Field
 Extraction**, **Field Alias**, **Calculated Field** and **Field Transform** objects
 using their exact native name and app namespace. Use **Selected object** for the
 declared scope, inputs/outputs, processing phase, AS/ASNEW assignments, ordered
@@ -234,8 +235,9 @@ REPORT references retain every one-based list position, including repeated
 targets. Potential input paths connect compatible exact event scopes and visible
 namespaces: extraction → alias → calculated → lookup. Calculated EVAL definitions
 run in parallel; the app does not invent calculated-to-calculated or alias-to-
-alias chains. Literal transform outputs can identify a possible REPORT producer;
-opaque inline regex captures are not guessed or executed. Constants have a known
+alias chains. Attributable transform outputs can identify a possible REPORT producer.
+Supported inline named captures also identify possible extraction producers;
+customer regex is never compiled or executed. Constants have a known
 output but no invented input field. Unsupported expressions retain the output
 identity and an explicit input-lineage gap.
 
@@ -254,10 +256,27 @@ body, regex, lookup row or customer field value is included as lineage evidence.
 An empty output list means the supported decoder did not establish names—not that
 the definition produces nothing. No path or missing path approves removal.
 
-Field-enabled scans use `shared-static-v3`; earlier v1/v2 reviews remain readable
+Extraction-output scans use `shared-static-v4`; earlier v1/v2/v3 reviews remain readable
 and unchanged. Investigate the expanded coverage before explicitly reaffirming a
 decision. Full props precedence, cross-scope interactions, regex matching, effective
 values, dynamic expressions and runtime execution are not established.
+
+In 1.4, **Output attribution** identifies supported
+inline/transform named captures, literal FORMAT capture mappings or DELIMS/FIELDS
+declarations. Expand **Output declaration locations** to see each field,
+one-based capture number and zero-based UTF-16 position in the native attribute.
+Graph relationship details offer the matching producer declaration and identity.
+These positions help an operator verify the source configuration separately;
+the app neither retains the pattern nor claims that it compiles or matches.
+
+Inline `in <field>` clauses retain the declared input but do not create guessed
+same-phase extraction chains. Transform capture mappings require recognized group
+numbering and key-cleaning-safe names (or explicit CLEAN_KEYS opt-out). Literal
+FORMAT/FIELDS names without unambiguous attribution stay visible as facts but
+do not create producer links. Dynamic output names, unsupported regex constructs,
+index-time/routing attributes and competing mechanisms remain qualified gaps.
+Run a new complete scan after upgrading; old cached facts are not silently
+reinterpreted and existing decisions/history are not rewritten.
 
 ### Automatic lookups and implicit props
 

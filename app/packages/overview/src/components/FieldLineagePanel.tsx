@@ -1,7 +1,12 @@
 import React from 'react';
 import CollapsiblePanel from '@splunk/react-ui/CollapsiblePanel';
 import { DefinitionList, EvidenceList, InlineNotice, SmallText } from '../AppStyles';
-import { ContentObject, FieldDependencyProvenance } from '../types';
+import { ContentObject, ExtractionOutputProvenance, FieldDependencyProvenance } from '../types';
+
+const outputMethods: Record<ExtractionOutputProvenance['method'], string> = {
+    inline_named_captures: 'Inline named captures', transform_named_captures: 'Transform named captures',
+    transform_format: 'Literal FORMAT capture mapping', transform_fields: 'Literal DELIMS/FIELDS mapping',
+};
 
 function FieldNames({ names, label }: { names: string[]; label: string }): React.ReactElement {
     const unique = [...new Set(names)];
@@ -23,7 +28,7 @@ export function FieldLineagePanel({ object }: { object: ContentObject }): React.
     else if (facts.enabled === false) { enabledLabel = 'Configured disabled'; }
     const aliases = [...new Map(facts.aliases.map(mapping => [JSON.stringify(mapping), mapping])).values()];
     const reportTargets = facts.transforms.map((name, index) => ({ name, position: index + 1 }));
-    const phases = { inline: 'Extraction (opaque inline regex)', report: 'Extraction (ordered REPORT targets)',
+    const phases = { inline: 'Extraction (declared inline regex)', report: 'Extraction (ordered REPORT targets)',
         transform: 'Transform (scope supplied by REPORT callers)', alias: 'Alias (after extraction)',
         eval: 'Calculated (parallel EVAL declarations)', lookup: 'Lookup (after aliases and calculated fields)' };
     return <section aria-label="Declared field lineage">
@@ -36,6 +41,17 @@ export function FieldLineagePanel({ object }: { object: ContentObject }): React.
             <dt>Supported syntax</dt><dd>{facts.syntax}</dd>
             <dt>Declared inputs</dt><dd><FieldNames names={facts.inputs} label="input names" /></dd>
             <dt>Declared outputs</dt><dd><FieldNames names={facts.outputs} label="output names" /></dd>
+            {facts.outputProvenance ? <><dt>Output attribution</dt><dd>
+                {outputMethods[facts.outputProvenance.method]}
+                <SmallText>Input: {facts.outputProvenance.sourceField ?? 'not established'} · {facts.outputProvenance.sourceOrigin.replace(/_/g, ' ')}.
+                    {facts.outputProvenance.regexCaptureCount !== null ? ` ${facts.outputProvenance.regexCaptureCount} declared capture group(s).` : ''}</SmallText>
+                <CollapsiblePanel appearance="subtle" title={`Output declaration locations (${facts.outputProvenance.declarations.length})`}>
+                    <SmallText>Offsets are zero-based UTF-16 positions in the named native attribute. Capture numbers are one-based. Patterns and event values are not cached.</SmallText>
+                    <EvidenceList aria-label="Output declaration locations">{facts.outputProvenance.declarations.map(item => <li key={`${item.attribute}-${item.offset}-${item.field}-${item.capture}`}>
+                        <strong>{item.field}</strong> · {item.capture === null ? 'literal field list' : `capture ${item.capture}`} · {item.attribute} offset {item.offset}
+                    </li>)}</EvidenceList>
+                </CollapsiblePanel>
+            </dd></> : null}
             {facts.aliases.length ? <><dt>Alias assignments</dt><dd><EvidenceList>
                 {aliases.map(mapping => <li key={JSON.stringify(mapping)}>
                     {mapping.input} {mapping.mode} {mapping.output} · {mapping.mode === 'ASNEW' ? 'preserves an existing output' : 'can replace or remove the output'}
@@ -61,6 +77,15 @@ export function FieldProvenanceDetails({ provenance }: { provenance?: FieldDepen
             {provenance.transformPositions.length ? <><dt>REPORT positions</dt><dd>{provenance.transformPositions.join(', ')} (one-based)</dd></> : null}
             {provenance.viaObjectIds.length ? <><dt>Transform provenance</dt><dd>{provenance.viaObjectIds.join('; ')}</dd></> : null}
             <dt>Namespace</dt><dd>{provenance.contextApps.join(', ')} · {provenance.invocation === 'fixed_app' ? 'fixed caller app' : 'possible invoking app, unverified at runtime'}</dd>
+            {provenance.outputDeclarations?.length ? <><dt>Output attribution</dt><dd>
+                <CollapsiblePanel appearance="subtle" title={`Matched output declarations (${provenance.outputDeclarations.length})`}>
+                    <SmallText>Declared producer locations, not proof of matching or field availability. Offsets are zero-based UTF-16; capture numbers are one-based.</SmallText>
+                    <EvidenceList aria-label="Matched output declaration locations">{provenance.outputDeclarations.map(item => <li key={`${item.objectId}-${item.attribute}-${item.offset}-${item.field}-${item.capture}`}>
+                        <strong>{item.field}</strong> · {outputMethods[item.method]} · {item.capture === null ? 'literal field list' : `capture ${item.capture}`} · {item.attribute} offset {item.offset}
+                        <SmallText>{item.objectId}</SmallText>
+                    </li>)}</EvidenceList>
+                </CollapsiblePanel>
+            </dd></> : null}
         </DefinitionList>
     </section>;
 }

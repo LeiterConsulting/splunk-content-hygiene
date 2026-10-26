@@ -3,7 +3,7 @@ import { ParserCoverageGap, ReferenceTarget } from './dependencyParser';
 import { evidenceDigest } from './evidenceDigest';
 import { tagBindingIdentity } from './knowledgeReferences';
 
-export const SHARED_STATIC_POLICY = 'shared-static-v3' as const;
+export const SHARED_STATIC_POLICY = 'shared-static-v4' as const;
 
 export interface SourceCoverageGap extends ParserCoverageGap {
     sourceId: string;
@@ -95,7 +95,7 @@ export function buildCoverageResolver(context: CoverageContext): (
         const own = outgoing.get(object.objectId);
         const outboundReasons = [...(own?.messages ?? [])];
         if (object.objectType === 'Sourcetype') {
-            outboundReasons.push('Separately inventoried props lookup and declared field rules have bounded coverage. Effective precedence, renames, regex outputs and invoking-app scope remain unverified for sourcetypes.');
+            outboundReasons.push('Separately inventoried props lookup and declared field rules have bounded coverage. Effective precedence, renames, unsupported capture outputs and invoking-app scope remain unverified for sourcetypes.');
         }
         if (!context.identityKnown) { outboundReasons.push('Scanning identity/roles could not be verified.'); }
         if (object.objectType !== 'App' && !parentKnown) {
@@ -151,7 +151,7 @@ export function buildCoverageResolver(context: CoverageContext): (
                 reasons.push('Unsupported calculated-field functions, dynamic props and other implicit consumers can add lookup references beyond the supported static subset.');
             }
             if (['field_extraction', 'field_alias', 'calculated_field', 'field_transform'].includes(type ?? '')) {
-                reasons.push('Declared field paths and exact event-scope callers are potential only. Regex captures, effective values, cross-scope/namespace overrides, alias chaining and parallel calculated-field availability are not exhaustively resolved.');
+                reasons.push('Declared field paths and exact event-scope callers are potential only. Supported capture declarations do not prove regex validity, matching or field availability. Dynamic outputs, cross-scope/namespace overrides, alias chaining and parallel calculated-field availability are not exhaustively resolved.');
             }
             if (type === 'event_type' || type === 'tag_binding') {
                 reasons.push('Only declared literal filters and supported shared tag assignments are mapped. Implicit event classification, wildcard names, system inheritance and runtime field availability remain unverified.');

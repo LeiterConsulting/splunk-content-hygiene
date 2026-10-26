@@ -43,8 +43,8 @@ and regenerate its checksum before committing.
 Inspect the archive before signing off:
 
 ```bash
-tar -tzf app/dist/content_hygiene-1.3.0.tar.gz
-shasum -a 256 app/dist/content_hygiene-1.3.0.tar.gz
+tar -tzf app/dist/content_hygiene-1.4.0.tar.gz
+shasum -a 256 app/dist/content_hygiene-1.4.0.tar.gz
 ```
 
 It must have exactly one top-level `content_hygiene/` directory and must not

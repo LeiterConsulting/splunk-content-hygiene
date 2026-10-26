@@ -321,7 +321,7 @@ function supportedEvidence(value: unknown): value is ObjectReviewEvidence {
                 hash(row.evidenceDigest) &&
                 (row.neighborDigest === null || hash(row.neighborDigest)),
         ) &&
-        (item.version === 1 || (item.coverage !== undefined && ['shared-static-v1', 'shared-static-v2', SHARED_STATIC_POLICY].includes(item.coverage.policy) &&
+        (item.version === 1 || (item.coverage !== undefined && ['shared-static-v1', 'shared-static-v2', 'shared-static-v3', SHARED_STATIC_POLICY].includes(item.coverage.policy) &&
             [item.coverage.configuration, item.coverage.access, item.coverage.outbound, item.coverage.inbound].every((area) =>
                 area && ['complete', 'partial', 'unavailable'].includes(area.status) &&
                 Array.isArray(area.reasons) && area.reasons.every((message) => typeof message === 'string') &&

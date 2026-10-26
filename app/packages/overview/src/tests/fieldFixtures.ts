@@ -8,11 +8,11 @@ import { now, object, review, snapshot } from './milestoneFixtures';
 export const fieldCompleteness: AnalysisCompleteness = { macros: true, lookup_definitions: true, lookup_files: true,
     automatic_lookups: true, saved_searches: true, data_models: true, indexes: true, sourcetypes: false,
     event_types: true, tag_bindings: true, field_extractions: true, field_aliases: true, calculated_fields: true, field_transforms: true };
-export function field(catalog: FieldCatalog, attribute: string, value: string, app = 'example', sharing = 'app', stanza = 'example:events') {
+export function field(catalog: FieldCatalog, attribute: string, value: string, app = 'example', sharing = 'app', stanza = 'example:events', native: Record<string, unknown> = {}) {
     const acl = { app, sharing, owner: 'reviewer', perms: { read: ['user'], write: ['admin'] } };
     const type = { field_extractions: attribute.startsWith('REPORT-') ? 'Uses transform' : 'Inline', field_aliases: 'FIELDALIAS', calculated_fields: 'EVAL', field_transforms: 'transform' }[catalog];
-    const content = catalog === 'field_transforms' ? { SOURCE_KEY: '_raw', FORMAT: value, disabled: '0' }
-        : { stanza, attribute, type, value, 'field.name': attribute.slice(5) };
+    const content = catalog === 'field_transforms' ? { SOURCE_KEY: '_raw', REGEX: '(.*?)', FORMAT: value, disabled: '0', ...native }
+        : { stanza, attribute, type, value, 'field.name': attribute.slice(5), ...native };
     const entry = { name: catalog === 'field_transforms' ? attribute : `${stanza} : ${attribute}`, acl, content };
     const decoded = decodeFieldLineage(entry, catalog); const facts = fieldLineageFacts(decoded.records[0], decoded.issues);
     const item: ContentObject = { ...object(entry.name, decoded.records[0].objectType),
@@ -22,10 +22,12 @@ export function field(catalog: FieldCatalog, attribute: string, value: string, a
     return { item, source, entry };
 }
 
-export async function fieldInvestigationFixture(): Promise<{ data: InventorySnapshot; saved: ReviewRecord;
+export async function fieldInvestigationFixture(mode: 'format' | 'named_transform' | 'inline' = 'format'): Promise<{ data: InventorySnapshot; saved: ReviewRecord;
     transform: ContentObject; extraction: ContentObject; alias: ContentObject; calculated: ContentObject }> {
-    const transform = field('field_transforms', 'extract_actor', 'actor::$1');
-    const extraction = field('field_extractions', 'REPORT-actor', 'extract_actor extract_actor');
+    const transform = field('field_transforms', 'extract_actor', mode === 'named_transform' ? '' : 'actor::$1', 'example', 'app', 'example:events',
+        { REGEX: mode === 'named_transform' ? '(?<actor>synthetic-pattern)' : '(.*?)' });
+    const extraction = field('field_extractions', mode === 'inline' ? 'EXTRACT-actor' : 'REPORT-actor',
+        mode === 'inline' ? '(?<actor>synthetic-pattern)' : 'extract_actor extract_actor');
     const alias = field('field_aliases', 'FIELDALIAS-actor', 'actor ASNEW principal');
     const calculated = field('calculated_fields', 'EVAL-normalized', 'lower(principal)');
     const definitions = [transform, extraction, alias, calculated];

@@ -41,6 +41,87 @@ test('declared REPORT outputs feed aliases, aliases feed calculated fields, neve
     expect(result.coverageGaps.length).toBeGreaterThan(0);
 });
 
+test('inline producers expose exact named-capture evidence, not a same-phase extraction chain', () => {
+    const inline = field('field_extractions', 'EXTRACT-actor', '(prefix)(?<actor>customer-pattern)');
+    const consumer = field('field_aliases', 'FIELDALIAS-user', 'actor AS user');
+    const samePhase = field('field_extractions', 'EXTRACT-next', '(?<other>.+) in actor');
+    const result = analyze(inline, consumer, samePhase);
+    expect(result.edges).toEqual([expect.objectContaining({ sourceId: consumer.item.objectId, targetId: inline.item.objectId,
+        relation: 'may_read_extracted_field', confidence: 'medium', fieldProvenance: expect.objectContaining({ fields: ['actor'],
+            outputDeclarations: [{ field: 'actor', capture: 2, offset: 8, attribute: 'value', objectId: inline.item.objectId, method: 'inline_named_captures' }] }) })]);
+    expect(result.edges.some(row => row.sourceId === samePhase.item.objectId)).toBe(false);
+    expect(JSON.stringify(result)).not.toContain('customer-pattern');
+    const proof = result.edges[0].fieldProvenance!;
+    expect(readFieldProvenance(proof)).toEqual(proof);
+    expect(readFieldProvenance({ ...proof, kind: 'event_scope' })).toBeUndefined();
+    expect(readFieldProvenance({ ...proof, producerPhase: 'alias' })).toBeUndefined();
+    expect(readFieldProvenance({ ...proof, outputDeclarations: [{ ...proof.outputDeclarations![0], attribute: 'REGEX' }] })).toBeUndefined();
+    expect(readFieldProvenance({ ...proof, outputDeclarations: [{ ...proof.outputDeclarations![0], secret: 'not projected' }] })).toEqual(proof);
+});
+
+test.each(['other:events', 'source::example:events', 'example:*'])('inline capture names do not join unrelated or pattern scopes: %s', scope => {
+    const inline = field('field_extractions', 'EXTRACT-actor', '(?<actor>.+)', 'example', 'app', scope);
+    const consumer = field('field_aliases', 'FIELDALIAS-user', 'actor AS user');
+    expect(analyze(inline, consumer).edges).toEqual([]);
+});
+
+test('inline namespace overrides suppress ghost outputs, including overrides with opaque syntax', () => {
+    const exported = field('field_extractions', 'EXTRACT-actor', '(?<actor>.+)', 'definitions', 'global');
+    const override = field('field_extractions', 'EXTRACT-actor', '(?<other>.+)');
+    const opaqueOverride = field('field_extractions', 'EXTRACT-actor', '(?<bad');
+    const consumer = field('field_aliases', 'FIELDALIAS-user', 'actor AS user');
+    expect(analyze(exported, override, consumer).edges).toEqual([]);
+    expect(analyze(exported, opaqueOverride, consumer).edges).toEqual([]);
+});
+
+test('private inline shadows suppress producer and caller paths without exporting private identities', () => {
+    const exported = field('field_extractions', 'EXTRACT-actor', '(?<actor>.+)', 'definitions', 'global');
+    const consumer = field('field_aliases', 'FIELDALIAS-user', 'actor AS user');
+    const caller = { ...object('Caller', 'Saved Search'), app: 'example' };
+    const result = analyzeInventory([exported.item, consumer.item, caller], [exported.source, consumer.source,
+        { objectId: caller.objectId, kind: 'spl', text: 'sourcetype=example:events', sourceLocation: 'search' }], complete, undefined,
+    { privateObjects: [{ collector: 'field_extractions', app: 'example', count: 1 }], privateTargets: [
+        { collector: 'field_extractions', app: 'example', name: exported.item.canonicalName }] });
+    expect(result.edges.some(row => row.targetId === exported.item.objectId)).toBe(false);
+    expect(result.coverageGaps.some(row => /Private or omitted field/.test(row.message))).toBe(true);
+});
+
+test('REPORT named outputs retain transform identity and exact REGEX capture positions', () => {
+    const transform = field('field_transforms', 'extract_actor', '', 'example', 'app', 'example:events', { REGEX: '(prefix)(?<actor>.+)' });
+    const report = field('field_extractions', 'REPORT-actor', 'extract_actor extract_actor');
+    const consumer = field('field_aliases', 'FIELDALIAS-user', 'actor AS user');
+    const result = analyze(transform, report, consumer);
+    const edge = result.edges.find(row => row.sourceId === consumer.item.objectId)!;
+    expect(edge).toMatchObject({ targetId: report.item.objectId, relation: 'may_read_extracted_field', fieldProvenance: {
+        fields: ['actor'], viaObjectIds: [transform.item.objectId], outputDeclarations: [{ field: 'actor', capture: 2, offset: 8,
+            attribute: 'REGEX', method: 'transform_named_captures', objectId: transform.item.objectId }] } });
+    expect(result.edges.find(row => row.sourceId === report.item.objectId)?.fieldProvenance?.transformPositions).toEqual([1, 2]);
+});
+
+test.each([{ REGEX: '(?<broken' }, { REGEX: '(one)', FORMAT: 'actor::$2' }, { REGEX: '(one)', FORMAT: 'actor.name::$1' },
+    { REGEX: '', FIELDS: 'actor', FORMAT: '' }])('unattributed literal transform names cannot create producer links: %j', native => {
+    const transform = field('field_transforms', 'extract_actor', 'actor::$1', 'example', 'app', 'example:events', native);
+    const report = field('field_extractions', 'REPORT-actor', 'extract_actor');
+    const consumer = field('field_aliases', 'FIELDALIAS-user', 'actor AS user');
+    const result = analyze(transform, report, consumer);
+    expect(result.edges.filter(row => row.sourceId === consumer.item.objectId)).toEqual([]);
+    expect(result.edges.find(row => row.sourceId === report.item.objectId)?.targetId).toBe(transform.item.objectId);
+});
+
+test('multiple dense transform proofs remain bounded on one REPORT input edge with an explicit evidence gap', () => {
+    const REGEX = `(?J)${'(?<actor>x)'.repeat(FIELD_MATCH_LIMIT)}`;
+    const first = field('field_transforms', 'first', '', 'example', 'app', 'example:events', { REGEX });
+    const second = field('field_transforms', 'second', '', 'example', 'app', 'example:events', { REGEX });
+    const report = field('field_extractions', 'REPORT-actor', 'first second');
+    const consumer = field('field_aliases', 'FIELDALIAS-user', 'actor AS user');
+    const result = analyze(first, second, report, consumer);
+    const edge = result.edges.find(row => row.sourceId === consumer.item.objectId)!;
+    expect(edge.fieldProvenance?.outputDeclarations).toHaveLength(FIELD_MATCH_LIMIT);
+    expect(edge.fieldProvenance?.viaObjectIds.slice().sort()).toEqual([first.item.objectId, second.item.objectId].sort());
+    expect(result.coverageGaps.some(row => row.sourceId === consumer.item.objectId && /per-edge budget/.test(row.message))).toBe(true);
+    expect(readFieldProvenance(edge.fieldProvenance)).toEqual(edge.fieldProvenance);
+});
+
 test('constant calculated output has no invented input; opaque expressions and PCRE stay explicit gaps', () => {
     const constant = field('calculated_fields', 'EVAL-status', '"customer-literal-not-cached"');
     const unknown = field('calculated_fields', 'EVAL-user', 'lookup("customer-table", user)');

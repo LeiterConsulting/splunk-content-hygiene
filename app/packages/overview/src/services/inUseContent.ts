@@ -60,7 +60,7 @@ export interface InUseReport {
 const implicitGaps = [
     'This is a supported shared static dependency footprint, not a complete migration manifest or proof that excluded objects are unused.',
     'Shared event types and distinct tag assignments have bounded literal-reference coverage. Implicit classification, wildcard names, encoded tag values, system inheritance and invoking-app contexts are not exhaustively resolved.',
-    'Field extractions, aliases, calculated fields and transforms have bounded declared-metadata coverage. Potential field paths respect extraction → alias → parallel calculated fields → lookup; regex outputs, effective values, cross-scope precedence and chaining remain unverified. Workflow actions and navigation menus are outside inventory.',
+    'Field extractions, aliases, calculated fields and transforms have bounded declared-metadata coverage. Potential field paths respect extraction → alias → parallel calculated fields → lookup. Supported capture declarations do not prove regex validity, matches or field availability; dynamic outputs, cross-scope precedence and chaining remain unverified. Workflow actions and navigation menus are outside inventory.',
     'Automatic props lookup rules and exact-selector caller matches cover only part of search-time props. Patterns, precedence, renames, field availability and inherited invocation contexts remain unverified; potential paths do not establish execution.',
     'Ad-hoc searches, private content, dynamic SPL/tokens and external consumers may require additional objects.',
     'App-containment and ownership links are metadata, not dependency closure. Retaining an app is not an app-wide retain rule.',

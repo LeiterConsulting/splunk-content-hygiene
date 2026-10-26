@@ -10,6 +10,43 @@
         "value": { "type": "string", "minLength": 1, "maxLength": 4096 }, "exact": { "type": "boolean" } }
     }] },
     "phase": { "enum": ["extraction", "alias", "calculated", "lookup"] },
+    "outputMethod": { "enum": ["inline_named_captures", "transform_named_captures", "transform_format", "transform_fields"] },
+    "outputDeclaration": {
+      "type": "object", "additionalProperties": false, "required": ["field", "capture", "offset", "attribute"],
+      "properties": {
+        "field": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "capture": { "type": ["integer", "null"], "minimum": 1, "maximum": 250 },
+        "offset": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "attribute": { "enum": ["value", "REGEX", "FORMAT", "FIELDS"] }
+      }
+    },
+    "outputProvenance": {
+      "type": "object", "additionalProperties": false,
+      "required": ["version", "method", "sourceField", "sourceOrigin", "regexCaptureCount", "declarations"],
+      "properties": {
+        "version": { "const": 1 }, "method": { "$ref": "#/$defs/outputMethod" },
+        "sourceField": { "type": ["string", "null"], "minLength": 1, "maxLength": 4096 },
+        "sourceOrigin": { "enum": ["default_raw", "explicit_inline", "source_key", "unknown"] },
+        "regexCaptureCount": { "type": ["integer", "null"], "minimum": 1, "maximum": 250 },
+        "declarations": { "type": "array", "minItems": 1, "maxItems": 250, "items": { "$ref": "#/$defs/outputDeclaration" } }
+      },
+      "allOf": [
+        { "if": { "properties": { "method": { "const": "inline_named_captures" } } }, "then": { "properties": { "sourceOrigin": { "enum": ["default_raw", "explicit_inline"] }, "regexCaptureCount": { "type": "integer" }, "declarations": { "items": { "properties": { "attribute": { "const": "value" }, "capture": { "type": "integer" } } } } } }, "else": { "properties": { "sourceOrigin": { "enum": ["default_raw", "source_key", "unknown"] } } } },
+        { "if": { "properties": { "method": { "const": "transform_named_captures" } } }, "then": { "properties": { "regexCaptureCount": { "type": "integer" }, "declarations": { "items": { "properties": { "attribute": { "const": "REGEX" }, "capture": { "type": "integer" } } } } } } },
+        { "if": { "properties": { "method": { "const": "transform_format" } } }, "then": { "properties": { "regexCaptureCount": { "type": "integer" }, "declarations": { "items": { "properties": { "attribute": { "const": "FORMAT" }, "capture": { "type": "integer" } } } } } } },
+        { "if": { "properties": { "method": { "const": "transform_fields" } } }, "then": { "properties": { "regexCaptureCount": { "type": "null" }, "declarations": { "items": { "properties": { "attribute": { "const": "FIELDS" }, "capture": { "type": "null" } } } } } } },
+        { "if": { "properties": { "sourceOrigin": { "const": "default_raw" } } }, "then": { "properties": { "sourceField": { "const": "_raw" } } } },
+        { "if": { "properties": { "sourceOrigin": { "const": "unknown" } } }, "then": { "properties": { "sourceField": { "type": "null" } } }, "else": { "properties": { "sourceField": { "type": "string" } } } }
+      ]
+    },
+    "producerDeclaration": {
+      "type": "object", "additionalProperties": false, "required": ["field", "capture", "offset", "attribute", "objectId", "method"],
+      "properties": {
+        "field": { "$ref": "#/$defs/outputDeclaration/properties/field" }, "capture": { "$ref": "#/$defs/outputDeclaration/properties/capture" },
+        "offset": { "$ref": "#/$defs/outputDeclaration/properties/offset" }, "attribute": { "$ref": "#/$defs/outputDeclaration/properties/attribute" },
+        "objectId": { "type": "string", "minLength": 1, "maxLength": 16384 }, "method": { "$ref": "#/$defs/outputMethod" }
+      }
+    },
     "facts": {
       "type": "object", "additionalProperties": false,
       "required": ["version", "operation", "stanza", "attribute", "scope", "enabled", "inputs", "outputs", "aliases", "transforms", "syntax", "sourceLocation", "limitations"],
@@ -25,7 +62,8 @@
             "output": { "type": "string", "minLength": 1, "maxLength": 4096 }, "mode": { "enum": ["AS", "ASNEW"] } }
         } },
         "syntax": { "enum": ["declared", "partial", "unsupported"] }, "sourceLocation": { "type": "string" },
-        "limitations": { "type": "array", "maxItems": 250, "items": { "type": "string" } }
+        "limitations": { "type": "array", "maxItems": 250, "items": { "type": "string" } },
+        "outputProvenance": { "$ref": "#/$defs/outputProvenance" }
       }
     },
     "provenance": {
@@ -37,7 +75,8 @@
         "consumerPhase": { "anyOf": [{ "$ref": "#/$defs/phase" }, { "type": "null" }] }, "producerPhase": { "$ref": "#/$defs/phase" },
         "transformPositions": { "type": "array", "maxItems": 250, "items": { "type": "integer", "minimum": 1, "maximum": 250 } },
         "viaObjectIds": { "type": "array", "maxItems": 250, "items": { "type": "string", "minLength": 1, "maxLength": 16384 } }, "contextApps": { "$ref": "#/$defs/names" },
-        "invocation": { "enum": ["fixed_app", "invoking_app_unverified"] }
+        "invocation": { "enum": ["fixed_app", "invoking_app_unverified"] },
+        "outputDeclarations": { "type": "array", "maxItems": 250, "items": { "$ref": "#/$defs/producerDeclaration" } }
       }
     }
   }

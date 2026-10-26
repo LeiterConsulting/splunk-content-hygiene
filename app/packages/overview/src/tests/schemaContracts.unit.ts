@@ -10,7 +10,7 @@ import { fieldInvestigationFixture } from './fieldFixtures';
 test('published evidence schema and baseline parser agree on current and preserved policy versions', async () => {
     const schema = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../../../../schemas/review-evidence.schema.json'), 'utf8'));
     const { policy } = schema.$defs.coverage.properties;
-    expect(policy).toEqual({ enum: ['shared-static-v1', 'shared-static-v2', 'shared-static-v3'] });
+    expect(policy).toEqual({ enum: ['shared-static-v1', 'shared-static-v2', 'shared-static-v3', 'shared-static-v4'] });
     const { saved, macro } = await knowledgeFixture();
     const baseline = { ...saved.evidenceBaseline, evidence: macro.reviewEvidence };
     policy.enum.forEach((version: string) => {
@@ -50,6 +50,11 @@ test('field metadata schemas retain exact declared facts/provenance without raw 
     expect(schema.$defs.provenance.additionalProperties).toBe(false);
     expect(schema.$defs.facts.properties).not.toHaveProperty('value');
     expect(schema.$defs.facts.properties).not.toHaveProperty('REGEX');
+    expect(schema.$defs.outputDeclaration.additionalProperties).toBe(false);
+    expect(schema.$defs.outputProvenance.additionalProperties).toBe(false);
+    expect(schema.$defs.producerDeclaration.additionalProperties).toBe(false);
+    expect(schema.$defs.facts.required).not.toContain('outputProvenance');
+    expect(schema.$defs.provenance.required).not.toContain('outputDeclarations');
     const { data } = await fieldInvestigationFixture();
     data.edges.forEach(row => expect(edge.properties.relation.enum).toContain(row.relation));
     data.objects.filter(row => row.fieldLineage).forEach(row => expect(Object.keys(row.fieldLineage!)).toEqual(expect.arrayContaining(schema.$defs.facts.required)));

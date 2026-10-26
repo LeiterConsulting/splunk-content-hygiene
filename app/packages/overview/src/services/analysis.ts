@@ -461,11 +461,18 @@ export function analyzeInventory(
                 ]).join('; ');
                 if (previous.fieldProvenance && edge.fieldProvenance) {
                     const before = previous.fieldProvenance; const current = edge.fieldProvenance;
+                    const declarations = [...new Map([...(before.outputDeclarations ?? []), ...(current.outputDeclarations ?? [])].map(item => [JSON.stringify(item), item])).values()];
+                    if (declarations.length > 250) {
+                        coverageGaps.push({ sourceId: source.objectId, app: sourceObject.app, targets: [reference.targetType], sourceLocation: reference.sourceLocation,
+                            message: 'Merged output-declaration evidence reached its 250-position budget; additional positions remain unverified.' });
+                    }
                     edge.fieldProvenance = { ...current,
                         fields: uniqueEvidence([...before.fields, ...current.fields]).sort().slice(0, 250),
                         transformPositions: [...new Set([...before.transformPositions, ...current.transformPositions])].sort((a, b) => a - b).slice(0, 250),
                         viaObjectIds: uniqueEvidence([...before.viaObjectIds, ...current.viaObjectIds]).sort().slice(0, 250),
                         contextApps: uniqueEvidence([...before.contextApps, ...current.contextApps]).sort().slice(0, 250),
+                        ...((before.outputDeclarations || current.outputDeclarations) ? { outputDeclarations: declarations
+                            .sort((a, b) => { const left = JSON.stringify(a); const right = JSON.stringify(b); if (left < right) { return -1; } return left > right ? 1 : 0; }).slice(0, 250) } : {}),
                         invocation: before.invocation === 'invoking_app_unverified' ? before.invocation : current.invocation };
                 }
             }

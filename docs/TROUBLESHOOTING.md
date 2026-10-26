@@ -95,19 +95,29 @@ has not activated, the collector stays unavailable and the prior full baseline i
 retained. Follow your approved installation/configuration activation process;
 this app does not restart Splunk or relax permissions to bypass the failure.
 
-An empty input/output list is not proof of no fields. Inline PCRE, dynamic FORMAT,
+An empty input/output list is not proof of no fields. Unsupported PCRE declarations, dynamic FORMAT,
 unsupported calculated functions, routing/index-time transforms and pattern scopes
 remain explicit gaps. Literal REPORT lists retain order and repeats, but a missing
 shared target does not establish breakage when private/system inheritance or
 namespace overrides are unverified. Check full context and CSV/JSON provenance;
 do not change source configuration or broaden permissions to remove a warning.
 
+Version 1.4 recognizes a bounded names-only subset. Expand **Output
+declaration locations** to inspect the native attribute/offset and capture number.
+This does not validate PCRE or field availability. Branch-reset/conditional/
+recursive groups, dynamic KEY/VAL names and unsupported control syntax remain
+unknown. Literal FORMAT names with missing/out-of-range captures, FIELDS without
+unambiguous DELIMS, competing mechanisms or key-cleaning ambiguity can be shown
+without producer attribution. This is intentional: a declared name alone must
+not fabricate a dependency. An older snapshot needs a new complete scan; do not
+reaffirm a review simply to dismiss the upgrade notice.
+
 Same field names in unrelated event scopes are not joined. Local overrides can
 suppress exported producers even when the local declaration names different
 outputs. EVAL definitions run in parallel; lookup outputs are later and cannot
 feed them. Alias chaining and cross-transform input availability are not inferred.
 Narrow an investigation if a producer/index/candidate ceiling is reached; omitted
-edges remain unverified. See the [field guide](USER_GUIDE.md#declared-field-lineage-unreleased-13).
+edges remain unverified. See the [field guide](USER_GUIDE.md#declared-field-lineage).
 
 ## A dependency link cannot show its requested object
 

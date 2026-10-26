@@ -1,5 +1,5 @@
 /* eslint-disable no-restricted-syntax, no-continue -- Indexed matching exits at explicit build, per-source and whole-scan budgets. */
-import { ContentObject, FieldDependencyProvenance, FieldLineageFacts, FieldPhase, FieldScope } from '../types';
+import { ContentObject, FieldDependencyProvenance, FieldLineageFacts, FieldPhase, FieldScope, ProducerOutputDeclaration } from '../types';
 import { ParsedReference, ParsedSource, ReferenceTarget } from './dependencyParser';
 
 export const FIELD_MATCH_LIMIT = 250;
@@ -57,8 +57,10 @@ export function buildFieldDependencyMatcher(objects: ContentObject[], catalogCom
     visibility?.privateTargets?.forEach(row => privateNames.add(`${row.collector}\0${row.app}\0${row.name}`));
     visibility?.privateObjects.filter(row => row.count > 0).forEach(row => privateCounts.add(`${row.collector}\0${row.app}`));
     visibility?.privateTargetGaps?.forEach(row => privateGaps.add(`${row.collector}\0${row.app}`));
-    const privateTransform = (name: string, app: string): boolean => privateGaps.has(`field_transforms\0${app}`) || privateGaps.has('field_transforms\0unknown') || privateCounts.has('field_transforms\0unknown') ||
-        (visibility?.privateTargets ? privateNames.has(`field_transforms\0${app}\0${name}`) : privateCounts.has(`field_transforms\0${app}`));
+    const privateTarget = (collector: string, name: string, app: string): boolean => privateGaps.has(`${collector}\0${app}`) || privateGaps.has(`${collector}\0unknown`) || privateCounts.has(`${collector}\0unknown`) ||
+        (visibility?.privateTargets ? privateNames.has(`${collector}\0${app}\0${name}`) : privateCounts.has(`${collector}\0${app}`));
+    const collectorFor = (object: ContentObject): string => ({ 'Field Extraction': 'field_extractions', 'Field Alias': 'field_aliases',
+        'Calculated Field': 'calculated_fields', 'Field Transform': 'field_transforms' }[object.objectType] ?? 'field_extractions');
     const gapDuringBuild = (object: ContentObject, message: string): void => {
         const messages = buildGaps.get(object.objectId) ?? [];
         if (!messages.includes(message)) { messages.push(message); buildGaps.set(object.objectId, messages); }
@@ -73,7 +75,7 @@ export function buildFieldDependencyMatcher(objects: ContentObject[], catalogCom
         }
     });
     const visibleTransforms = (name: string, app: string): Candidate[] => {
-        if (privateTransform(name, app)) { return []; }
+        if (privateTarget('field_transforms', name, app)) { return []; }
         const scopes = transforms.get(name); const local = scopes?.get(`app:${app}`) ?? [];
         return local.length ? local : scopes?.get('exported') ?? [];
     };
@@ -101,7 +103,11 @@ export function buildFieldDependencyMatcher(objects: ContentObject[], catalogCom
                     if (rows.length >= FIELD_MATCH_LIMIT || bindingBudget <= 0) { break; }
                     rows.push({ name, positions, target, contextApp: app }); seen.add(target.object.objectId); added = true; bindingBudget -= 1;
                     if (facts.scope?.exact) {
-                        target.facts.outputs.forEach(output => addProducer({ ...item, phase: 'extraction', via: target }, output));
+                        // New partial declarations need explicit output attribution.
+                        // Legacy complete literal facts remain readable; ambiguous
+                        // FORMAT/FIELDS names are investigation facts, not producers.
+                        const outputs = target.facts.outputProvenance?.declarations.map(row => row.field) ?? (target.facts.syntax === 'declared' ? target.facts.outputs : []);
+                        [...new Set(outputs)].forEach(output => addProducer({ ...item, phase: 'extraction', via: target }, output));
                     }
                 }
                 if (!added && rows.length < FIELD_MATCH_LIMIT && bindingBudget > 0) {
@@ -112,7 +118,7 @@ export function buildFieldDependencyMatcher(objects: ContentObject[], catalogCom
                 }
             }
             bindings.set(object.objectId, rows);
-        } else if (facts.scope?.exact && ['alias', 'eval'].includes(facts.operation)) {
+        } else if (facts.scope?.exact && ['inline', 'alias', 'eval'].includes(facts.operation)) {
             facts.outputs.forEach(output => addProducer({ ...item, phase: phase(facts) }, output));
         }
     });
@@ -171,6 +177,9 @@ export function buildFieldDependencyMatcher(objects: ContentObject[], catalogCom
                         const consumer = phase(own);
                         if (producer.object.objectId === object.objectId || producer.phase === 'calculated' && consumer !== 'lookup' || producer.phase === 'alias' && consumer === 'alias') { continue; }
                         const app = reusable ? producer.via?.object.app ?? producer.object.app : object.app;
+                        if (privateTarget(collectorFor(producer.object), producer.object.canonicalName, app)) {
+                            gap('Private or omitted field declarations can change the producer binding; no shared output path is guessed for that context.'); continue;
+                        }
                         if (producer.via) {
                             const visible = visibleTransforms(producer.via.object.canonicalName, app);
                             if (visible.length !== 1 || visible[0].object.objectId !== producer.via.object.objectId) { continue; }
@@ -178,15 +187,24 @@ export function buildFieldDependencyMatcher(objects: ContentObject[], catalogCom
                         // Same-named local declarations can shadow exported ones.
                         if (!reusable && producer.object.app !== app && localIdentities.has(`${app}\0${producer.object.objectType}\0${producer.object.canonicalName}`)) { continue; }
                         const key = `${producer.object.objectId}\0${app}`;
+                        const origin = producer.via ?? producer;
+                        const declared: ProducerOutputDeclaration[] = (origin.facts.outputProvenance?.declarations ?? [])
+                            .filter(item => item.field === input).map(item => ({ ...item, objectId: origin.object.objectId, method: origin.facts.outputProvenance!.method }));
                         const existing = matches.get(key);
                         if (existing) {
                             if (!existing.fieldProvenance!.fields.includes(input)) { existing.fieldProvenance!.fields.push(input); }
                             if (producer.via && !existing.fieldProvenance!.viaObjectIds.includes(producer.via.object.objectId)) { existing.fieldProvenance!.viaObjectIds.push(producer.via.object.objectId); }
+                            if (declared.length) {
+                                const declarations = [...new Map([...(existing.fieldProvenance!.outputDeclarations ?? []), ...declared].map(item => [JSON.stringify(item), item])).values()];
+                                if (declarations.length > FIELD_MATCH_LIMIT) { gap('Output-declaration evidence reached its per-edge budget; additional declaration positions remain unverified.'); }
+                                existing.fieldProvenance!.outputDeclarations = declarations.slice(0, FIELD_MATCH_LIMIT);
+                            }
                             continue;
                         }
                         if (matches.size >= FIELD_MATCH_LIMIT || matches.size >= remaining) { gap('Declared field-input fan-out reached the matching safety budget; additional producer paths remain unverified.'); break; }
                         const proof = provenance('field_input', own.scope, consumer, producer.phase, reusable);
                         proof.fields = [input]; proof.viaObjectIds = producer.via ? [producer.via.object.objectId] : []; proof.contextApps = [app];
+                        if (declared.length) { proof.outputDeclarations = declared; }
                         let relation = 'may_read_extracted_field';
                         if (producer.phase === 'alias') { relation = 'may_read_aliased_field'; }
                         else if (producer.phase === 'calculated') { relation = 'may_read_calculated_field'; }
@@ -215,7 +233,8 @@ export function buildFieldDependencyMatcher(objects: ContentObject[], catalogCom
                 const possible = candidates(scoped, scopeKey(scope), object.app, false);
                 for (const candidate of possible) {
                     if (!visit()) { return result; }
-                    if (seen.has(candidate.object.objectId) || candidate.object.app !== object.app && localIdentities.has(`${object.app}\0${candidate.object.objectType}\0${candidate.object.canonicalName}`)) { continue; }
+                    if (seen.has(candidate.object.objectId) || privateTarget(collectorFor(candidate.object), candidate.object.canonicalName, object.app) ||
+                        candidate.object.app !== object.app && localIdentities.has(`${object.app}\0${candidate.object.objectType}\0${candidate.object.canonicalName}`)) { continue; }
                     seen.add(candidate.object.objectId);
                     const type = targetType(candidate.object);
                     const proof = provenance('event_scope', candidate.facts.scope, null, phase(candidate.facts), false);

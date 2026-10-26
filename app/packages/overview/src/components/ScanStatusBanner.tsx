@@ -57,6 +57,12 @@ export function ScanStatusBanner({
     const { navigate } = useReviewNavigation();
     if (scan) {
         const timestamp = scan.completedAt ?? scan.startedAt;
+        let fieldNotice: string | null = null;
+        if (!['field_extractions', 'field_aliases', 'calculated_fields', 'field_transforms'].every(collector => Object.prototype.hasOwnProperty.call(scan.collectorCounts, collector))) {
+            fieldNotice = 'This snapshot predates field-lineage coverage. Run a new complete scan from Settings; existing decisions and baselines are unchanged.';
+        } else if (scan.collectorVersions?.field_lineage !== '1.1.0') {
+            fieldNotice = 'This snapshot lacks current extraction-output attribution. Run a new complete scan from Settings; existing decisions and captured evidence are preserved.';
+        }
         let bannerState: 'ready' | 'warning' | 'error' = 'ready';
         if (scan.status === 'failed') { bannerState = 'error'; }
         else if (scan.status === 'partial' || scan.warningCount > 0 || scan.analysisStatus !== 'complete') { bannerState = 'warning'; }
@@ -75,9 +81,7 @@ export function ScanStatusBanner({
                             This snapshot predates event-type/tag coverage. Run a new complete scan from Settings; existing review decisions are preserved.
                         </div>
                     ) : null}
-                    {!['field_extractions', 'field_aliases', 'calculated_fields', 'field_transforms'].every(collector => Object.prototype.hasOwnProperty.call(scan.collectorCounts, collector)) ? (
-                        <div>This snapshot predates field-lineage coverage. Run a new complete scan from Settings; existing decisions and baselines are unchanged.</div>
-                    ) : null}
+                    {fieldNotice ? <div>{fieldNotice}</div> : null}
                     <ScanMeta>
                         <span>
                             {numberFormatter.format(scan.objectCount)} cached inventory objects

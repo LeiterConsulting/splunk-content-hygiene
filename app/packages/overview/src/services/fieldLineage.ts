@@ -1,6 +1,7 @@
 /* eslint-disable no-restricted-syntax, no-continue -- Lexing and parsing have explicit byte/token/depth budgets. */
 import { CatalogIssue, CatalogResult, decodeSharedKnowledgeIdentity, NativeKnowledgeEntry, SharedKnowledgeIdentity } from './knowledgeCatalog';
-import { FieldAliasMapping, FieldDependencyProvenance, FieldLineageFacts, FieldScope } from '../types';
+import { ExtractionOutputProvenance, FieldAliasMapping, FieldDependencyProvenance, FieldLineageFacts, FieldOutputDeclaration, FieldScope, ProducerOutputDeclaration } from '../types';
+import { inlineExtractionDeclarations, namedCaptureDeclarations } from './extractionDeclarations';
 
 export type { FieldAliasMapping, FieldScope } from '../types';
 
@@ -21,6 +22,7 @@ export interface FieldLineageDefinition extends SharedKnowledgeIdentity {
     transforms: string[];
     syntax: 'declared' | 'partial' | 'unsupported';
     sourceLocation: string;
+    outputProvenance?: ExtractionOutputProvenance;
 }
 export const FIELD_DECLARATION_BYTES = 65536;
 export const FIELD_DECLARATION_ITEMS = 250;
@@ -32,6 +34,7 @@ export function fieldLineageFacts(definition: FieldLineageDefinition, issues: Ca
     return { version: 1, operation: definition.operation, stanza: definition.stanza, attribute: definition.attribute,
         scope: definition.scope, enabled: definition.enabled, inputs: definition.inputs, outputs: definition.outputs,
         aliases: definition.aliases, transforms: definition.transforms, syntax: definition.syntax,
+        ...(definition.outputProvenance ? { outputProvenance: definition.outputProvenance } : {}),
         sourceLocation: definition.sourceLocation, limitations: [...new Set([...issues.map(issue => issue.message),
             ...(definition.enabled === null ? ['Native metadata does not establish enabled state; configured applicability is potential.'] : []),
             ...(definition.scope && !definition.scope.exact ? ['Pattern, default, rule or encoded props scopes are not evaluated by the exact-scope matcher.'] : [])])] };
@@ -49,10 +52,42 @@ export function readFieldLineageFacts(value: unknown): FieldLineageFacts | undef
         !Array.isArray(row.limitations) || row.limitations.length > FIELD_DECLARATION_ITEMS || row.limitations.some(message => typeof message !== 'string') ||
         (row.stanza !== null && !identifier(row.stanza)) || (row.attribute !== null && !identifier(row.attribute)) ||
         row.scope !== null && (!row.scope || !['sourcetype', 'host', 'source'].includes(row.scope.field) || !identifier(row.scope.value) || typeof row.scope.exact !== 'boolean')) { return undefined; }
+    const outputProvenance = row.outputProvenance === undefined ? undefined : readOutputProvenance(row.outputProvenance);
+    if (row.outputProvenance !== undefined && (!outputProvenance ||
+        (outputProvenance.method === 'inline_named_captures' ? row.operation !== 'inline' : row.operation !== 'transform') ||
+        outputProvenance.declarations.some(item => !row.outputs.includes(item.field)) || row.outputs.some(name => !outputProvenance.declarations.some(item => item.field === name)) ||
+        (outputProvenance.sourceField === null ? row.inputs.length !== 0 : row.inputs.length !== 1 || row.inputs[0] !== outputProvenance.sourceField))) { return undefined; }
     return { version: 1, operation: row.operation, stanza: row.stanza, attribute: row.attribute,
         scope: row.scope ? { field: row.scope.field, value: row.scope.value, exact: row.scope.exact } : null,
         enabled: row.enabled, inputs: row.inputs, outputs: row.outputs, aliases: row.aliases.map(mapping => ({ input: mapping.input, output: mapping.output, mode: mapping.mode })),
-        transforms: row.transforms, syntax: row.syntax, sourceLocation: row.sourceLocation, limitations: row.limitations };
+        transforms: row.transforms, syntax: row.syntax, sourceLocation: row.sourceLocation, limitations: row.limitations,
+        ...(outputProvenance ? { outputProvenance } : {}) };
+}
+
+const OUTPUT_METHODS: ExtractionOutputProvenance['method'][] = ['inline_named_captures', 'transform_named_captures', 'transform_format', 'transform_fields'];
+const OUTPUT_ATTRIBUTES = { inline_named_captures: 'value', transform_named_captures: 'REGEX', transform_format: 'FORMAT', transform_fields: 'FIELDS' } as const;
+function readOutputDeclaration(value: unknown): FieldOutputDeclaration | undefined {
+    const row = value as FieldOutputDeclaration | undefined;
+    if (!row || !identifier(row.field) || row.capture !== null && (!Number.isSafeInteger(row.capture) || row.capture < 1 || row.capture > FIELD_DECLARATION_ITEMS) ||
+        !Number.isSafeInteger(row.offset) || row.offset < 0 || row.offset >= FIELD_DECLARATION_BYTES || !['value', 'REGEX', 'FORMAT', 'FIELDS'].includes(row.attribute)) { return undefined; }
+    return { field: row.field, capture: row.capture, offset: row.offset, attribute: row.attribute };
+}
+export function readOutputProvenance(value: unknown): ExtractionOutputProvenance | undefined {
+    const row = value as ExtractionOutputProvenance | undefined;
+    if (!row || row.version !== 1 || !OUTPUT_METHODS.includes(row.method) || row.sourceField !== null && !identifier(row.sourceField) ||
+        !['default_raw', 'explicit_inline', 'source_key', 'unknown'].includes(row.sourceOrigin) || row.regexCaptureCount !== null &&
+        (!Number.isSafeInteger(row.regexCaptureCount) || row.regexCaptureCount < 0 || row.regexCaptureCount > FIELD_DECLARATION_ITEMS) ||
+        !Array.isArray(row.declarations) || !row.declarations.length || row.declarations.length > FIELD_DECLARATION_ITEMS ||
+        row.sourceOrigin === 'default_raw' && row.sourceField !== '_raw' || row.sourceOrigin === 'unknown' && row.sourceField !== null ||
+        ['explicit_inline', 'source_key'].includes(row.sourceOrigin) && row.sourceField === null ||
+        (row.method === 'inline_named_captures' ? !['default_raw', 'explicit_inline'].includes(row.sourceOrigin) : row.sourceOrigin === 'explicit_inline') ||
+        row.sourceOrigin === 'explicit_inline' && !/^[A-Za-z0-9_]+$/.test(row.sourceField!) ||
+        (row.method === 'transform_fields' ? row.regexCaptureCount !== null : row.regexCaptureCount === null || row.regexCaptureCount < 1)) { return undefined; }
+    const declarations = row.declarations.map(readOutputDeclaration);
+    if (declarations.some(item => !item || item.attribute !== OUTPUT_ATTRIBUTES[row.method] ||
+        (row.method === 'transform_fields' ? item.capture !== null : item.capture === null || item.capture > row.regexCaptureCount!))) { return undefined; }
+    return { version: 1, method: row.method, sourceField: row.sourceField, sourceOrigin: row.sourceOrigin,
+        regexCaptureCount: row.regexCaptureCount, declarations: declarations as FieldOutputDeclaration[] };
 }
 
 export function readFieldProvenance(value: unknown): FieldDependencyProvenance | undefined {
@@ -68,9 +103,22 @@ export function readFieldProvenance(value: unknown): FieldDependencyProvenance |
         !Array.isArray(row.transformPositions) || row.transformPositions.length > FIELD_DECLARATION_ITEMS ||
         row.transformPositions.some(position => !Number.isSafeInteger(position) || position < 1 || position > FIELD_DECLARATION_ITEMS) ||
         row.scope !== null && (!row.scope || !['sourcetype', 'host', 'source'].includes(row.scope.field) || !identifier(row.scope.value) || typeof row.scope.exact !== 'boolean')) { return undefined; }
+    let outputDeclarations: ProducerOutputDeclaration[] | undefined;
+    if (row.outputDeclarations !== undefined) {
+        if (!Array.isArray(row.outputDeclarations) || row.outputDeclarations.length > FIELD_DECLARATION_ITEMS) { return undefined; }
+        outputDeclarations = [];
+        for (const item of row.outputDeclarations) {
+            const declaration = readOutputDeclaration(item);
+            if (!declaration || !identities([item.objectId]) || !OUTPUT_METHODS.includes(item.method) || !row.fields.includes(item.field) ||
+                row.kind !== 'field_input' || row.producerPhase !== 'extraction' || declaration.attribute !== OUTPUT_ATTRIBUTES[item.method] ||
+                (item.method === 'transform_fields' ? declaration.capture !== null : declaration.capture === null)) { return undefined; }
+            outputDeclarations.push({ ...declaration, objectId: item.objectId, method: item.method });
+        }
+    }
     return { version: 1, kind: row.kind, fields: row.fields, scope: row.scope ? { field: row.scope.field, value: row.scope.value, exact: row.scope.exact } : null,
         consumerPhase: row.consumerPhase, producerPhase: row.producerPhase, transformPositions: row.transformPositions,
-        viaObjectIds: row.viaObjectIds, contextApps: row.contextApps, invocation: row.invocation };
+        viaObjectIds: row.viaObjectIds, contextApps: row.contextApps, invocation: row.invocation,
+        ...(outputDeclarations ? { outputDeclarations } : {}) };
 }
 const object = (value: unknown): Record<string, unknown> | null => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
 const identifier = (value: unknown): value is string => typeof value === 'string' && value.length > 0 && value.length <= 4096 && value.trim() === value &&
@@ -89,11 +137,13 @@ const withinBudget = (text: string): boolean => {
     }
     return true;
 };
-const state = (value: unknown): boolean | null => {
-    if ([true, 1, '1', 'true'].includes(value as string | boolean | number)) { return false; }
-    if ([false, 0, '0', 'false'].includes(value as string | boolean | number)) { return true; }
+const nativeBoolean = (value: unknown): boolean | null => {
+    const normalized = typeof value === 'string' ? value.toLowerCase() : value;
+    if ([true, 1, '1', 'true'].includes(normalized as string | boolean | number)) { return true; }
+    if ([false, 0, '0', 'false'].includes(normalized as string | boolean | number)) { return false; }
     return null;
 };
+const state = (value: unknown): boolean | null => { const disabled = nativeBoolean(value); return disabled === null ? null : !disabled; };
 export function declaredFieldScope(stanza: string): FieldScope {
     let field: FieldScope['field'] = 'sourcetype';
     if (stanza.startsWith('host::')) { field = 'host'; }
@@ -221,23 +271,63 @@ export function decodeFieldLineage(entry: NativeKnowledgeEntry, catalog: FieldCa
     if (catalog === 'field_transforms') {
         definition.sourceLocation = `transforms.conf[${JSON.stringify(definition.nativeName)}]`;
         const source = content?.SOURCE_KEY;
-        if (typeof source === 'string' && literalField(source) && !/^(?:MetaData:|field:)/.test(source)) { definition.inputs = [source]; }
-        const indexOnly = content?.WRITE_META === true || content?.WRITE_META === 'true' || content?.WRITE_META === 1 || content?.WRITE_META === '1' ||
-            typeof content?.DEST_KEY === 'string' && content.DEST_KEY.length > 0 || typeof content?.CLONE_SOURCETYPE === 'string' && content.CLONE_SOURCETYPE.length > 0;
+        let sourceField: string | null = null; let sourceOrigin: ExtractionOutputProvenance['sourceOrigin'] = 'unknown';
+        if (source === undefined || source === '') { sourceField = '_raw'; sourceOrigin = 'default_raw'; }
+        else if (typeof source === 'string' && literalField(source) && !/^(?:MetaData:|fields?:)/.test(source)) { sourceField = source; sourceOrigin = 'source_key'; }
+        if (sourceField) { definition.inputs = [sourceField]; }
+        else { gap('Transform SOURCE_KEY is not a supported literal input; indexed-field and dynamic source semantics remain unverified.'); }
+        const present = (value: unknown): boolean => value !== undefined && value !== null && value !== '';
+        const writeMeta = present(content?.WRITE_META) ? nativeBoolean(content?.WRITE_META) : false;
+        const cleanKeys = present(content?.CLEAN_KEYS) ? nativeBoolean(content?.CLEAN_KEYS) : true;
+        const indexOnly = writeMeta === true || ['DEST_KEY', 'CLONE_SOURCETYPE', 'INGEST_EVAL', 'STOP_PROCESSING_IF'].some(key => present(content?.[key]));
+        const cleanName = (name: string): boolean => cleanKeys === false || cleanKeys === true && /^[A-Za-z][A-Za-z0-9_]*$/.test(name);
+        const pattern = content?.REGEX; const format = content?.FORMAT; const fields = content?.FIELDS; const delims = content?.DELIMS;
+        const attributeText = [pattern, format, fields, delims].every(value => !present(value) || typeof value === 'string' && withinBudget(value));
+        const retain = (declarations: FieldOutputDeclaration[], method: ExtractionOutputProvenance['method'], count: number | null): void => {
+            const bounded = declarations.slice(0, FIELD_DECLARATION_ITEMS);
+            definition.outputs = [...new Set(bounded.map(item => item.field))];
+            definition.outputProvenance = { version: 1, method, sourceField, sourceOrigin, regexCaptureCount: count, declarations: bounded };
+            if (declarations.length > FIELD_DECLARATION_ITEMS) { gap('Transform output-declaration budget reached; additional positions remain unverified.', 'limit'); }
+        };
         if (indexOnly) { unsupported('Transform has index-time or routing attributes; search-time field outputs are not inferred.'); }
-        else if (typeof content?.FIELDS === 'string' && withinBudget(content.FIELDS)) {
-            const names = content.FIELDS.split(',').map(name => name.trim());
-            if (!names.length || names.some(name => !/^[A-Za-z_][\w.:-]*$/.test(name))) { unsupported('Transform FIELDS is not a supported literal output list.'); }
+        else if (writeMeta === null || cleanKeys === null) { unsupported('Transform boolean options are unsupported; search-time output names are not guessed.'); }
+        else if (!attributeText) { unsupported('Transform declaration attributes are unsupported or exceed the bounded byte budget.'); }
+        else if (typeof fields === 'string' && fields.length) {
+            let offset = 0;
+            const declarations = fields.split(',').map(value => {
+                const item = { field: value.trim(), capture: null, offset: offset + value.length - value.trimStart().length, attribute: 'FIELDS' as const };
+                offset += value.length + 1; return item;
+            });
+            if (declarations.some(item => !identifier(item.field) || !/^[A-Za-z_][\w.:-]*$/.test(item.field))) { unsupported('Transform FIELDS is not a supported bounded literal output list.'); }
             else {
-                definition.outputs = names.slice(0, FIELD_DECLARATION_ITEMS);
-                if (names.length > FIELD_DECLARATION_ITEMS) { gap('Transform output-field budget reached.', 'limit'); }
+                definition.outputs = [...new Set(declarations.slice(0, FIELD_DECLARATION_ITEMS).map(item => item.field))];
+                if (!present(delims) || present(pattern) || present(format) || declarations.some(item => !cleanName(item.field))) {
+                    gap('Literal FIELDS names are retained, but missing DELIMS, competing REGEX/FORMAT or key cleaning prevents unambiguous output attribution.');
+                } else { retain(declarations, 'transform_fields', null); }
+                if (!definition.outputProvenance && declarations.length > FIELD_DECLARATION_ITEMS) { gap('Transform output-field budget reached.', 'limit'); }
             }
-        } else if (typeof content?.FORMAT === 'string' && withinBudget(content.FORMAT) &&
-            /^(?:[A-Za-z_][\w.:-]*::\$\d+)(?:\s+[A-Za-z_][\w.:-]*::\$\d+)*$/.test(content.FORMAT)) {
-            const names = content.FORMAT.split(/\s+/).map(item => item.slice(0, item.lastIndexOf('::')));
-            definition.outputs = [...new Set(names)].slice(0, FIELD_DECLARATION_ITEMS);
-            if (names.length > FIELD_DECLARATION_ITEMS) { gap('Transform output-field budget reached.', 'limit'); }
-        } else { unsupported('PCRE captures, dynamic FORMAT and effective transform outputs remain unverified; no customer regex is evaluated.'); }
+        } else if (present(delims)) { unsupported('DELIMS without a supported FIELDS list does not declare literal output names.'); }
+        else if (typeof format === 'string' && format.length) {
+            const pieces = [...format.matchAll(/\S+/g)].map(item => ({ match: /^([A-Za-z_][\w.:-]*)::\$(\d+)$/.exec(item[0]), offset: item.index! }));
+            if (!pieces.length || pieces.some(item => !item.match || !identifier(item.match[1]))) { unsupported('Dynamic, oversized or unsupported FORMAT does not declare unambiguous literal output names.'); }
+            else {
+                const declarations = pieces.map(item => ({ field: item.match![1], capture: Number(item.match![2]), offset: item.offset, attribute: 'FORMAT' as const }));
+                definition.outputs = [...new Set(declarations.slice(0, FIELD_DECLARATION_ITEMS).map(item => item.field))];
+                const captures = typeof pattern === 'string' ? namedCaptureDeclarations(pattern, cleanKeys === false) : null;
+                if (!captures?.complete || declarations.some(item => !cleanName(item.field) || !Number.isSafeInteger(item.capture) || item.capture < 1 || item.capture > captures.groupCount!)) {
+                    gap('Literal FORMAT names are retained, but capture numbering or key cleaning is unverified; these names are not attributed as producer outputs.');
+                } else {
+                    retain(declarations, 'transform_format', captures.groupCount);
+                    if (captures.captures.length) { gap('Named REGEX captures coexist with FORMAT; only explicit FORMAT outputs are attributed, not additional effective fields.'); }
+                }
+                if (!definition.outputProvenance && declarations.length > FIELD_DECLARATION_ITEMS) { gap('Transform output-field budget reached.', 'limit'); }
+            }
+        } else if (typeof pattern === 'string' && pattern.length) {
+            const captures = namedCaptureDeclarations(pattern, cleanKeys === false);
+            if (!captures.complete || !captures.captures.length) { unsupported(captures.reason ?? 'REGEX has no supported literal named-capture outputs.'); }
+            else { retain(captures.captures.map(item => ({ field: item.field, capture: item.group, offset: item.offset, attribute: 'REGEX' })), 'transform_named_captures', captures.groupCount); }
+        } else { unsupported('No supported search-time output declaration is available; effective transform outputs remain unverified.'); }
+        if (present(pattern)) { gap('Capture declarations are read without compiling or executing PCRE. Regex validity, matching, values and effective field availability remain unverified.'); }
         if (definition.enabled === null) { gap('Transform enabled state is unavailable; active applicability is not assumed.', 'unknown_state'); }
         return { records: [definition], issues };
     }
@@ -257,7 +347,19 @@ export function decodeFieldLineage(entry: NativeKnowledgeEntry, catalog: FieldCa
     if (catalog === 'field_extractions') {
         const report = content.attribute.startsWith('REPORT-'); definition.operation = report ? 'report' : 'inline';
         if (content.type !== (report ? 'Uses transform' : 'Inline')) { unsupported('Native extraction type and attribute disagree.'); }
-        else if (!report) { unsupported('Inline EXTRACT regex is inventoried but capture/output lineage is not interpreted or executed.'); }
+        else if (!report) {
+            const declared = inlineExtractionDeclarations(text);
+            definition.inputs = declared.sourceField ? [declared.sourceField] : [];
+            if (!declared.complete) { unsupported(declared.reason ?? 'Inline EXTRACT declarations are outside the supported names-only subset.'); }
+            else {
+                definition.outputs = [...new Set(declared.captures.map(item => item.field))];
+                definition.outputProvenance = { version: 1, method: 'inline_named_captures', sourceField: declared.sourceField,
+                    sourceOrigin: declared.sourceOrigin, regexCaptureCount: declared.groupCount,
+                    declarations: declared.captures.map(item => ({ field: item.field, capture: item.group, offset: item.offset, attribute: 'value' })) };
+            }
+            gap('Named-capture declarations are read without compiling or executing PCRE. Regex validity, matching, values and effective field availability remain unverified.');
+            if (declared.sourceOrigin === 'explicit_inline') { gap('An explicit inline source field is a declared input only; same-phase extraction availability and lexical ordering are not inferred.'); }
+        }
         else if (['$', '*', '?', '{', '}', '[', ']', '"', "'"].some(character => text.includes(character)) || /^\s*,|,\s*$|,\s*,/.test(text)) { unsupported('REPORT target list is dynamic or unsupported; transform identities are not guessed.'); }
         else {
             const names = text.trim().split(/[,\s]+/);

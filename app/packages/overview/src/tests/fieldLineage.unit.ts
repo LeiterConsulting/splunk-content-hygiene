@@ -1,5 +1,6 @@
 // Synthetic contract tests only. These are never a runtime inventory source.
 import { calculatedFieldInputs, declaredFieldScope, decodeFieldLineage, FieldCatalog,
+    fieldLineageFacts, readFieldLineageFacts, readOutputProvenance,
     FIELD_DECLARATION_BYTES, FIELD_DECLARATION_ITEMS, FIELD_EXPRESSION_DEPTH, FIELD_EXPRESSION_TOKENS } from '../services/fieldLineage';
 
 const acl = { app: 'example', owner: 'reviewer', sharing: 'app' };
@@ -63,11 +64,35 @@ test('REPORT reference fan-out is capped with an explicit limit issue', () => {
     expect(result.issues).toEqual([expect.objectContaining({ code: 'limit' })]);
 });
 
-test('EXTRACT remains an inventoried opaque regex without evaluating malformed PCRE', () => {
+test('malformed EXTRACT retains the declared default input but no guessed captures', () => {
     const result = decodeFieldLineage(props('EXTRACT-example', 'Inline', '(?<malformed'), 'field_extractions');
-    expect(result.records[0]).toMatchObject({ operation: 'inline', inputs: [], outputs: [], syntax: 'unsupported' });
-    expect(result.issues[0].message).toMatch(/not interpreted or executed/);
+    expect(result.records[0]).toMatchObject({ operation: 'inline', inputs: ['_raw'], outputs: [], syntax: 'unsupported' });
+    expect(result.issues[0].message).toMatch(/Unterminated/);
+    expect(result.issues.some(issue => /without compiling or executing PCRE/.test(issue.message))).toBe(true);
     expect(JSON.stringify(result)).not.toContain('(?<malformed');
+});
+
+test('inline outputs retain names, numbering, offsets and input provenance without raw expressions', () => {
+    const value = '(one)(?<actor>customer-sensitive-pattern)(?P<status>.+) in payload';
+    const result = decodeFieldLineage(props('EXTRACT-example', 'Inline', value), 'field_extractions');
+    const facts = fieldLineageFacts(result.records[0], result.issues);
+    expect(facts).toMatchObject({ inputs: ['payload'], outputs: ['actor', 'status'], syntax: 'partial', outputProvenance: {
+        method: 'inline_named_captures', sourceField: 'payload', sourceOrigin: 'explicit_inline', regexCaptureCount: 3,
+        declarations: [{ field: 'actor', capture: 2, offset: value.indexOf('(?<actor>'), attribute: 'value' },
+            { field: 'status', capture: 3, offset: value.indexOf('(?P<status>'), attribute: 'value' }] } });
+    expect(facts.limitations.some(message => /same-phase/.test(message))).toBe(true);
+    expect(JSON.stringify(facts)).not.toContain('customer-sensitive-pattern');
+    expect(readFieldLineageFacts(facts)).toEqual(facts);
+    expect(readFieldLineageFacts({ ...facts, operation: 'alias' })).toBeUndefined();
+    expect(readFieldLineageFacts({ ...facts, inputs: ['other'] })).toBeUndefined();
+    expect(readFieldLineageFacts({ ...facts, outputs: [...facts.outputs, 'invented'] })).toBeUndefined();
+    expect(readFieldLineageFacts({ ...facts, outputProvenance: { ...facts.outputProvenance, sourceField: null } })).toBeUndefined();
+    const projected = readFieldLineageFacts({ ...facts, regex: value, outputProvenance: { ...facts.outputProvenance,
+        regex: value, declarations: facts.outputProvenance!.declarations.map(item => ({ ...item, value: 'secret' })) } });
+    expect(projected).toEqual(facts);
+    expect(readOutputProvenance({ ...facts.outputProvenance, regexCaptureCount: 1 })).toBeUndefined();
+    expect(readOutputProvenance({ ...facts.outputProvenance, sourceOrigin: 'source_key' })).toBeUndefined();
+    expect(readOutputProvenance({ ...facts.outputProvenance, declarations: [{ field: 'actor', capture: null, offset: 0, attribute: 'value' }] })).toBeUndefined();
 });
 
 test('inconsistent native props names retain only their shared identity, not guessed scope', () => {
@@ -140,10 +165,11 @@ test('unsupported calculated syntax preserves its declared output but not an inc
     expect(decodeFieldLineage(calculated('unknown_function(first,second)'), 'calculated_fields').records[0]).toMatchObject({ outputs: ['result'], inputs: [], syntax: 'unsupported' });
 });
 
-test('literal transform FORMAT outputs do not require executing the configured regex', () => {
+test('literal transform names survive malformed REGEX but do not claim capture attribution', () => {
     const result = decodeFieldLineage({ name: 'example_transform', acl, content: { REGEX: '(?<malformed', FORMAT: 'user::$1 custom::field::$2', SOURCE_KEY: '_raw', disabled: '0' } }, 'field_transforms');
-    expect(result.issues).toEqual([]);
-    expect(result.records[0]).toMatchObject({ inputs: ['_raw'], outputs: ['user', 'custom::field'], operation: 'transform', scope: null, enabled: true, syntax: 'declared' });
+    expect(result.issues.some(issue => /capture numbering or key cleaning is unverified/.test(issue.message))).toBe(true);
+    expect(result.records[0]).toMatchObject({ inputs: ['_raw'], outputs: ['user', 'custom::field'], operation: 'transform', scope: null, enabled: true, syntax: 'partial' });
+    expect(result.records[0].outputProvenance).toBeUndefined();
     expect(JSON.stringify(result)).not.toContain('(?<malformed');
 });
 
@@ -155,5 +181,86 @@ test('dynamic transform field names and index-time routing do not become search-
 
 test('literal FIELDS output lists and disabled transform metadata are preserved', () => {
     expect(decodeFieldLineage({ name: 'example_delimited', acl, content: { FIELDS: 'user, action', SOURCE_KEY: '_raw', disabled: '1' } }, 'field_transforms').records[0])
-        .toMatchObject({ inputs: ['_raw'], outputs: ['user', 'action'], enabled: false });
+        .toMatchObject({ inputs: ['_raw'], outputs: ['user', 'action'], enabled: false, syntax: 'partial' });
+});
+
+const transform = (content: Record<string, unknown>) => decodeFieldLineage({ name: 'example_transform', acl, content: { disabled: 'False', ...content } }, 'field_transforms');
+test('named transform REGEX outputs use default source and empty FORMAT without executing PCRE', () => {
+    const pattern = '(prefix)(?<actor>customer-secret)(?P<status>.+)';
+    const result = transform({ REGEX: pattern, FORMAT: '', WRITE_META: 'False', CLEAN_KEYS: 'True' });
+    expect(result.records[0]).toMatchObject({ enabled: true, inputs: ['_raw'], outputs: ['actor', 'status'], syntax: 'partial', outputProvenance: {
+        method: 'transform_named_captures', sourceField: '_raw', sourceOrigin: 'default_raw', regexCaptureCount: 3,
+        declarations: [{ field: 'actor', capture: 2, offset: pattern.indexOf('(?<actor>'), attribute: 'REGEX' },
+            { field: 'status', capture: 3, offset: pattern.indexOf('(?P<status>'), attribute: 'REGEX' }] } });
+    const facts = fieldLineageFacts(result.records[0], result.issues);
+    expect(readFieldLineageFacts(facts)).toEqual(facts);
+    expect(JSON.stringify(facts)).not.toContain('customer-secret');
+});
+test('literal FORMAT attribution validates group references and preserves repeated positions', () => {
+    const result = transform({ REGEX: '(one)(two)', FORMAT: 'actor::$2 actor::$1 status::$1', SOURCE_KEY: 'payload' });
+    expect(result.records[0]).toMatchObject({ inputs: ['payload'], outputs: ['actor', 'status'], outputProvenance: {
+        method: 'transform_format', sourceField: 'payload', sourceOrigin: 'source_key', regexCaptureCount: 2,
+        declarations: [{ field: 'actor', capture: 2, offset: 0, attribute: 'FORMAT' },
+            { field: 'actor', capture: 1, offset: 10, attribute: 'FORMAT' }, { field: 'status', capture: 1, offset: 20, attribute: 'FORMAT' }] } });
+    expect(readFieldLineageFacts(fieldLineageFacts(result.records[0], result.issues))).toBeDefined();
+});
+test.each(['actor::$0', 'actor::$2', 'actor::$9999999999999999999999999'])('missing/out-of-range FORMAT captures do not become producer evidence: %s', FORMAT => {
+    const result = transform({ REGEX: '(one)', FORMAT });
+    expect(result.records[0]).toMatchObject({ outputs: ['actor'], syntax: 'partial' });
+    expect(result.records[0].outputProvenance).toBeUndefined();
+});
+test.each(['$1::$2', 'actor::literal', 'actor::$1$2'])('dynamic/unsupported FORMAT does not invent names: %s', FORMAT => {
+    expect(transform({ REGEX: '(one)(two)', FORMAT }).records[0]).toMatchObject({ outputs: [], syntax: 'unsupported' });
+});
+test.each(['DEST_KEY', 'CLONE_SOURCETYPE', 'INGEST_EVAL', 'STOP_PROCESSING_IF'])('index-time %s excludes search-time producer attribution', key => {
+    expect(transform({ REGEX: '(?<actor>.+)', [key]: 'configured' }).records[0]).toMatchObject({ outputs: [], syntax: 'unsupported' });
+});
+test.each([true, 'True', 'TRUE', '1', 1])('native WRITE_META=%s is decoded without case-sensitive routing mistakes', WRITE_META => {
+    expect(transform({ REGEX: '(?<actor>.+)', WRITE_META }).records[0]).toMatchObject({ outputs: [], syntax: 'unsupported' });
+});
+test('key cleaning is never silently translated into an effective output name', () => {
+    expect(transform({ REGEX: '(one)', FORMAT: 'actor.name::$1' }).records[0]).toMatchObject({ outputs: ['actor.name'], syntax: 'partial' });
+    expect(transform({ REGEX: '(one)', FORMAT: 'actor.name::$1' }).records[0].outputProvenance).toBeUndefined();
+    expect(transform({ REGEX: '(one)', FORMAT: 'actor.name::$1', CLEAN_KEYS: 'false' }).records[0].outputProvenance).toBeDefined();
+    expect(transform({ REGEX: '(?<_actor>.+)' }).records[0].outputs).toEqual([]);
+    expect(transform({ REGEX: '(?<_actor>.+)', CLEAN_KEYS: false }).records[0]).toMatchObject({ outputs: ['_actor'], outputProvenance: { method: 'transform_named_captures' } });
+});
+test('indexed SOURCE_KEY semantics remain unknown even when output names are declared', () => {
+    const result = transform({ REGEX: '(?<actor>.+)', SOURCE_KEY: 'fields:payload' });
+    expect(result.records[0]).toMatchObject({ inputs: [], outputs: ['actor'], outputProvenance: { sourceField: null, sourceOrigin: 'unknown' } });
+    expect(readFieldLineageFacts(fieldLineageFacts(result.records[0], result.issues))).toBeDefined();
+});
+test('DELIMS/FIELDS attribution requires an unambiguous mechanism and records literal name positions', () => {
+    const result = transform({ FIELDS: ' actor, status', DELIMS: ',' });
+    expect(result.records[0]).toMatchObject({ outputs: ['actor', 'status'], outputProvenance: { method: 'transform_fields', regexCaptureCount: null,
+        declarations: [{ field: 'actor', capture: null, offset: 1, attribute: 'FIELDS' }, { field: 'status', capture: null, offset: 8, attribute: 'FIELDS' }] } });
+    expect(readFieldLineageFacts(fieldLineageFacts(result.records[0], result.issues))).toBeDefined();
+    expect(transform({ FIELDS: 'actor', DELIMS: ',', REGEX: '(one)' }).records[0].outputProvenance).toBeUndefined();
+    expect(transform({ FIELDS: 'actor', DELIMS: ',', FORMAT: 'actor::$1' }).records[0].outputProvenance).toBeUndefined();
+    expect(transform({ DELIMS: ',' }).records[0]).toMatchObject({ outputs: [], syntax: 'unsupported' });
+});
+test('named and explicit FORMAT mechanisms are not silently unioned', () => {
+    const result = transform({ REGEX: '(?<raw_name>.+)', FORMAT: 'actor::$1' });
+    expect(result.records[0]).toMatchObject({ outputs: ['actor'], outputProvenance: { method: 'transform_format' } });
+    expect(result.issues.some(issue => /coexist/.test(issue.message))).toBe(true);
+});
+
+test('dense FORMAT positions are capped without losing the explicit coverage gap or cache readability', () => {
+    const FORMAT = Array.from({ length: FIELD_DECLARATION_ITEMS + 1 }, () => 'actor::$1').join(' ');
+    const result = transform({ REGEX: '(one)', FORMAT });
+    const facts = fieldLineageFacts(result.records[0], result.issues);
+    expect(facts).toMatchObject({ outputs: ['actor'], syntax: 'partial', outputProvenance: { method: 'transform_format', regexCaptureCount: 1 } });
+    expect(facts.outputProvenance!.declarations).toHaveLength(FIELD_DECLARATION_ITEMS);
+    expect(facts.outputProvenance!.declarations[FIELD_DECLARATION_ITEMS - 1].offset).toBe((FIELD_DECLARATION_ITEMS - 1) * 10);
+    expect(result.issues.some(issue => issue.code === 'limit' && /additional positions remain unverified/.test(issue.message))).toBe(true);
+    expect(readFieldLineageFacts(facts)).toEqual(facts);
+});
+
+test.each(['FORMAT', 'FIELDS'])('oversized %s names fail closed rather than publishing unreadable compact facts', attribute => {
+    const field = 'a'.repeat(4097);
+    const result = transform(attribute === 'FORMAT' ? { REGEX: '(one)', FORMAT: `${field}::$1` } : { DELIMS: ',', FIELDS: field });
+    const facts = fieldLineageFacts(result.records[0], result.issues);
+    expect(facts).toMatchObject({ outputs: [], syntax: 'unsupported' });
+    expect(facts.outputProvenance).toBeUndefined();
+    expect(readFieldLineageFacts(facts)).toEqual(facts);
 });

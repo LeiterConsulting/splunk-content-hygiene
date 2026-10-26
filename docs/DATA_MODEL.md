@@ -43,10 +43,11 @@ analyzed. Boolean branches and independent subsearches must establish their own
 positive index scope. A possible source is not an asserted dependency.
 
 The 1.3 event-type/tag milestone introduced `shared-static-v2`; the
-field-lineage increment generates `shared-static-v3` while retaining read support
-for v1/v2 baselines. A policy expansion
+field-lineage increment generates `shared-static-v3`. The 1.4 development
+increment generates `shared-static-v4` while retaining read support for v1/v2/v3
+baselines. A policy expansion
 requires explicit re-review, not migration of saved decisions or evidence. The
-evidence schema accepts both supported policies and rejects no historical record
+evidence schema accepts every supported policy and rejects no historical record
 merely because the current scanner uses the newer policy.
 
 Event Type identities use their exact native name and app namespace. Tag Binding
@@ -63,6 +64,16 @@ scope, nullable enabled state, literal input/output names, AS/ASNEW assignments,
 ordered REPORT names, syntax status, provenance and limitations. Names remain
 values, never dotted/dollar-prefixed KV keys. Raw declaration bodies are hashed
 transiently and are not retained. See [field metadata schema](../schemas/field-lineage.schema.json).
+
+Optional `outputProvenance` version 1 stores the attribution method, declared
+source field/origin, recognized capture count and at most 250 output declarations.
+Each has a literal field name, nullable one-based capture number, zero-based
+UTF-16 offset and native attribute (`value`, `REGEX`, `FORMAT`, `FIELDS`). Repeated
+capture/mapping positions remain distinct. These are source locations, not
+event offsets or field values. Old facts without this optional metadata remain
+readable; the scan's `field_lineage` collector version requests recollection.
+Ambiguous literal FORMAT/FIELDS names may remain visible without attribution;
+such partial names are not producer evidence.
 
 Configuration fingerprint version 2 uses locale-independent canonical ordering.
 Different normalization versions are not direct proof of a configuration edit.
@@ -96,6 +107,8 @@ ordered REPORT positions; `may_read_extracted_field`, `may_read_aliased_field` a
 `may_apply_calculated_field` record positive exact event-scope witnesses.
 Optional `field_provenance` retains fields, scope, consumer/producer phases,
 one-based REPORT positions, intermediate transform IDs and possible app contexts.
+Optional `outputDeclarations` additionally identifies the exact producer object,
+attribution method and matching declaration positions for extraction-input paths.
 These facts are hashed with relationship evidence so changed provenance can
 require re-review. Required-content and impact exports retain them and propagate
 potential status/weakest confidence. No synthetic field object or runtime value

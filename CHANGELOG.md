@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.4.0 — 2026-10-26 (build 79)
+
+- Attribute supported inline named captures and declared source fields without
+  compiling/evaluating customer PCRE or inferring same-phase extraction chains.
+- Attribute unambiguous named transform outputs and literal FORMAT capture
+  mappings, validating numbering and key-cleaning safety. Keep literal FIELDS
+  facts while requiring DELIMS and an unambiguous mechanism for producer links.
+- Decode native boolean option casing, exclude index-time/routing transforms,
+  and retain explicit gaps for dynamic names, unsupported constructs, competing
+  mechanisms, field availability, precedence and invocation context.
+- Preserve compact declaration positions through cached facts, potential field
+  paths, accessible Explorer/Library disclosures, impact, required-content and
+  CSV/JSON. Never cache raw patterns, expressions or event values.
+- Introduce shared-static-v4 coverage with read support for all earlier policies;
+  preserve decisions/history and request a new complete scan for older snapshots.
+- Enforce output-name bounds before emitting FORMAT/FIELDS facts so native scan
+  results and strict cached/schema projections agree at the size boundary.
+- Qualify the exact candidate with 680 automated checks, pre-cert AppInspect,
+  native catalog/cache and schema comparisons on Enterprise 10.2.5, 10.2.8 and
+  10.4.4, targeted light/dark investigations and real CSV/JSON downloads.
+  Customer content and original review decisions remain unchanged;
+  qualification limits remain explicit. Broader coverage follow-up #8 is open.
+
 ## 1.3.0 — 2026-10-26 (build 77)
 
 - Inventory shared Event Types and distinct Tag Bindings with exact native

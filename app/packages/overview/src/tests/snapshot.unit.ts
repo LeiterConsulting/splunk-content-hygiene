@@ -198,8 +198,38 @@ test('native field catalogs persist compact facts and exact edge provenance with
     expect(stored).not.toContain('private_literal_must_not_be_cached');
     expect(stored).not.toContain('coalesce(');
     expect(stored).not.toContain('actor::$1');
-    expect(result.objects.find(row => row.objectType === 'Calculated Field')?.reviewEvidence?.coverage?.policy).toBe('shared-static-v3');
+    expect(result.objects.find(row => row.objectType === 'Calculated Field')?.reviewEvidence?.coverage?.policy).toBe('shared-static-v4');
     expect([...collections.get('ch_reviews')!.values()]).toEqual([original]);
+    expect(requests.filter(row => row.method !== 'GET').every(row => row.path.includes('/storage/collections/data/') && !/\/ch_review/.test(row.path))).toBe(true);
+});
+
+test.each(['inline', 'transform'] as const)('%s output provenance survives collection, KV publication and cache reload without review writes', async operation => {
+    const extraction = declaredField('field_extractions', operation === 'inline' ? 'EXTRACT-actor' : 'REPORT-actor',
+        operation === 'inline' ? '(prefix)(?<actor>synthetic-secret-pattern)' : 'extract_actor');
+    const transform = declaredField('field_transforms', 'extract_actor', '', 'example', 'app', 'example:events', { REGEX: '(prefix)(?<actor>synthetic-secret-pattern)' });
+    const alias = declaredField('field_aliases', 'FIELDALIAS-actor', 'actor ASNEW principal');
+    fieldEntries = { 'data/transforms/extractions': operation === 'transform' ? [transform.entry] : [],
+        'data/props/extractions': [extraction.entry], 'data/props/fieldaliases': [alias.entry], 'data/props/calcfields': [] };
+    const original = { _key: 'original', object_id: 'original', stage: 'retain', note: 'Original note', evidence_baseline: { version: 1 } };
+    const journal = { _key: 'revision', object_id: 'original', revision_id: 'revision', note: 'Original revision' };
+    collections.set('ch_reviews', new Map([['original', original]]));
+    collections.set('ch_review_revisions', new Map([['revision', journal]]));
+    const result = await splunkInventoryClient.runFullScan();
+    const origin = result.objects.find(row => row.objectId === (operation === 'inline' ? extraction : transform).item.objectId);
+    // Fixture display IDs differ from native IDs; match the exact native name/type.
+    const nativeOrigin = origin ?? result.objects.find(row => row.canonicalName === (operation === 'inline' ? extraction : transform).entry.name)!;
+    expect(nativeOrigin.fieldLineage?.outputProvenance).toMatchObject({ method: operation === 'inline' ? 'inline_named_captures' : 'transform_named_captures',
+        declarations: [{ field: 'actor', capture: 2, offset: 8 }] });
+    const edge = result.edges.find(row => row.relation === 'may_read_extracted_field')!;
+    expect(edge.fieldProvenance?.outputDeclarations).toMatchObject([{ field: 'actor', objectId: nativeOrigin.objectId, capture: 2, offset: 8 }]);
+    expect([...collections.get('ch_edges')!.values()].find(row => row.relation === edge.relation)).toMatchObject({ field_provenance: edge.fieldProvenance });
+    expect(result.scan.collectorVersions).toMatchObject({ field_lineage: '1.1.0', dependency_analysis: '1.4.0' });
+    const cached = await splunkInventoryClient.getLatestSnapshot();
+    expect(cached?.objects.find(row => row.objectId === nativeOrigin.objectId)?.fieldLineage).toEqual(nativeOrigin.fieldLineage);
+    expect(cached?.edges.find(row => row.edgeId === edge.edgeId)?.fieldProvenance).toEqual(edge.fieldProvenance);
+    expect(JSON.stringify([...collections.get('ch_objects')!.values()])).not.toContain('synthetic-secret-pattern');
+    expect([...collections.get('ch_reviews')!.values()]).toEqual([original]);
+    expect([...collections.get('ch_review_revisions')!.values()]).toEqual([journal]);
     expect(requests.filter(row => row.method !== 'GET').every(row => row.path.includes('/storage/collections/data/') && !/\/ch_review/.test(row.path))).toBe(true);
 });
 

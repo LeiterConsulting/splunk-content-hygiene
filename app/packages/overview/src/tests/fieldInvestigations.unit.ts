@@ -37,14 +37,36 @@ test('removal analysis propagates potential field impact without field-availabil
     expect(JSON.stringify(report)).toContain('not proof');
 });
 
-test.each(['shared-static-v1', 'shared-static-v2'] as const)('field coverage expansion reads %s without rewriting a saved decision', async policy => {
+test.each(['shared-static-v1', 'shared-static-v2', 'shared-static-v3'] as const)('field coverage expansion reads %s without rewriting a saved decision', async policy => {
     const { data, calculated, saved } = await fieldInvestigationFixture();
     saved.evidenceBaseline!.evidence.coverage!.policy = policy;
     const original = JSON.stringify(saved);
     expect(parseReviewBaseline(saved.evidenceBaseline)).not.toBeNull();
-    expect(calculated.reviewEvidence?.coverage?.policy).toBe('shared-static-v3');
+    expect(calculated.reviewEvidence?.coverage?.policy).toBe('shared-static-v4');
     expect(compareReviewEvidence(saved, calculated, data.scan, now)).toMatchObject({ status: 'needs_review',
         reasons: expect.arrayContaining([expect.stringContaining('coverage policy expanded')]) });
     expect(JSON.stringify(saved)).toBe(original);
     expect(saved).toMatchObject({ stage: 'retain', note: 'Original rationale', assignedTo: 'original-team', revisionId: 'revision-1' });
+});
+
+test.each(['inline', 'named_transform'] as const)('%s declarations survive graph, required-content, impact and JSON without upgrading potential evidence', async mode => {
+    const { data, calculated, alias, extraction, transform } = await fieldInvestigationFixture(mode);
+    const origin = mode === 'inline' ? extraction : transform;
+    const edge = data.edges.find(row => row.sourceId === alias.objectId && row.targetId === extraction.objectId)!;
+    const declarations = edge.fieldProvenance!.outputDeclarations!;
+    expect(declarations).toMatchObject([{ field: 'actor', capture: 1, offset: 0, objectId: origin.objectId,
+        method: mode === 'inline' ? 'inline_named_captures' : 'transform_named_captures' }]);
+    const footprint = buildInUseReport(data, [], { selectedIds: [calculated.objectId], activity: 'none', includeRetained: false, successfulOnly: true }, now);
+    expect(footprint.rows.find(row => row.objectId === extraction.objectId)?.via).toMatchObject({ conditional: true, confidence: 'medium',
+        fieldProvenance: { outputDeclarations: declarations } });
+    const impact = analyzeRemovalImpact(origin, data.objects, data.edges, [], data.scan, 5, now);
+    const affected = impact.affectedObjects.find(row => row.objectId === alias.objectId)!;
+    expect(affected).toMatchObject({ conditional: true, confidence: 'medium', fieldProvenance: { outputDeclarations: declarations } });
+    expect(impact.readiness).toBe('blocked');
+    const index = buildDependencyIndex(data.objects, data.edges);
+    const adjacent = [...(index.inbound.get(extraction.objectId) ?? []), ...(index.outbound.get(extraction.objectId) ?? [])];
+    const graph = buildGraphModel(extraction.objectId, index, adjacent, { grouping: 'type', expandedGroups: new Map(), expandedNodes: new Set() });
+    expect(graph.links.flatMap(link => link.edges).find(row => row.edgeId === edge.edgeId)?.fieldProvenance?.outputDeclarations).toEqual(declarations);
+    expect(JSON.parse(JSON.stringify(footprint)).relationships.find((row: { edgeId: string }) => row.edgeId === edge.edgeId).fieldProvenance.outputDeclarations).toEqual(declarations);
+    expect(JSON.stringify({ footprint, impact, graph })).not.toContain('synthetic-pattern');
 });

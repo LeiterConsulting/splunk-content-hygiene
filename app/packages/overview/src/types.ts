@@ -103,6 +103,25 @@ export interface ContentObject {
 export interface FieldScope { field: 'sourcetype' | 'host' | 'source'; value: string; exact: boolean }
 export interface FieldAliasMapping { input: string; output: string; mode: 'AS' | 'ASNEW' }
 export type FieldPhase = 'extraction' | 'alias' | 'calculated' | 'lookup';
+export interface FieldOutputDeclaration {
+    field: string;
+    capture: number | null;
+    /** Zero-based UTF-16 offset in the named native attribute, not a field value. */
+    offset: number;
+    attribute: 'value' | 'REGEX' | 'FORMAT' | 'FIELDS';
+}
+export interface ExtractionOutputProvenance {
+    version: 1;
+    method: 'inline_named_captures' | 'transform_named_captures' | 'transform_format' | 'transform_fields';
+    sourceField: string | null;
+    sourceOrigin: 'default_raw' | 'explicit_inline' | 'source_key' | 'unknown';
+    regexCaptureCount: number | null;
+    declarations: FieldOutputDeclaration[];
+}
+export interface ProducerOutputDeclaration extends FieldOutputDeclaration {
+    objectId: string;
+    method: ExtractionOutputProvenance['method'];
+}
 /** Compact declared facts only: never an expression, regex, lookup row or value. */
 export interface FieldLineageFacts {
     version: 1;
@@ -118,6 +137,7 @@ export interface FieldLineageFacts {
     syntax: 'declared' | 'partial' | 'unsupported';
     sourceLocation: string;
     limitations: string[];
+    outputProvenance?: ExtractionOutputProvenance;
 }
 export interface FieldDependencyProvenance {
     version: 1;
@@ -131,6 +151,7 @@ export interface FieldDependencyProvenance {
     viaObjectIds: string[];
     contextApps: string[];
     invocation: 'fixed_app' | 'invoking_app_unverified';
+    outputDeclarations?: ProducerOutputDeclaration[];
 }
 
 export interface ConfigurationFingerprint {
@@ -149,7 +170,7 @@ export interface EvidenceCoverageDimension {
     digest: string;
 }
 export interface ReviewCoverage {
-    policy: 'shared-static-v1' | 'shared-static-v2' | 'shared-static-v3';
+    policy: 'shared-static-v1' | 'shared-static-v2' | 'shared-static-v3' | 'shared-static-v4';
     configuration: EvidenceCoverageDimension;
     access: EvidenceCoverageDimension;
     outbound: EvidenceCoverageDimension;
@@ -275,6 +296,7 @@ export interface ScanSummary {
     collectorTotals: Record<string, number>;
     /** Native entries (such as tag stanzas) can expand into many normalized records. */
     collectorNativeCounts?: Record<string, number>;
+    collectorVersions?: Record<string, string>;
     analysisStatus: 'pending' | 'complete' | 'partial' | 'failed';
     dataSource: 'live';
     snapshotVersion?: number;
