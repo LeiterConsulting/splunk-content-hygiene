@@ -27,9 +27,9 @@ the minimum is not a recommendation to downgrade or remain on an old patch.
 
 | Runtime | Purpose | Current evidence |
 | --- | --- | --- |
-| 10.2.5 | Exact minimum; classic navigation; coordinator and reported regressions | App 1.1.1 build 67: isolated Linux VM; real installed-content scan, seven pages in light/dark, live filter recovery, 1024px layouts, native 200% zoom, keyboard review/draft flow, operator-assisted VoiceOver, and parsed CSV/JSON delivery |
-| 10.2.8 | Representative 10.2 maintenance release and real-estate regression | App 1.1.1 build 67: real-data scan, seven pages in light/dark, native keyboard filter recovery and selected-object investigations; existing decisions unchanged |
-| 10.4.4 | Modern navigation, current theme host, and newer bundled runtime | App 1.1.1 build 67: real-data scan, seven pages in light/dark, live filter recovery and selected-object investigations; existing decisions unchanged |
+| 10.2.5 | Exact minimum; classic navigation; coordinator and reported regressions | App 1.3.0 build 77: isolated Linux VM; fresh bounded/full scans, native catalog/cache and schema parity, field/dependency investigations and CSV/JSON in light/dark; earlier broader 1.1.1 checks remain distinct below |
+| 10.2.8 | Representative 10.2 maintenance release and real-estate regression | App 1.3.0 build 77: real-data scans, native catalog/cache and schema parity, targeted light/dark field/dependency/Library investigations and exports; original decisions unchanged |
+| 10.4.4 | Modern navigation, current theme host, and newer bundled runtime | App 1.3.0 build 77: real-data scans, native catalog/cache and schema parity, targeted light/dark field/dependency/Library investigations and exports; original decisions unchanged |
 
 ### 1.2.0 coverage increment
 
@@ -77,6 +77,80 @@ Python-migration notice and KV Store configuration); one `app.manifest`-based
 check is skipped. The build retains webpack's
 bundle-size advisories. These are release checks, not Splunk Cloud certification
 or a production-scale performance benchmark.
+
+### 1.3.0 dependency-accuracy qualification
+
+Release build 77 is the final qualified artifact. Builds 73/74 below are earlier
+event/tag milestones, not separate released versions or installed field coverage.
+
+Checksum-identified candidate **build 73** was installed without a restart on
+Enterprise 10.2.5, 10.2.8 and 10.4.4. All native collectors completed; shared
+event-type/tag identities, disabled assignments, native-versus-normalized counts
+and edge provenance were independently compared with GET-only native catalogs.
+The analysis correctly remains partial for unsupported system inheritance,
+encoded tag values, implicit classification and invoking-app ambiguity. Complete
+collection is not complete dependency coverage.
+
+Targeted native-browser checks cover Explorer drill-down, full context, grouped
+expansion, keyboard graph pan, pagination, required-content reporting and Review
+Library in light/dark modes. Actual downloaded relationship, impact, required-
+content, coverage, scan and review CSV/JSON files were parsed and compared.
+Existing decisions, revisions and saved evidence remained unchanged; new policy
+coverage can require re-review. Empty libraries stayed empty. These are bounded
+feature checks, not a new full accessibility, backend-concurrency or production-
+scale qualification.
+
+The exact build 73 release-preparation pipeline passed 450 automated checks,
+lint, types, branding, production build and package verification. Pre-cert
+AppInspect reported zero errors, failures or future failures, three known
+advisories and one skipped manifest check, using the existing trusted-library
+cache without updating it. Bundle-size advisories remain.
+
+Candidate **build 74** verifies the follow-up status/impact wording and public
+schema contracts. Its full release-preparation pipeline passes 525 checks with
+the same AppInspect advisory scope. Fresh full scans, native/cache identity and
+state parity, original-review preservation and targeted light/dark Explorer,
+required-content and Library checks pass on all three representative runtimes.
+Rendered modes were checked explicitly rather than assuming a default preference
+meant light. Actual CSV/JSON verifies scan-count units, complete filtered export
+scope, potential-path propagation and the broadening consequence of a potential
+exclusion. Bounded graph expansion/pagination and full context retain their
+layout/contrast checks; native user appearance preferences were restored.
+
+Draft 2020-12 validation of real cached rows and the preserved exported baseline
+also passes against local-only schema references. These are data-contract checks,
+not a change to the server review protocol. Builds 73/74 do not contain installed
+field coverage.
+
+Field-lineage release **build 77** passes the full 588-check pipeline, including
+decoder/matcher, persistence, cross-view, both-theme synthetic and dense-budget
+regressions. Its exact archive passes package verification and pre-cert
+AppInspect with zero errors, failures or future failures and the same three
+known warnings and one manifest skip. Fresh bounded/full scans complete all 18
+collectors on Enterprise **10.2.5, 10.2.8 and 10.4.4**. Independent GET-only native
+comparisons verify shared identities, ACL/state, normalized versus native counts,
+compact field facts, ordered REPORT bindings and phase-qualified potential paths.
+Real cached rows and preserved historical evidence pass local-only schema checks.
+
+Targeted native light/dark checks cover field details, wrapped graph labels,
+expanded relationship provenance, long-name disclosure and the existing Review
+Library. Actual relationship, required-content, impact, scan and review downloads
+retain identity, field provenance and conditional/partial qualifications. Original
+review stages, notes, revisions and evidence baselines remain unchanged. Native
+field-specific Library saves were not added solely for validation; that rendering
+and export contract is covered by synthetic tests and the reused native detail
+component. Existing libraries were inspected without saving or reaffirming them.
+
+Classic runtimes receive one exact GET-only Web exposure for the calculated-field
+catalog. It activates through normal app installation without a restart; source
+ACL enforcement and the review backend are unchanged. No source-write methods,
+roles or capabilities are added. A cached-read timeout during an emulated
+minimum-version theme reload recovered after a healthy-state check and fresh
+reload; its failed attempt is retained separately, not counted as a passing run.
+These remain bounded compatibility checks, not full accessibility, Splunk Cloud,
+new backend-concurrency or production-scale certification. Unsupported expressions,
+regex outputs, effective precedence and implicit invocation remain explicit gaps.
+The 1.3.0 release uses the exact checksum-identified build 77 archive.
 
 ### Earlier 1.1.1 qualification
 

@@ -1,8 +1,9 @@
-import { ConfidenceLevel } from '../types';
+import { ConfidenceLevel, FieldDependencyProvenance, FieldLineageFacts } from '../types';
 import { hasUnboundedIndexScope } from './indexScope';
 
 export type ReferenceTarget =
-    'macro' | 'lookup' | 'lookup_file' | 'saved_search' | 'data_model' | 'index' | 'sourcetype' | 'automatic_lookup';
+    'macro' | 'lookup' | 'lookup_file' | 'saved_search' | 'data_model' | 'index' | 'sourcetype' | 'automatic_lookup' |
+    'event_type' | 'tag_binding' | 'field_extraction' | 'field_alias' | 'calculated_field' | 'field_transform';
 export interface EventSelector {
     field: 'sourcetype' | 'host' | 'source';
     value: string;
@@ -16,6 +17,8 @@ export interface AutomaticLookupRule {
     scopeValue: string;
     exactScope: boolean;
     disabled: boolean;
+    fieldInputs?: string[];
+    fieldInputsComplete?: boolean;
 }
 export interface ParsedReference {
     targetType: ReferenceTarget;
@@ -27,6 +30,13 @@ export interface ParsedReference {
     macroArity?: number;
     /** Invocation namespace for a potential exported automatic-lookup binding. */
     contextApp?: string;
+    /** A literal tag::<field> qualifier. A tag name alone is not a binding ID. */
+    tagField?: string;
+    /** Exact shared target selected by a bounded catalog matcher. */
+    targetObjectId?: string;
+    /** Catalog/context uncertainty must not become a missing-target assertion. */
+    resolutionUncertain?: boolean;
+    fieldProvenance?: FieldDependencyProvenance;
 }
 export interface ParsedSource {
     references: ParsedReference[];
@@ -35,6 +45,7 @@ export interface ParsedSource {
     eventSelectors?: EventSelector[];
     hasEventSearch?: boolean;
     automaticLookup?: AutomaticLookupRule;
+    fieldLineage?: FieldLineageFacts;
 }
 export interface ParserCoverageGap {
     targets: ReferenceTarget[] | 'all';
@@ -47,8 +58,11 @@ interface Token {
     offset: number;
     quoted?: boolean;
     macro?: boolean;
+    valueQuoted?: boolean;
 }
 const dynamicName = /\$[^$]+\$|\{[^{}]+\}|\*/;
+export const SPL_SOURCE_LIMIT = 1024 * 1024;
+export const KNOWLEDGE_REFERENCE_LIMIT = 250;
 
 // Quoted strings, macro bodies, and comments are indivisible. A pipe in a
 // literal must never become an executable command boundary.
@@ -134,7 +148,7 @@ function tokenize(text: string): { tokens: Token[]; warnings: string[] } {
                     index += 1;
                 }
             }
-            tokens.push({ value, offset, quoted });
+            tokens.push({ value, offset, quoted, valueQuoted: /^[^=]*!?=["']/.test(text.slice(offset, index)) });
         }
     }
     return { tokens, warnings };
@@ -185,8 +199,13 @@ const commandOptions: Record<string, Set<string>> = {
     ]),
 };
 
-export function parseSpl(sourceText: string, sourceLocation = 'search', assessIndexScope = true): ParsedSource {
+export function parseSpl(sourceText: string, sourceLocation = 'search', assessIndexScope = true, implicitEventSearch = false): ParsedSource {
+    if (sourceText.length > SPL_SOURCE_LIMIT) {
+        const message = `SPL source exceeds the ${SPL_SOURCE_LIMIT}-character parse budget; dependency coverage is unverified.`;
+        return { references: [], warnings: [message], gaps: [{ targets: 'all', message, sourceLocation }] };
+    }
     const { tokens, warnings } = tokenize(sourceText);
+    const malformedTokens = warnings.some(message => message.startsWith('Unterminated'));
     const gaps: ParserCoverageGap[] = warnings.map((message) => ({ targets: 'all', message, sourceLocation }));
     const warn = (message: string, targets: ReferenceTarget[] | 'all' = 'all'): void => {
         warnings.push(message);
@@ -229,9 +248,77 @@ export function parseSpl(sourceText: string, sourceLocation = 'search', assessIn
     let eventBased = false;
     const consumed = new Set<number>();
     const resourceArguments = new Set<number>();
+    let knowledgeReferences = 0;
     const commandStack: Array<{ command: string; negations: boolean[]; queryStart: boolean; eventBased: boolean }> = [];
     const filterCommands = new Set(['search', 'tstats', 'mstats', 'from']);
     const initialCommands = new Set([...filterCommands, 'lookup', 'inputlookup', 'outputlookup', 'savedsearch', 'datamodel']);
+    const namedKnowledge = (token: Token, index: number, excluded: boolean): boolean => {
+        // Built-in field names are exact. An unrelated EventType/TAG field is
+        // not silently treated as the lowercase search-time knowledge field.
+        const assignment = token.value.match(/^(eventtype|tag(?:::[A-Za-z_][\w.:-]*)?)(!?=)(.*)$/);
+        const field = assignment?.[1] ?? (/^(eventtype|tag(?:::[A-Za-z_][\w.:-]*)?)$/.test(token.value) ? token.value : null);
+        if (!field) { return false; }
+        const targetType: ReferenceTarget = field === 'eventtype' ? 'event_type' : 'tag_binding';
+        const inList = !assignment && tokens[index + 1]?.value.toUpperCase() === 'IN';
+        const operator = assignment?.[2] ?? tokens[index + 1]?.value.match(/^(!?=)/)?.[1];
+        if (!inList && !operator) { return false; }
+        const unavailable = (reason: string): void => warn(`${reason} at ${sourceLocation}:${token.offset}`, [targetType]);
+        if (malformedTokens) { unavailable('Malformed SPL prevents literal event-type/tag resolution'); return true; }
+        if (command !== 'search' || !eventBased) {
+            // A search filter after eval/stats/inputlookup may refer to a
+            // manufactured field, not the original event knowledge object.
+            if (command === 'search' || ['where', 'tstats', 'mstats'].includes(command)) {
+                unavailable('Event-type/tag filter context is not an established original event search');
+            }
+            return true;
+        }
+        const values: Token[] = [];
+        if (inList) {
+            if (tokens[index + 2]?.value !== '(') { unavailable('Unsupported event-type/tag IN list'); return true; }
+            let next = index + 3;
+            while (next < tokens.length && (tokens[next].quoted || !'|[]()'.includes(tokens[next].value))) {
+                if (tokens[next].quoted || tokens[next].value !== ',') { values.push(tokens[next]); }
+                next += 1;
+            }
+            if (tokens[next]?.value !== ')' || !values.length) { unavailable('Empty or unterminated event-type/tag IN list'); return true; }
+            for (let item = index + 1; item <= next; item += 1) { consumed.add(item); }
+        } else if (assignment?.[3]) {
+            values.push({ ...token, value: assignment[3], quoted: token.valueQuoted });
+        } else {
+            const operatorIndex = assignment ? index : index + 1;
+            const joined = assignment ? '' : tokens[operatorIndex]?.value.slice(operator!.length);
+            if (joined) { values.push({ ...tokens[operatorIndex], value: joined, quoted: tokens[operatorIndex].valueQuoted }); consumed.add(operatorIndex); }
+            else if (tokens[operatorIndex + 1]) {
+                const value = tokens[operatorIndex + 1];
+                values.push(value);
+                if (value.quoted || !'|[](),'.includes(value.value)) { consumed.add(operatorIndex + 1); }
+            }
+            if (!assignment) { consumed.add(operatorIndex); }
+        }
+        const negative = excluded !== (operator === '!=');
+        values.forEach((value) => {
+            if (!value.value || value.value.trim() !== value.value || value.value.length > 4096 ||
+                Array.from(value.value).some(character => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127) ||
+                /[$*?{}]/.test(value.value) || (!value.quoted &&
+                    ('|[](),'.includes(value.value) || /^(AND|OR|NOT|CASE|TERM)$/i.test(value.value)))) {
+                unavailable('Dynamic, missing or unsupported literal event-type/tag reference'); return;
+            }
+            if (knowledgeReferences >= KNOWLEDGE_REFERENCE_LIMIT) {
+                const message = `Event-type/tag reference limit (${KNOWLEDGE_REFERENCE_LIMIT}) reached; remaining names are unverified at ${sourceLocation}`;
+                if (!warnings.includes(message)) { warn(message, ['event_type', 'tag_binding']); }
+                return;
+            }
+            knowledgeReferences += 1;
+            references.push({ targetType, targetName: value.value,
+                relation: `${negative ? 'excludes' : 'matches'}_${targetType === 'event_type' ? 'event_type' : 'tag'}`,
+                confidence: 'medium', sourceLocation: `${sourceLocation}:${token.offset}`,
+                evidence: `SPL ${negative ? 'excludes' : 'matches'} literal ${field}=${value.value}; declared filter semantics, not observed execution`,
+                ...(field.startsWith('tag::') ? { tagField: field.slice(5) } : {}),
+            });
+        });
+        if (!values.length) { unavailable('Missing literal event-type/tag reference'); }
+        return true;
+    };
     const addConstraint = (field: string, token: Token | undefined, rawField = field): void => {
         if (command === 'search' && eventBased && rawField === field && ['sourcetype', 'host', 'source'].includes(field)) {
             if (token?.value && !/[$*?{}]/.test(token.value) && !/^(CASE|TERM)$/i.test(token.value) && !'|[](),'.includes(token.value)) {
@@ -337,7 +424,7 @@ export function parseSpl(sourceText: string, sourceLocation = 'search', assessIn
             // A leading free-text term is an implicit search, not a command.
             // Only a pipe (or a recognized initial generating command) changes
             // command context; filter parentheses do not become target names.
-            command = !token.value.includes('=') && (explicitCommand || initialCommands.has(name)) ? name : 'search';
+            command = !token.value.includes('=') && (explicitCommand || !implicitEventSearch && initialCommands.has(name)) ? name : 'search';
             if (queryStart) {
                 eventBased = command === 'search';
                 queryStart = false;
@@ -393,6 +480,7 @@ export function parseSpl(sourceText: string, sourceLocation = 'search', assessIn
         if (token.quoted) {
             return;
         }
+        if (namedKnowledge(token, index, excluded)) { return; }
         if (['eval', 'where', 'fieldformat'].includes(command) &&
             /(?:^|=)lookup$/i.test(token.value) && tokens[index + 1]?.value === '(') {
             resourceArguments.add(index + 2);
@@ -456,6 +544,24 @@ export function parseSpl(sourceText: string, sourceLocation = 'search', assessIn
         warn(`Implicit/default index scope is not established for every query branch at ${sourceLocation}`, ['index']);
     }
     return { references, warnings: [...new Set(warnings)], gaps, eventSelectors, hasEventSearch };
+}
+
+/** Event types are base-search definitions, not arbitrary executable pipelines. */
+export function parseEventType(text: string, sourceLocation = 'eventtypes.conf.search'): ParsedSource {
+    // Bare command-like words are search terms in an event-type definition,
+    // not an implicit savedsearch/inputlookup/datamodel execution instruction.
+    const parsed = parseSpl(text, sourceLocation, true, true);
+    const tokens = text.length <= SPL_SOURCE_LIMIT ? tokenize(text).tokens : [];
+    const invalidPipeline = tokens.some(token => !token.quoted && !token.macro && ['|', '[', ']'].includes(token.value));
+    const invalidTag = tokens.some((token, index) => !token.quoted && !token.macro &&
+        (/^tag(?:::[A-Za-z_][\w.:-]*)?(!?=)/.test(token.value) ||
+            (/^tag(?:::[A-Za-z_][\w.:-]*)?$/.test(token.value) && /^(IN|!?=)/i.test(tokens[index + 1]?.value ?? ''))));
+    if (invalidPipeline || invalidTag) {
+        const message = 'Event-type definitions cannot contain pipelines, subsearches or tag filters; returned definition is unverified.';
+        return { references: [], warnings: [...parsed.warnings, message],
+            gaps: [...(parsed.gaps ?? []), { targets: 'all', message, sourceLocation }] };
+    }
+    return parsed;
 }
 
 export function parseDashboard(text: string, sourceLocation = 'dashboard'): ParsedSource {

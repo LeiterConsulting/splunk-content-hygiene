@@ -17,6 +17,32 @@ The app keeps customer content read-only:
   collections.
 - Every finding carries reasons, evidence, and a suggested investigation step.
 
+## Version 1.3.0 — dependency accuracy
+
+[Release 1.3.0, build 77](https://github.com/LeiterConsulting/splunk-content-hygiene/releases/tag/v1.3.0) adds shared
+**Event Type** and **Tag Binding** inventory, literal inclusion/exclusion filters,
+namespace-aware resolution and explicit uncertainty through investigations,
+required-content reports, review freshness and CSV/JSON. Existing decisions and
+their captured evidence are preserved; a coverage-policy expansion can require
+explicit re-review, not automatic reaffirmation.
+
+The bounded field-lineage increment inventories shared **Field Extraction**, **Field
+Alias**, **Calculated Field** and **Field Transform** definitions. Ordered REPORT
+bindings, declared field-input paths and exact event-scope callers are explicitly
+potential. Existing object details show field names, phases and provenance;
+reports retain the same qualifications. Customer SPL, expressions and PCRE are
+never executed to infer lineage, and raw declaration bodies are not cached.
+
+Release **build 77** passes 588 automated checks, packaging and pre-cert
+AppInspect with no errors or failures (three reviewed warnings). Fresh native scans and catalog/cache
+comparisons cover Enterprise **10.2.5, 10.2.8 and 10.4.4**; targeted light/dark
+checks cover field facts, wrapped graph/context details and the existing review
+workflow. Real CSV/JSON retains potential-path provenance and partial coverage.
+Saved decisions and evidence baselines remain unchanged. Earlier candidates
+73/74 qualify event/tag coverage only; they do not contain installed field coverage.
+See the [compatibility scope](docs/COMPATIBILITY.md#130-dependency-accuracy-qualification)
+and [field-lineage investigation guide](docs/USER_GUIDE.md#declared-field-lineage-13).
+
 ## What it includes
 
 - Overview reporting for the latest live scan, including searchable, sortable,
@@ -33,6 +59,8 @@ The app keeps customer content read-only:
   remediation guidance, and relationship/impact export
 - Native automatic-lookup rule inventory, configured lookup-definition/file
   chains, and explicitly potential caller links from exact event selectors
+- Shared event-type/tag inventory and bounded declared extraction, alias,
+  calculated-field and transform lineage, with exact identities and provenance
 - A persistent Review Library with triage, investigation, owner-confirmation,
   eligibility, retain, and blocked stages, with independent review-evidence
   validity, scoped coverage, change explanations, explicit reaffirmation,
@@ -49,9 +77,11 @@ The app keeps customer content read-only:
   saved-search executions and dashboard access, with explicit complete,
   partial, and unavailable source coverage
 
-The complete scan inventories installed apps, saved searches, dashboards,
-macros, automatic lookup rules, lookup definitions and files, data models, indexes, sourcetypes, and
-users visible to the initiating Splunk user. Private objects are excluded from
+The complete scan inventories installed apps, saved searches, dashboards, macros,
+event types, tag bindings, field extractions, aliases, calculated fields,
+field transforms, automatic lookup rules, lookup definitions and files,
+data models, indexes, sourcetypes, and users visible to the initiating Splunk user.
+Private objects are excluded from
 the shared cache; access is restricted to explicit hygiene roles.
 
 ## Install
@@ -66,12 +96,12 @@ the shared cache; access is restricted to explicit hygiene roles.
    connectivity check succeeds.
 
 The support baseline is Splunk Enterprise **10.2.5 or later** on a standalone
-Linux x86-64 search head with KV Store. The 1.2 automatic-lookup increment
-(build 69) has targeted real-data qualification on 10.2.5, 10.2.8 and 10.4.4: native
-automatic-lookup collection, dependency/impact investigations, required-content
-reporting and Review Library in both themes, preserved decisions, and parsed
-representative CSV/JSON downloads. This is bounded static coverage, not execution
-telemetry or a large-estate performance benchmark.
+Linux x86-64 search head with KV Store. Release 1.3.0 **build 77** has targeted
+real-data qualification on **10.2.5, 10.2.8 and 10.4.4**: fresh bounded/full scans,
+native catalog/cache and schema comparisons, field/dependency investigations,
+required-content and removal-impact exports, and the existing Review Library in
+light/dark modes. Saved decisions and evidence baselines are preserved. This is
+bounded static coverage, not execution telemetry or a large-estate benchmark.
 
 Release 1.2.0 (build 72) adds wrapped labels, opaque
 relationship surfaces, hover/focus previews and full-context dialogs. Targeted
@@ -112,9 +142,10 @@ shared static scope matches a recent reviewed baseline—not that no hidden,
 private, dynamic, or external consumer exists. Removal-impact planning retains
 its wider, conservative blockers.
 
-After upgrading to 1.2, run a complete scan to collect automatic lookup rules.
-Follow **Automatic Lookup** entries in Explorer to their configured definition
-and file. **May apply** and **may use** links remain explicitly potential through
+After upgrading to 1.3, run a complete scan to collect the expanded shared
+event/tag and field catalogs alongside automatic lookup rules. Follow configured
+definitions and declared field paths in Explorer. **May apply**, **may read** and
+**may use** links remain explicitly potential through
 multi-hop reports, impact explanations and exports. New evidence may require
 re-review; the scan does not change your saved decision or reaffirm its baseline.
 
@@ -190,7 +221,8 @@ yarn validate
 ```
 
 The verified installable archive is written to
-`app/dist/content_hygiene-1.2.0.tar.gz`. Run `yarn release:prepare` to
+`app/dist/content_hygiene-<VERSION>.tar.gz` (currently 1.3.0, build 77).
+Run `yarn release:prepare` to
 perform the complete validation and update `SHA256SUMS`.
 
 ## Current limitations
@@ -200,6 +232,9 @@ perform the complete validation and update `SHA256SUMS`.
   matches, not observed use. Pattern scopes, other implicit props, uninventoried
   types, private/dynamic content and ad-hoc consumers remain explicit gaps. See
   [automatic lookup investigations](docs/USER_GUIDE.md#automatic-lookups-and-implicit-props).
+- Declared field-lineage paths do not establish effective values or runtime
+  use. Inline PCRE capture interpretation, unsupported expressions, cross-scope
+  precedence, alias chaining and EVAL-to-EVAL chaining are not inferred.
 - Bulk review is not atomic or an app-wide retain rule. Existing decisions are
   skipped by default; completed saves remain if later items fail or are cancelled.
 - Scans run in the initiating browser session and are not scheduled.

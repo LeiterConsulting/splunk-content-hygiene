@@ -14,6 +14,42 @@ const exactScope = (value: string): boolean => Boolean(value) &&
 const scopeKey = (field: EventSelector['field'], value: string): string =>
     `${field}\0${value.toLowerCase()}`;
 
+/** Native LOOKUP mappings contain field names, not executable expressions. */
+export function automaticLookupInputs(declaration: string): { inputs: string[]; complete: boolean } {
+    if (declaration.length > 65536) { return { inputs: [], complete: false }; }
+    const parts: Array<{ value: string; quoted: boolean }> = [];
+    const lexer = /\s*("(?:\\["\\]|[^"\\])*"|'(?:\\['\\]|[^'\\])*'|[^\s"']+)/gy;
+    let offset = 0;
+    while (offset < declaration.length && declaration.slice(offset).trim()) {
+        lexer.lastIndex = offset;
+        const match = lexer.exec(declaration);
+        if (!match || parts.length >= 1002) { return { inputs: [], complete: false }; }
+        const quoted = /^['"]/.test(match[1]);
+        const value = quoted ? match[1].slice(1, -1).replace(/\\(["'\\])/g, '$1') : match[1];
+        if (!value || /[$*?{}[\]\r\n]/.test(value)) { return { inputs: [], complete: false }; }
+        parts.push({ value, quoted }); offset = lexer.lastIndex;
+    }
+    if (parts.length < 2) { return { inputs: [], complete: false }; }
+    const inputs: string[] = []; let output = false;
+    for (let index = 1; index < parts.length; index += 1) {
+        const item = parts[index]; const keyword = item.value.toUpperCase();
+        if (!item.quoted && ['OUTPUT', 'OUTPUTNEW'].includes(keyword)) {
+            if (output || index === parts.length - 1) { return { inputs: [], complete: false }; }
+            output = true; continue;
+        }
+        if (!item.quoted && keyword === 'AS') { return { inputs: [], complete: false }; }
+        let eventField = item.value;
+        if (!parts[index + 1]?.quoted && parts[index + 1]?.value.toUpperCase() === 'AS') {
+            const renamed = parts[index + 2];
+            if (!renamed || !renamed.quoted && ['AS', 'OUTPUT', 'OUTPUTNEW'].includes(renamed.value.toUpperCase())) { return { inputs: [], complete: false }; }
+            eventField = renamed.value; index += 2;
+        }
+        if (!output) { inputs.push(eventField); }
+        if (inputs.length > 250) { return { inputs: [], complete: false }; }
+    }
+    return { inputs: [...new Set(inputs)], complete: inputs.length > 0 };
+}
+
 /** Read only the native REST handler's canonical rule fields; never execute SPL. */
 export function parseAutomaticLookup(text: string, sourceLocation: string): ParsedSource {
     const fail = (message: string): ParsedSource => ({ references: [], warnings: [message],
@@ -43,8 +79,10 @@ export function parseAutomaticLookup(text: string, sourceLocation: string): Pars
     if (!declaration || (firstName !== transform && !declaration.startsWith(`${transform} `))) {
         return fail('Automatic lookup canonical target and returned LOOKUP value disagree or are unavailable.');
     }
+    const fields = automaticLookupInputs(declaration);
     const rule: AutomaticLookupRule = { stanza, attribute, transform, scopeField, scopeValue,
-        exactScope: exactScope(scopeValue) && stanza !== 'default' && !/^(?:rule|delayedrule)::/.test(stanza), disabled };
+        exactScope: exactScope(scopeValue) && stanza !== 'default' && !/^(?:rule|delayedrule)::/.test(stanza), disabled,
+        fieldInputs: fields.inputs, fieldInputsComplete: fields.complete };
     return { warnings: [], gaps: [], automaticLookup: rule, references: disabled ? [] : [{
         targetType: 'lookup', targetName: transform, relation: 'uses_lookup', confidence: 'high',
         evidence: `props.conf [${stanza}] ${attribute} explicitly names lookup definition ${transform}; this is configuration, not proof of execution`,

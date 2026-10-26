@@ -22,7 +22,7 @@ interface ScanStatusBannerProps {
 
 function scanTitle(status: ScanSummary['status']): string {
     if (status === 'partial') {
-        return 'Live inventory cache partially updated';
+        return 'Live inventory has coverage limitations';
     }
     if (status === 'failed') {
         return 'Latest live inventory scan failed';
@@ -69,6 +69,14 @@ export function ScanStatusBanner({
                             A verified full-scan baseline is retained; a newer bounded or partial
                             check did not replace it.
                         </div>
+                    ) : null}
+                    {!['event_types', 'tag_bindings'].every(collector => Object.prototype.hasOwnProperty.call(scan.collectorCounts, collector)) ? (
+                        <div>
+                            This snapshot predates event-type/tag coverage. Run a new complete scan from Settings; existing review decisions are preserved.
+                        </div>
+                    ) : null}
+                    {!['field_extractions', 'field_aliases', 'calculated_fields', 'field_transforms'].every(collector => Object.prototype.hasOwnProperty.call(scan.collectorCounts, collector)) ? (
+                        <div>This snapshot predates field-lineage coverage. Run a new complete scan from Settings; existing decisions and baselines are unchanged.</div>
                     ) : null}
                     <ScanMeta>
                         <span>

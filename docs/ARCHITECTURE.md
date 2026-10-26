@@ -117,6 +117,55 @@ The source contracts are documented in Splunk's
 SPL case behavior is documented in
 [Use fields to search](https://help.splunk.com/en/splunk-enterprise/search/search-tutorial/9.0/part-4-searching-the-tutorial-data/use-fields-to-search).
 
+### Unreleased event-type/tag extension
+
+Native `saved/eventtypes` and `configs/conf-tags` GET catalogs provide
+authoritative per-entry ACL/namespace and paging totals. `search/tags` summaries
+are not the shared-inventory authority because their response lacks those
+contracts. Each tag assignment has its own canonical identity; stanza paging
+counts are distinct from expanded assignment counts.
+
+Bounded literal equality/IN parsing preserves include/exclude polarity.
+Name/field/namespace indexes and exact-ID resolution avoid an estate-wide target
+scan for each reference. Private shadows, duplicate exports, case collisions,
+unknown enabled states and URI-like values remain qualified rather than guessed.
+System inheritance and implicit classification are not complete. No inventoried
+SPL, regex or expression is executed to prove a relationship.
+
+Explorer, review freshness, required-content, impact and CSV/JSON share the same
+edge identities and potential-path semantics. Coverage policies v2 (event/tag)
+and v3 (field lineage) never rewrite earlier decisions or captured evidence.
+The extension uses the existing app-local cache and permissions; it adds no
+server endpoint or restart requirement.
+
+The separately bounded field-lineage increment uses four native GET catalogs:
+`data/props/extractions`, `data/props/fieldaliases`, `data/props/calcfields` and
+`data/transforms/extractions`. Strict pagination, shared ACL identity, duplicate
+omission and 10,000-entry family caps reuse existing app-local snapshot handling.
+Decoders retain compact facts rather than raw PCRE or expression bodies.
+An exact GET-only Web exposure supplies the native calculated-field collection
+route omitted by older Enterprise defaults. Native authentication/ACL checks are
+unchanged; no child wildcard, new handler/capability or source-write method is
+added. This is not a general-purpose proxy.
+
+An indexed matcher binds literal ordered REPORT targets and compatible field
+producers/consumers by exact event scope, literal field name, namespace and phase.
+REPORT output provenance is checked again in the consumer's possible app context;
+same-name local overrides with different outputs do not leave ghost exported
+producers. Calculated fields are parallel; aliases do not chain. Literal automatic
+lookup event-input mappings can depend on earlier declared field phases. Positive
+exact original-event selectors witness possible props callers without proving
+field consumption. Reusable sources do not inherit their owning app as a caller.
+Per-source/scan edges, producer-index entries and candidate visits are bounded;
+every reached ceiling adds a coverage gap. Inline PCRE, expression execution,
+cross-transform availability, full props precedence and effective values remain
+outside the supported contract. Installed/native qualification is build-specific;
+see the compatibility policy rather than treating decoder tests as runtime proof.
+
+The native shapes and search-time ordering are documented in the
+[10.2 knowledge REST reference](https://help.splunk.com/en/splunk-enterprise/rest-api-reference/10.2/knowledge-endpoints/knowledge-endpoint-descriptions)
+and [10.2 props.conf specification](https://help.splunk.com/en/splunk-enterprise/administer/admin-manual/10.2/configuration-file-reference/10.2.7-configuration-file-reference/props.conf).
+
 ## Usage evidence
 
 Usage runs are separate from inventory snapshots and reference the inventory

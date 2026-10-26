@@ -59,6 +59,56 @@ map is never proof that a rule or lookup can be removed. Review source diagnosti
 for the 250-links-per-source/50,000-per-scan matching ceilings. New evidence can
 change review validity without altering the saved decision or its baseline.
 
+## Event-type/tag coverage is missing or conditional (1.3)
+
+Check that the installed candidate contains the new collectors, then run a
+complete scan. A pre-upgrade snapshot cannot establish absence. Read the native
+entry and normalized-record counts as different units: one tag stanza can produce
+several distinct assignments. Collector denial, malformed metadata or caps remain
+warnings; do not broaden permissions or grant customer-content write access as a
+workaround.
+
+An encoded tag value is retained literally, not silently decoded into an event
+type. Shared definitions can resolve differently in an invoking app; private or
+duplicate definitions can prevent deterministic resolution. Inspect parser gaps,
+exact identities, source locations and potential-path flags in the full JSON.
+Do not rename source objects, rewrite tags or edit review collections to clear
+these warnings. See the [event-type/tag guide](USER_GUIDE.md#event-types-and-tag-bindings-unreleased-13).
+
+The expanded coverage policy can request re-review without changing a saved
+stage or baseline. An older installed candidate may predate field collection;
+decoder tests do not qualify its installed coverage.
+
+## Declared field lineage is missing or conditional (1.3)
+
+Verify the installed candidate includes the four field collectors and run a
+complete scan. Inspect native-entry versus normalized-object counts. Native props
+handlers may not expose enabled state. An unknown state is not silently enabled;
+all field paths are potential. A retained identity with unsupported syntax can
+still be valid inventory while its dependency analysis remains partial.
+
+Older Enterprise defaults can omit the calculated-field catalog from Splunk
+Web's proxy even when its management API exists. Field-enabled candidates include
+one exact GET-only exposure for `data/props/calcfields`, retaining native
+authentication/ACLs and adding no wildcard or write method. If the updated route
+has not activated, the collector stays unavailable and the prior full baseline is
+retained. Follow your approved installation/configuration activation process;
+this app does not restart Splunk or relax permissions to bypass the failure.
+
+An empty input/output list is not proof of no fields. Inline PCRE, dynamic FORMAT,
+unsupported calculated functions, routing/index-time transforms and pattern scopes
+remain explicit gaps. Literal REPORT lists retain order and repeats, but a missing
+shared target does not establish breakage when private/system inheritance or
+namespace overrides are unverified. Check full context and CSV/JSON provenance;
+do not change source configuration or broaden permissions to remove a warning.
+
+Same field names in unrelated event scopes are not joined. Local overrides can
+suppress exported producers even when the local declaration names different
+outputs. EVAL definitions run in parallel; lookup outputs are later and cannot
+feed them. Alias chaining and cross-transform input availability are not inferred.
+Narrow an investigation if a producer/index/candidate ceiling is reached; omitted
+edges remain unverified. See the [field guide](USER_GUIDE.md#declared-field-lineage-unreleased-13).
+
 ## A dependency link cannot show its requested object
 
 Version 1.0.2 preserves the requested identity rather than opening an unrelated

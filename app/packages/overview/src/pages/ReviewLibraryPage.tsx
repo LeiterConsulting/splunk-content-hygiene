@@ -26,6 +26,7 @@ import { ResultPagination } from '../components/ResultPagination';
 import { PageHeader } from '../components/PageHeader';
 import { ReviewEditor } from '../components/ReviewEditor';
 import { ExportMenu } from '../components/ExportMenu';
+import { FieldLineagePanel } from '../components/FieldLineagePanel';
 import { WorkspaceTabs } from '../components/WorkspaceTabs';
 import { ReviewHistoryPanel } from '../components/ReviewHistoryPanel';
 import { useReviewNavigation } from '../components/ReviewNavigationContext';
@@ -138,6 +139,7 @@ function exportReviews(rows: ReviewRecord[], objectById: Map<string, ContentObje
             'Updated by',
             'Library state', 'Revision', 'Revision ID', 'Persistence warning',
             'Coverage policy', 'Configuration coverage', 'ACL coverage', 'Outbound coverage', 'Inbound coverage',
+            'Current declared field facts',
         ],
         rows.map((review) => [
             review.objectId,
@@ -175,6 +177,7 @@ function exportReviews(rows: ReviewRecord[], objectById: Map<string, ContentObje
             freshness.get(review.objectId)?.current?.coverage?.access.status ?? 'unavailable',
             freshness.get(review.objectId)?.current?.coverage?.outbound.status ?? 'unavailable',
             freshness.get(review.objectId)?.current?.coverage?.inbound.status ?? 'unavailable',
+            objectById.get(review.objectId)?.fieldLineage ? JSON.stringify(objectById.get(review.objectId)!.fieldLineage) : '',
         ]),
     );
 }
@@ -582,7 +585,7 @@ export function ReviewLibraryPage({
                                     onClick={() => navigate(() => navigateToView('candidates', { object: selectedReview.objectId }))}>View candidate evidence</StyledButton>
                                 <ExportMenu label="Export this review" items={[
                                     { label: 'Selected review CSV', onClick: () => exportReviews([selectedReview], objectById, freshness, Boolean(snapshot)) },
-                                    { label: 'Selected review JSON', onClick: () => downloadJson('content-hygiene-review.json', { exportedAt: new Date().toISOString(), review: selectedReview, reviewEvidenceStatus: freshness.get(selectedReview.objectId) }) },
+                                    { label: 'Selected review JSON', onClick: () => downloadJson('content-hygiene-review.json', { exportedAt: new Date().toISOString(), review: selectedReview, currentObject: objectById.get(selectedReview.objectId) ?? null, reviewEvidenceStatus: freshness.get(selectedReview.objectId) }) },
                                 ]} />
                             </ButtonRow>
                         </WorkspaceHeader>
@@ -645,6 +648,7 @@ export function ReviewLibraryPage({
                                 <dt>Last updated</dt>
                                 <dd>{formatDateTime(selectedReview.updatedAt)}</dd>
                             </FactGrid>
+                            <FieldLineagePanel object={selectedObject} />
                             <UsageEvidencePanel contentObject={selectedObject} />
                         </WorkspaceTabs.Panel>
                         <WorkspaceTabs.Panel panelId="history" label="Revision history">

@@ -70,7 +70,7 @@ test('a normalization policy upgrade is not labeled as a definite configuration 
 async function attachReviewEvidence(objects: ContentObject[], edges: DependencyEdge[], input: ReviewEvidenceScope): Promise<ContentObject[]> {
     const parent = { ...object('app::search'), objectType: 'App', canonicalName: 'search' };
     const collectors = Object.fromEntries(['apps', 'macros', 'dashboards', 'lookup_definitions', 'lookup_files',
-        'saved_searches', 'data_models', 'indexes', 'sourcetypes'].map((name) => [name, input.collectionComplete]));
+        'saved_searches', 'data_models', 'indexes', 'sourcetypes', 'event_types', 'tag_bindings'].map((name) => [name, input.collectionComplete]));
     const result = await attachEvidence([...objects, parent], edges, { ...input, coverageContext: {
         collectors, privateObjects: [], identityKnown: true,
         gaps: input.analysisComplete ? [] : [{ sourceId: objects[0].objectId, app: 'search',

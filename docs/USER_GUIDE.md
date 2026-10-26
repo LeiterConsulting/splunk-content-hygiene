@@ -173,10 +173,10 @@ compact parent/root IDs; export coverage CSV alongside it. A filtered CSV is
 explicitly labeled and is not the full dependency footprint.
 
 This is always a **partial shared static footprint**, not a complete migration
-manifest. Review the listed gaps: event types, tags, field extractions/aliases,
-calculated fields, non-lookup transforms, workflow actions, navigation menus and
-other implicit props.conf dependencies are not inventoried/resolved. Automatic
-lookups have bounded potential coverage described below, not runtime closure. Private,
+manifest. Release 1.3 adds bounded shared event-type/tag and declared field-lineage
+coverage described below. Workflow actions, navigation menus and complete
+effective props behavior remain outside inventory/analysis coverage. Automatic
+lookups and declared field paths have bounded potential coverage, not runtime closure. Private,
 dynamic, external and ad-hoc consumers may require more content. Missing activity
 or absence from this list never establishes inactivity or removal eligibility.
 
@@ -190,6 +190,74 @@ Filters can restrict the center objects and related results by cleanup group or
 Review Library stage. Select a resolved related object to continue the
 investigation as a multi-step drill-through. Cross-view links preserve the
 selected object context.
+
+### Event types and tag bindings (1.3)
+
+Run a **complete scan** after upgrading to 1.3.
+An older snapshot requests that scan instead of inventing missing coverage.
+Event Type identities include their app namespace. A Tag Binding is one specific
+tag assignment to a native field/value stanza; it is not a single object shared
+by every use of the tag's name. Scan reports distinguish native stanzas from the
+assignment records produced from them.
+
+Explorer retains literal equality/IN filters and their inclusion or exclusion
+meaning, including field-qualified tag filters. **May** links are conditional:
+disabled/unknown-state targets, encoded values, exported reusable definitions and
+invoking-app context cannot establish a single proven runtime binding. Literal
+tag-to-event-type declarations can be followed through the existing drill-down,
+impact and required-content actions. Inspect full relationship context for source
+locations and qualifications; exports retain the same identity and semantics.
+
+Private definitions are excluded. Ambiguous namespaces, system inheritance,
+wildcards, dynamic names, transformed-event contexts and encoded field values
+remain explicit gaps. The app neither evaluates event classification nor silently
+decodes a different target identity. No graph match is proof of execution; no
+missing edge is proof of non-use. Inclusion and exclusion both matter when
+assessing removal: a lost exclusion can broaden results if that binding applies.
+
+Saved Library stages, notes, assignments, revisions and evidence baselines are
+unchanged by scans. Moving from the earlier coverage policy to the expanded
+policy can require **Needs re-review**; inspect the changes and explicitly reaffirm
+only after investigation. Do not edit review KV rows to force a Current badge.
+
+### Declared field lineage (1.3)
+
+Run a complete scan after upgrading to 1.3. Explorer can select **Field
+Extraction**, **Field Alias**, **Calculated Field** and **Field Transform** objects
+using their exact native name and app namespace. Use **Selected object** for the
+declared scope, inputs/outputs, processing phase, AS/ASNEW assignments, ordered
+REPORT targets and native source location. Long field lists expand through a
+keyboard-accessible Splunk disclosure. Review Library shows the same facts under
+**Object & usage details**, without changing a saved decision.
+
+REPORT references retain every one-based list position, including repeated
+targets. Potential input paths connect compatible exact event scopes and visible
+namespaces: extraction → alias → calculated → lookup. Calculated EVAL definitions
+run in parallel; the app does not invent calculated-to-calculated or alias-to-
+alias chains. Literal transform outputs can identify a possible REPORT producer;
+opaque inline regex captures are not guessed or executed. Constants have a known
+output but no invented input field. Unsupported expressions retain the output
+identity and an explicit input-lineage gap.
+
+**May apply** links from positive exact original-event selectors identify possible
+scope callers, not proven output-field consumption. Negative/wildcard selectors,
+transformed or post-process event streams, and reusable owning-app assumptions do
+not create these links. Exported definitions can have multiple possible invoking
+app contexts; private shadows, missing metadata, duplicate targets and omitted
+system inheritance remain unverified rather than proven broken references.
+
+Open graph **Details** for the matched field names, phases, transform provenance,
+REPORT positions and namespace qualification. Required-content and removal-impact
+paths retain their weakest confidence and remain conditional through subsequent
+hops. CSV/JSON include compact declared facts and field provenance. No expression
+body, regex, lookup row or customer field value is included as lineage evidence.
+An empty output list means the supported decoder did not establish names—not that
+the definition produces nothing. No path or missing path approves removal.
+
+Field-enabled scans use `shared-static-v3`; earlier v1/v2 reviews remain readable
+and unchanged. Investigate the expanded coverage before explicitly reaffirming a
+decision. Full props precedence, cross-scope interactions, regex matching, effective
+values, dynamic expressions and runtime execution are not established.
 
 ### Automatic lookups and implicit props
 

@@ -29,3 +29,16 @@ test('all seven app views use the native theme-inheriting host, including the re
     });
     expect(read('src/main/webapp/bootstrap.ts')).toContain("InUseContent: 'in-use-content'");
 });
+
+test('the legacy calculated-field Web route exposes only the exact native read catalog', () => {
+    const config = read('src/main/resources/splunk/default/web.conf');
+    const body = config.split('[expose:content_hygiene_calculated_field_catalog]')[1]?.split(/\n\[/)[0];
+    expect(body).toBeDefined();
+    expect(body).toMatch(/^pattern = data\/props\/calcfields$/m);
+    expect(body).toMatch(/^methods = GET$/m);
+    expect(body).not.toContain('*');
+    expect(body).not.toMatch(/POST|DELETE|PUT|skipCSRFProtection|oidEnabled|allowRemoteProxy/);
+    // No new Splunk capability, REST handler or source-content write role.
+    expect(read('src/main/resources/splunk/default/authorize.conf')).not.toContain('calcfields');
+    expect(read('src/main/resources/splunk/default/restmap.conf')).not.toContain('calcfields');
+});

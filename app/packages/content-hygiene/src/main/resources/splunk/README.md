@@ -8,7 +8,8 @@ This app does not delete, disable, reassign, archive, or rewrite customer
 objects. Settings includes an explicit bounded metadata inventory that persists
 normalized records and scan status in application-owned KV Store collections.
 The complete scan paginates supported REST endpoints, extracts explicit SPL and
-dashboard dependencies plus native automatic lookup rules, and stores conservative findings. Every view reads the
+dashboard dependencies, native automatic lookup rules and bounded shared
+event-type/tag/field metadata, and stores conservative findings. Every view reads the
 latest live KV Store snapshot. On-demand usage scans can add attributable
 saved-search and dashboard observations plus explicit source coverage from
 native Splunk telemetry. Missing or partial evidence remains unknown; the
@@ -43,11 +44,28 @@ Version 1.2 adds native read-only `LOOKUP-*` rule inventory, configured
 lookup-definition/file chains and potential caller links from positive exact
 event selectors. “May apply”/“may use” paths are configuration possibilities,
 not observed execution. That distinction propagates through required-content,
-removal-impact and CSV/JSON reports. Pattern scopes, props precedence, renames,
-input fields, reusable invocation context and other props families remain
-unverified. Run a complete scan after upgrading. Saved decisions, notes,
+removal-impact and CSV/JSON reports. That original increment did not establish
+pattern scopes, props precedence, renames, input fields, reusable invocation
+context or other props families. Run a complete scan after upgrading. Saved decisions, notes,
 assignees and evidence baselines are preserved; changed evidence needs explicit
 investigation/reaffirmation. No customer objects or permissions are changed.
+
+The 1.3 candidate adds shared Event Type and Tag Binding identities with bounded
+literal include/exclude relationships, plus Field Extraction, Field Alias,
+Calculated Field and Field Transform inventory. Ordered REPORT targets and
+phase-qualified declared field inputs are potential, not execution evidence.
+Field paths respect extraction -> alias -> parallel calculated fields -> lookup;
+alias and EVAL chains are not invented. Existing object details and CSV/JSON show
+compact names, scope, positions, provenance and limitations. Raw expressions,
+regex, lookup rows and field values are not cached as lineage evidence.
+
+Coverage policy shared-static-v3 reads earlier v1/v2 reviews without migrating or
+reaffirming them. Run a new complete scan, inspect expanded evidence and explicitly
+reaffirm only after investigation. Unknown enabled state, private/system
+inheritance, pattern scopes, opaque PCRE, unsupported expressions, props precedence
+and effective field availability remain unverified. Empty field-name lists are
+not proof a declaration produces or consumes nothing. Build-specific runtime and
+theme qualification is documented in the repository compatibility policy.
 
 ## Requirements
 

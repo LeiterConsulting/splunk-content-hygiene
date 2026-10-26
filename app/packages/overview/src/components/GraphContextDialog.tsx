@@ -7,6 +7,7 @@ import { DependencyIndex, GraphLink, GraphNode } from '../services/dependencyGra
 import { isPotentialRelation } from '../utils/dependencySemantics';
 import { ResultPagination } from './ResultPagination';
 import { StatusBadge } from './StatusBadge';
+import { FieldLineagePanel, FieldProvenanceDetails } from './FieldLineagePanel';
 
 const ContextFacts = styled(DefinitionList)`
     grid-template-columns: minmax(90px, 0.3fr) minmax(0, 1fr);
@@ -93,6 +94,7 @@ export function GraphContextDialog({
                                 </>
                             ) : null}
                         </ContextFacts>
+                        {!node.memberIds && index.objects.get(node.id) ? <FieldLineagePanel object={index.objects.get(node.id)!} /> : null}
                         {!node.resolved && !node.memberIds ? (
                             <InlineNotice>
                                 This target is unresolved. Its label and status are captured
@@ -147,7 +149,7 @@ export function GraphContextDialog({
                         </ContextFacts>
                         <InlineNotice>
                             {references.some((edge) => isPotentialRelation(edge.relation))
-                                ? 'Potential implicit relationship — not observed execution. Confirm props precedence, field availability and invoking-app context before treating this as a runtime dependency.'
+                                ? 'Potential implicit relationship — not observed execution. Confirm active state, exact field/value assignment, props precedence, field availability and invoking-app context before treating this as a runtime dependency.'
                                 : 'Captured static relationship — not proof of runtime execution or removal eligibility.'}
                         </InlineNotice>
                         <p>
@@ -202,6 +204,7 @@ export function GraphContextDialog({
                                                     : 'Unresolved in the captured catalog'}
                                             </dd>
                                         </ContextFacts>
+                                        <FieldProvenanceDetails provenance={edge.fieldProvenance} />
                                     </li>
                                 ))}
                         </ContextList>

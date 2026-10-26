@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import Tooltip from '@splunk/react-ui/Tooltip';
 import styled from 'styled-components';
 import { variables } from '@splunk/themes';
@@ -250,14 +250,22 @@ export function DependencyGraph({
     const hidePreview = (id: string): void => {
         setPreviewId((current) => current === id ? null : current);
     };
+    const returnContextFocus = useCallback(() => {
+        if (contextTrigger.current?.isConnected) {
+            contextTrigger.current.focus();
+        } else {
+            viewport.current?.focus();
+        }
+    }, []);
     useEffect(() => {
         // Invalidate a dismissed selection once, so returning to an earlier
         // filter cannot reopen a dialog without a new user action. Its visible
         // context/open state is already derived above; unchanged paths stay open.
         if (contextSelection?.open && !contextNode && !contextLink) {
-            setContextSelection((current) => current && { ...current, open: false });
+            setContextSelection(null);
+            returnContextFocus();
         }
-    }, [contextSelection?.open, contextNode, contextLink]);
+    }, [contextSelection?.open, contextNode, contextLink, returnContextFocus]);
     const fit = (): void => {
         setZoom(1);
         const node = nodeById.get(inspectedId) ?? nodeById.get(center.objectId);
@@ -534,7 +542,7 @@ export function DependencyGraph({
                     ))}
                 </Artboard>
             </Viewport>
-            <GraphContextDialog
+            {context ? <GraphContextDialog
                 key={`${contextSelection?.kind}:${contextSelection?.id}`}
                 context={context}
                 open={Boolean(contextSelection?.open && (contextNode || contextLink))}
@@ -543,14 +551,8 @@ export function DependencyGraph({
                     setContextSelection((current) => current && { ...current, open: false })
                 }
                 onInspect={onInspect}
-                returnFocus={() => {
-                    if (contextTrigger.current?.isConnected) {
-                        contextTrigger.current.focus();
-                    } else {
-                        viewport.current?.focus();
-                    }
-                }}
-            />
+                returnFocus={returnContextFocus}
+            /> : null}
         </>
     );
 }

@@ -33,6 +33,7 @@ import { PageHeader } from '../components/PageHeader';
 import { RemovalImpactPanel } from '../components/RemovalImpactPanel';
 import { ReviewEditor } from '../components/ReviewEditor';
 import { ExportMenu } from '../components/ExportMenu';
+import { FieldLineagePanel } from '../components/FieldLineagePanel';
 import { useReviewNavigation } from '../components/ReviewNavigationContext';
 import { ReviewStageBadge } from '../components/ReviewStageBadge';
 import { ReviewFreshnessBadge, ReviewFreshnessPanel } from '../components/ReviewFreshnessPanel';
@@ -176,6 +177,7 @@ function exportRelationships(
             'Resolved',
             'Evidence',
             'Source location',
+            'Field relationship provenance', 'Center declared field facts', 'Related declared field facts',
         ],
         rows.map((row) => [
             selected.objectId,
@@ -198,6 +200,9 @@ function exportRelationships(
             row.edge.resolved,
             row.edge.evidence,
             row.edge.sourceLocation,
+            row.edge.fieldProvenance ? JSON.stringify(row.edge.fieldProvenance) : '',
+            selected.fieldLineage ? JSON.stringify(selected.fieldLineage) : '',
+            row.contentObject?.fieldLineage ? JSON.stringify(row.contentObject.fieldLineage) : '',
         ]),
     );
 }
@@ -231,6 +236,7 @@ function exportRemovalImpact(selected: ContentObject, analysis: RemovalImpactAna
             'Likely outcome',
             'Path contains potential implicit relationship',
             'Evidence',
+            'Field relationship provenance', 'Selected declared field facts', 'Affected declared field facts',
         ],
         rows.map((affected) => [
             selected.objectId,
@@ -257,6 +263,9 @@ function exportRemovalImpact(selected: ContentObject, analysis: RemovalImpactAna
             affected?.likelyOutcome ?? '',
             affected?.conditional ?? false,
             affected?.evidence ?? '',
+            affected?.fieldProvenance ? JSON.stringify(affected.fieldProvenance) : '',
+            selected.fieldLineage ? JSON.stringify(selected.fieldLineage) : '',
+            affected?.fieldLineage ? JSON.stringify(affected.fieldLineage) : '',
         ]),
     );
 }
@@ -727,10 +736,10 @@ export function DependencyPage({
                                 {reviewByObject.has(selected.objectId) ? <StyledButton onClick={() => navigate(() => navigateToView('reviews', { object: selected.objectId }))}>Open center in review library</StyledButton> : null}
                             </ButtonRow>
                         </WorkspaceHeader>
-                        {selected.objectType === 'Automatic Lookup' || relatedRows.some((row) => isPotentialRelation(row.edge.relation)) ? (
+                        {selected.fieldLineage || ['Automatic Lookup', 'Event Type', 'Tag Binding'].includes(selected.objectType) || relatedRows.some((row) => isPotentialRelation(row.edge.relation)) ? (
                             <InlineNotice>
                                 <strong>Configuration is not execution evidence</strong>
-                                <p>Automatic lookup rules define search-time enrichment. “May apply” and “may use” links are potential event-scope or invoking-app matches. Confirm props precedence, renames, fields and namespace overrides before treating a path as a runtime dependency.</p>
+                                <p>Automatic lookups, event types, tag assignments and declared field processing are configured search-time knowledge. “Matches” and “excludes” preserve declared filter semantics; they do not establish observed use. “May” links are potential event-scope, field-input, inactive-state or invoking-app bindings. Confirm effective permissions, namespace overrides, props precedence and field availability before treating a path as a runtime dependency.</p>
                             </InlineNotice>
                         ) : null}
                     </Card>
@@ -976,6 +985,7 @@ export function DependencyPage({
                                     ) : null}
                                 </DetailSection>
                                 <DetailSection>
+                                    <FieldLineagePanel object={detail} />
                                     <UsageEvidencePanel contentObject={detail} />
                                 </DetailSection>
                                 <DetailSection>

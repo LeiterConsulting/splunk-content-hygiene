@@ -157,6 +157,9 @@ export function SettingsPage({
                                         'Usage coverage',
                                         'Usage window days',
                                         'Usage observed objects',
+                                        'Normalized collector records',
+                                        'Collected native entries',
+                                        'Visible native entries',
                                     ],
                                     displayedScan
                                         ? [
@@ -176,6 +179,9 @@ export function SettingsPage({
                                                   snapshot?.usage?.coverage ?? '',
                                                   snapshot?.usage?.windowDays ?? '',
                                                   snapshot?.usage?.observedObjectCount ?? '',
+                                                  JSON.stringify(displayedScan.collectorCounts),
+                                                  JSON.stringify(displayedScan.collectorNativeCounts ?? {}),
+                                                  JSON.stringify(displayedScan.collectorTotals),
                                               ],
                                           ]
                                         : [],
@@ -413,8 +419,8 @@ export function SettingsPage({
                         </CardHeader>
                         <CardBody>
                             <DefinitionList>
-                                <dt>Verified target</dt>
-                                <dd>Splunk Enterprise 10.2.8 and 10.4.4 (browser-validated)</dd>
+                                <dt>Support baseline</dt>
+                                <dd>Splunk Enterprise 10.2.5 or later; see the compatibility policy for exact tested builds.</dd>
                                 <dt>Frontend</dt>
                                 <dd>Splunk UI Toolkit / React</dd>
                                 <dt>App ID</dt>
@@ -444,28 +450,33 @@ export function SettingsPage({
                                 <thead>
                                     <tr>
                                         <th scope="col">Collector</th>
-                                        <th scope="col">Cached records</th>
-                                        <th scope="col">Visible records</th>
+                                        <th scope="col">Collected native entries</th>
+                                        <th scope="col">Visible native entries</th>
+                                        <th scope="col">Normalized records</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {Object.entries(displayedScan.collectorCounts).map(
                                         ([collector, count]) => (
                                             <tr key={collector}>
-                                                <td>{collector.replace(/_/g, ' ')}</td>
-                                                <td>{count.toLocaleString()}</td>
+                                                <td>{collector === 'tag_bindings' ? 'tag binding stanzas' : collector.replace(/_/g, ' ')}</td>
+                                                <td>{displayedScan.collectorNativeCounts?.[collector]?.toLocaleString() ?? '—'}</td>
                                                 <td>
                                                     {(
                                                         displayedScan.collectorTotals[collector] ??
                                                         count
                                                     ).toLocaleString()}
                                                 </td>
+                                                <td>{count.toLocaleString()}</td>
                                             </tr>
                                         ),
                                     )}
                                 </tbody>
                             </Table>
                         </TableScroller>
+                        <CardBody>
+                            Native entries and normalized records are different units: a tag stanza can produce several assignment objects. Private or unsupported entries are excluded from the shared inventory. Earlier snapshots did not record native-entry counts.
+                        </CardBody>
                     </Card>
                 </SpacedBlock>
             ) : null}

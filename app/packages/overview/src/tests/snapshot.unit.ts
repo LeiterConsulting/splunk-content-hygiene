@@ -1,5 +1,6 @@
 /* eslint-disable no-underscore-dangle -- Splunk KV Store defines the _key protocol field. */
 import { splunkInventoryClient } from '../services/inventory';
+import { field as declaredField } from './fieldFixtures';
 
 jest.mock('@splunk/splunk-utils/config', () => ({ username: 'operator', splunkdPath: '/splunkd' }));
 jest.mock('@splunk/splunk-utils/fetch', () => ({ createFetchInit: (init: RequestInit) => init }));
@@ -15,6 +16,14 @@ const collections = new Map<string, Map<string, Row>>();
 let failEdges = false;
 let failAutomatic = false;
 let automaticEntries: Row[] = [];
+let eventTypeEntries: Row[] = [];
+let tagEntries: Row[] = [];
+let failKnowledge = false;
+let fieldEntries: Record<string, Row[]> = {};
+let failFields = false;
+let fieldPaging: 'normal' | 'repeat' | 'missing_total' | 'shrinking_total' = 'normal';
+let tagPaging: 'normal' | 'repeat' | 'missing_total' | 'shrinking_total' = 'normal';
+let sourceSearch = '| makeresults';
 let requests: Array<{ path: string; method: string; query?: string | null; fields?: string | null; offset?: string | null }> = [];
 const reply = (data: unknown, status = 200): Response =>
     ({ status, text: async () => JSON.stringify(data), json: async () => data }) as Response;
@@ -32,6 +41,14 @@ beforeEach(() => {
     failEdges = false;
     failAutomatic = false;
     automaticEntries = [];
+    eventTypeEntries = [];
+    tagEntries = [];
+    failKnowledge = false;
+    fieldEntries = {};
+    failFields = false;
+    fieldPaging = 'normal';
+    tagPaging = 'normal';
+    sourceSearch = '| makeresults';
     requests = [];
     globalThis.fetch = jest.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
         if (init.signal?.aborted) {
@@ -112,6 +129,23 @@ beforeEach(() => {
             content: { disabled: false },
         };
         let entries: Row[] = [];
+        const fieldEndpoint = ['data/props/extractions', 'data/props/fieldaliases', 'data/props/calcfields', 'data/transforms/extractions'].find(endpoint => url.pathname.endsWith(`/${endpoint}`));
+        if (fieldEndpoint) {
+            if (failFields) { return reply({}, 403); }
+            const rows = fieldEntries[fieldEndpoint] ?? [];
+            const offset = fieldPaging === 'repeat' ? 0 : Number(url.searchParams.get('offset') ?? 0); const count = Number(url.searchParams.get('count') ?? 200);
+            return reply({ entry: rows.slice(offset, offset + count),
+                ...(fieldPaging === 'missing_total' ? {} : { paging: { total: fieldPaging === 'shrinking_total' && offset > 0 ? rows.length - 1 : rows.length } }) });
+        }
+        if (url.pathname.endsWith('/saved/eventtypes') || url.pathname.endsWith('/configs/conf-tags')) {
+            if (failKnowledge) { return reply({}, 403); }
+            const tags = url.pathname.endsWith('/configs/conf-tags');
+            const rows = tags ? tagEntries : eventTypeEntries;
+            const offset = tags && tagPaging === 'repeat' ? 0 : Number(url.searchParams.get('offset') ?? 0);
+            const count = Number(url.searchParams.get('count') ?? 200);
+            return reply({ entry: rows.slice(offset, offset + count),
+                ...(tags && tagPaging === 'missing_total' ? {} : { paging: { total: tags && tagPaging === 'shrinking_total' && offset > 0 ? rows.length - 1 : rows.length } }) });
+        }
         if (url.pathname.endsWith('/data/props/lookups')) {
             if (failAutomatic) { return reply({}, 403); }
             const offset = Number(url.searchParams.get('offset') ?? 0);
@@ -126,7 +160,7 @@ beforeEach(() => {
                 {
                     ...app,
                     name: 'Daily',
-                    content: { disabled: false, search: '| makeresults', is_scheduled: false, 'dispatch.earliest_time': '-24h' },
+                    content: { disabled: false, search: sourceSearch, is_scheduled: false, 'dispatch.earliest_time': '-24h' },
                 },
                 {
                     ...app,
@@ -141,6 +175,72 @@ beforeEach(() => {
         }
         return reply({ entry: entries, paging: { total: entries.length } });
     }) as jest.Mock;
+});
+
+test('native field catalogs persist compact facts and exact edge provenance with GET-only customer requests', async () => {
+    const transform = declaredField('field_transforms', 'extract_actor', 'actor::$1');
+    const report = declaredField('field_extractions', 'REPORT-actor', 'extract_actor extract_actor');
+    const alias = declaredField('field_aliases', 'FIELDALIAS-actor', 'actor ASNEW principal');
+    const calc = declaredField('calculated_fields', 'EVAL-normalized', 'coalesce(principal,"private_literal_must_not_be_cached")');
+    fieldEntries = { 'data/transforms/extractions': [transform.entry], 'data/props/extractions': [report.entry],
+        'data/props/fieldaliases': [alias.entry], 'data/props/calcfields': [calc.entry] };
+    sourceSearch = 'sourcetype=example:events';
+    const original = { _key: 'original', object_id: 'original', stage: 'retain', note: 'Unchanged original review' };
+    collections.set('ch_reviews', new Map([['original', original]]));
+    const result = await splunkInventoryClient.runFullScan();
+    expect(result.scan.collectorCounts).toMatchObject({ field_extractions: 1, field_aliases: 1, calculated_fields: 1, field_transforms: 1 });
+    expect(result.objects.find(row => row.objectType === 'Calculated Field')?.fieldLineage).toMatchObject({ inputs: ['principal'], outputs: ['normalized'], syntax: 'declared' });
+    const edge = result.edges.find(row => row.relation === 'may_use_field_transform');
+    expect(edge?.fieldProvenance).toMatchObject({ transformPositions: [1, 2], contextApps: ['example'] });
+    const storedEdge = [...collections.get('ch_edges')!.values()].find(row => row.relation === 'may_use_field_transform');
+    expect(storedEdge).toMatchObject({ field_provenance: edge?.fieldProvenance });
+    const stored = JSON.stringify([...collections.get('ch_objects')!.values()]);
+    expect(stored).not.toContain('private_literal_must_not_be_cached');
+    expect(stored).not.toContain('coalesce(');
+    expect(stored).not.toContain('actor::$1');
+    expect(result.objects.find(row => row.objectType === 'Calculated Field')?.reviewEvidence?.coverage?.policy).toBe('shared-static-v3');
+    expect([...collections.get('ch_reviews')!.values()]).toEqual([original]);
+    expect(requests.filter(row => row.method !== 'GET').every(row => row.path.includes('/storage/collections/data/') && !/\/ch_review/.test(row.path))).toBe(true);
+});
+
+test('field native pagination separates shared records and excluded private entries and a denial retains the full baseline', async () => {
+    fieldEntries['data/props/fieldaliases'] = Array.from({ length: 201 }, (_unused, index) => {
+        const definition = declaredField('field_aliases', `FIELDALIAS-example-${index}`, 'actor.name ASNEW principal');
+        return { ...definition.entry, acl: { ...definition.entry.acl, sharing: index === 200 ? 'user' : 'app' } };
+    });
+    const result = await splunkInventoryClient.runFullScan();
+    expect(result.scan.collectorCounts.field_aliases).toBe(200);
+    expect(result.scan.collectorTotals.field_aliases).toBe(201);
+    expect(result.scan.collectorNativeCounts?.field_aliases).toBe(201);
+    expect(requests.filter(row => row.path.endsWith('/data/props/fieldaliases')).map(row => row.offset)).toEqual(['0', '200']);
+    expect(JSON.stringify([...collections.get('ch_objects')!.values()])).not.toContain('FIELDALIAS-example-200');
+    failFields = true;
+    const partial = await splunkInventoryClient.runFullScan();
+    expect(partial.scan.scanId).toBe(result.scan.scanId);
+    expect(partial.scan.retainedBaseline).toBe(true);
+    expect(partial.latestCheck?.warnings.join(' ')).toContain('Field aliases (props)');
+});
+
+test('an excluded private transform with an unavailable app cannot establish a shared REPORT binding', async () => {
+    const transform = declaredField('field_transforms', 'extract_actor', 'actor::$1');
+    const report = declaredField('field_extractions', 'REPORT-actor', 'extract_actor');
+    const privateRow = { ...transform.entry, acl: { ...transform.entry.acl, app: '', sharing: 'user' } };
+    fieldEntries = { 'data/transforms/extractions': [transform.entry, privateRow], 'data/props/extractions': [report.entry] };
+    const result = await splunkInventoryClient.runFullScan();
+    expect(result.edges.find(row => row.relation === 'may_use_field_transform')).toMatchObject({ resolved: false, confidence: 'unknown' });
+    expect(result.objects.find(row => row.objectType === 'Field Extraction')?.healthStatus).not.toBe('broken');
+    expect(result.scan.warnings.join(' ')).toContain('private object(s) excluded');
+});
+
+test.each(['missing_total', 'repeat', 'shrinking_total'] as const)('strict field paging cannot replace a verified baseline: %s', async mode => {
+    const first = await splunkInventoryClient.runFullScan();
+    fieldEntries['data/props/fieldaliases'] = Array.from({ length: 201 }, (_value, index) => declaredField('field_aliases', `FIELDALIAS-${index}`, 'actor AS principal').entry);
+    fieldPaging = mode;
+    const result = await splunkInventoryClient.runFullScan();
+    expect(result.scan.scanId).toBe(first.scan.scanId);
+    expect(result.scan.retainedBaseline).toBe(true);
+    expect(result.latestCheck?.warnings.join(' ')).toContain('Field aliases (props)');
+    expect(result.latestCheck?.analysisStatus).toBe('partial');
 });
 
 test('native automatic lookup collection paginates, excludes private identities, fingerprints mappings and never stores raw declarations', async () => {
@@ -171,6 +271,73 @@ test('a failed automatic lookup collector cannot replace a complete published ba
     expect(partial.scan.retainedBaseline).toBe(true);
     expect(partial.latestCheck?.warnings.join(' ')).toContain('Automatic lookup rules (props)');
     expect(partial.latestCheck?.analysisStatus).toBe('partial');
+});
+
+test('native event-type/tag scans preserve reviews, separate stanza/object counts and keep customer content GET-only', async () => {
+    const acl = { app: 'example', owner: 'nobody', sharing: 'app', perms: { read: ['user'], write: ['admin'] } };
+    eventTypeEntries = [
+        { name: 'Purchase', acl, content: { search: 'sourcetype=events sensitive_source_payload=example', disabled: '0' } },
+        { name: 'private-sensitive-event-type', acl: { ...acl, sharing: 'user' }, content: { search: '*', disabled: '0' } },
+    ];
+    tagEntries = [
+        { name: 'eventtype=Purchase', acl, content: { disabled: '0', commerce: 'enabled', retired: 'disabled' } },
+        { name: 'eventtype=private-sensitive-event-type', acl: { ...acl, sharing: 'user' }, content: { disabled: '0', privateTag: 'enabled' } },
+    ];
+    sourceSearch = 'eventtype=Purchase tag=commerce';
+    const legacy = { _key: 'original', stage: 'retain', note: 'Preserve this decision' };
+    const journal = { _key: 'revision', revision_id: 'original', stage: 'retain', note: 'Preserve history' };
+    collections.set('ch_reviews', new Map([['original', legacy]]));
+    collections.set('ch_review_revisions', new Map([['revision', journal]]));
+    const before = JSON.stringify([legacy, journal]);
+    const result = await splunkInventoryClient.runFullScan();
+    expect(result.scan.collectorCounts).toMatchObject({ event_types: 1, tag_bindings: 2 });
+    expect(result.scan.collectorNativeCounts).toMatchObject({ event_types: 2, tag_bindings: 2 });
+    expect(result.scan.collectorTotals).toMatchObject({ event_types: 2, tag_bindings: 2 });
+    const event = result.objects.find(row => row.objectType === 'Event Type')!;
+    const tags = result.objects.filter(row => row.objectType === 'Tag Binding');
+    expect(event.objectId).toBe('event_type::example::Purchase');
+    expect(tags).toHaveLength(2);
+    expect(result.edges).toEqual(expect.arrayContaining([
+        expect.objectContaining({ relation: 'matches_event_type', targetId: event.objectId, resolved: true }),
+        expect.objectContaining({ relation: 'matches_tag', targetId: tags.find(row => row.enabled === true)!.objectId, resolved: true }),
+        expect.objectContaining({ relation: 'tags_event_type', targetId: event.objectId, resolved: true }),
+        expect.objectContaining({ relation: 'may_tag_event_type', targetId: event.objectId, resolved: true }),
+    ]));
+    const persisted = JSON.stringify([...collections.get('ch_objects')!.values()]);
+    expect(persisted).not.toContain('private-sensitive');
+    expect(persisted).not.toContain('sensitive_source_payload');
+    expect(JSON.stringify([collections.get('ch_reviews')!.get('original'), collections.get('ch_review_revisions')!.get('revision')])).toBe(before);
+    expect(requests.filter(row => row.path.endsWith('/saved/eventtypes') || row.path.endsWith('/configs/conf-tags')).every(row => row.method === 'GET')).toBe(true);
+    expect(requests.some(row => row.path.endsWith('/search/jobs'))).toBe(false);
+    expect(requests.filter(row => row.method !== 'GET').every(row => row.path.includes('/storage/collections/data/'))).toBe(true);
+});
+
+test.each(['missing_total', 'repeat', 'shrinking_total'] as const)('unqualified native tag paging cannot replace a verified baseline: %s', async (mode) => {
+    const first = await splunkInventoryClient.runFullScan();
+    tagEntries = Array.from({ length: 201 }, (_value, index) => ({ name: `host=example${index}`,
+        acl: { app: 'example', owner: 'nobody', sharing: 'app' }, content: { disabled: '0', exampleTag: 'enabled' } }));
+    tagPaging = mode;
+    const result = await splunkInventoryClient.runFullScan();
+    expect(result.scan.scanId).toBe(first.scan.scanId);
+    expect(result.scan.retainedBaseline).toBe(true);
+    expect(result.latestCheck?.warnings.join(' ')).toMatch(/Tag binding stanzas/);
+    expect(result.latestCheck?.analysisStatus).toBe('partial');
+});
+
+test('an unavailable new catalog retains the old baseline, while semantic gaps alone do not hide newly collected objects', async () => {
+    const first = await splunkInventoryClient.runFullScan();
+    failKnowledge = true;
+    const failed = await splunkInventoryClient.runFullScan();
+    expect(failed.scan.scanId).toBe(first.scan.scanId);
+    failKnowledge = false;
+    eventTypeEntries = [{ name: 'builtin', acl: { app: 'system', owner: 'nobody', sharing: 'system' }, content: { disabled: '0', search: '*' } }];
+    tagEntries = [{ name: 'eventtype=Example%20Encoded', acl: { app: 'example', owner: 'nobody', sharing: 'app' },
+        content: { disabled: '0', exampleTag: 'enabled' } }];
+    const semantic = await splunkInventoryClient.runFullScan();
+    expect(semantic.scan.scanId).not.toBe(first.scan.scanId);
+    expect(semantic.objects.some(row => row.objectType === 'Tag Binding')).toBe(true);
+    expect(semantic.scan.analysisStatus).toBe('partial');
+    expect(semantic.edges.some(row => row.relation === 'tags_event_type')).toBe(false);
 });
 
 test('interrupted persistence and cancellation preserve the complete baseline; bounded scans cannot replace it', async () => {

@@ -29,6 +29,23 @@
         "uses_lookup",
         "may_use_lookup",
         "may_apply_automatic_lookup",
+        "matches_event_type",
+        "excludes_event_type",
+        "matches_tag",
+        "excludes_tag",
+        "tags_event_type",
+        "may_match_event_type",
+        "may_exclude_event_type",
+        "may_match_tag",
+        "may_exclude_tag",
+        "may_tag_event_type",
+        "may_use_field_transform",
+        "may_read_extracted_field",
+        "may_read_aliased_field",
+        "may_read_calculated_field",
+        "may_apply_field_extraction",
+        "may_apply_field_alias",
+        "may_apply_calculated_field",
         "reads",
         "writes",
         "invokes",
@@ -60,6 +77,7 @@
     "resolved": {
       "type": "boolean"
     },
+    "field_provenance": { "$ref": "field-lineage.schema.json#/$defs/provenance" },
     "scan_id": {
       "type": [
         "string",

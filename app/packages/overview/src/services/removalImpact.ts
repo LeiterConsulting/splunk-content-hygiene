@@ -36,6 +36,8 @@ export interface ImpactedObject {
     likelyOutcome: string;
     resolved: boolean;
     protected: boolean;
+    fieldProvenance?: DependencyEdge['fieldProvenance'];
+    fieldLineage?: ContentObject['fieldLineage'];
 }
 
 export interface DependencyFollowUp {
@@ -134,6 +136,32 @@ function likelyOutcome(
             return `${dependentLabel} may lose automatically enriched fields if its events match this props rule and the lookup executes. Confirm event scope, precedence and field availability before assuming an impact.`;
         case 'may_use_lookup':
             return `${dependentLabel} may bind this lookup definition in an invoking app. Confirm the effective app namespace and overrides before assuming this is the runtime target.`;
+        case 'may_use_field_transform':
+            return `${dependentLabel} declares this transform in an ordered REPORT list. Removing it may change extracted fields when that scope and binding apply. Check every native list position, invoking app and override; configuration is not proof of regex matching or execution.`;
+        case 'may_read_extracted_field':
+        case 'may_read_aliased_field':
+        case 'may_read_calculated_field':
+            return `${dependentLabel} declares input field(s) ${edge.fieldProvenance?.fields.join(', ') || 'with recorded producer provenance'} that may come from this earlier field-processing definition. Removing it can change derived values or enrichment if the fields are supplied at runtime. Check exact scope, processing phase, AS/ASNEW semantics and competing definitions; no field availability is assumed.`;
+        case 'may_apply_field_extraction':
+        case 'may_apply_field_alias':
+        case 'may_apply_calculated_field':
+            return `${dependentLabel} has a positive exact event selector compatible with this field-processing scope. Removal may change available fields or derived values, but the selector alone proves neither field consumption nor execution. Validate scope, permissions, precedence and actual input/output use.`;
+        case 'matches_event_type':
+        case 'matches_tag':
+            return `${dependentLabel} explicitly selects events through this ${dependencyType}. Removing its definition or assignment can change which events match; a configured filter is not observed execution.`;
+        case 'excludes_event_type':
+        case 'excludes_tag':
+            return `${dependentLabel} explicitly excludes events through this ${dependencyType}. Removing it can broaden or otherwise change results; exclusion is a dependency, not proof that this object is unnecessary.`;
+        case 'tags_event_type':
+            return `${dependentLabel} assigns a tag to this event type. Removing the definition can remove that classification from tagged searches and data-model constraints.`;
+        case 'may_match_event_type':
+        case 'may_match_tag':
+            return `${dependentLabel} may select events through this ${dependencyType} relationship. If the binding applies at runtime, removing it can narrow or otherwise change results. Confirm the invoking app, active state and exact field/value assignment; this is not observed execution.`;
+        case 'may_exclude_event_type':
+        case 'may_exclude_tag':
+            return `${dependentLabel} may exclude events through this ${dependencyType} relationship. If the binding applies at runtime, removing it can broaden or otherwise change results; exclusion does not make the object unnecessary. Confirm the invoking app, active state and exact field/value assignment.`;
+        case 'may_tag_event_type':
+            return `${dependentLabel} may assign a tag through this event-type binding. If the binding applies at runtime, removing the definition can remove classification used by tagged searches or data-model constraints. Confirm the invoking app, active state and exact field/value assignment.`;
         case 'references':
         case 'invokes':
             return `${dependentLabel} may fail to load or execute when its ${dependencyType} reference is no longer available.`;
@@ -152,6 +180,13 @@ function likelyOutcome(
 
 function typeSpecificPreparation(selected: ContentObject): string {
     switch (selected.objectType) {
+        case 'Field Extraction':
+        case 'Field Transform':
+            return 'Inspect the exact props scope, every ordered REPORT position and declared field-output consumers. Validate effective transforms and representative read-only searches; opaque PCRE capture lineage is not established before retiring configuration through supported Splunk controls.';
+        case 'Field Alias':
+            return 'Confirm original and alias field consumers, exact props scope, AS replacement/removal versus ASNEW preservation, and competing aliases. A declared name does not establish field availability; migrate consumers before retiring the alias through supported Splunk controls.';
+        case 'Calculated Field':
+            return 'Inspect declared inputs, consumers and exact props scope. EVAL definitions run in parallel, not as a chain, and cannot depend on fields added later by lookups. Validate equivalent values with read-only searches before retiring the declaration through supported Splunk controls.';
         case 'Dashboard':
             return 'Confirm navigation links, embedded references, scheduled delivery, and owner communications before retiring the dashboard through supported Splunk controls.';
         case 'Saved Search':
@@ -163,6 +198,10 @@ function typeSpecificPreparation(selected: ContentObject): string {
             return 'Migrate lookup readers and writers together, validate field compatibility, and confirm refresh ownership before retiring the lookup.';
         case 'Automatic Lookup':
             return 'Review the props LOOKUP class and event scope, effective invoking-app definition, input/output fields, precedence and all potential callers before changing automatic enrichment through a separate approved process.';
+        case 'Event Type':
+            return 'Review literal inclusion and exclusion filters, tag assignments, data-model constraints, macro callers and inherited app scope. Validate replacement classification through a separate approved change with rollback; do not assume a missing usage record makes the definition unused.';
+        case 'Tag Binding':
+            return 'Review this exact app, tag and field/value assignment rather than every same-name tag. Check qualified and unqualified tag searches, data-model constraints, disabled overrides and the referenced event type before any separate approved change.';
         case 'Data Model':
             return 'Migrate searches, pivots, and acceleration consumers and preserve rollback details before retiring the data model.';
         case 'Index':
@@ -298,6 +337,8 @@ export function analyzeRemovalImpact(
                     )}`,
                     resolved: Boolean(dependent) && edge.resolved,
                     protected: dependent?.protected ?? false,
+                    ...(edge.fieldProvenance ? { fieldProvenance: edge.fieldProvenance } : {}),
+                    ...(dependent?.fieldLineage ? { fieldLineage: dependent.fieldLineage } : {}),
                 };
                 affectedObjects.push(impacted);
                 queue.push({
@@ -537,7 +578,7 @@ export function analyzeRemovalImpact(
 
     const caveats = [
         'This is a read-only simulation from the latest persisted live scan; it does not remove or modify Splunk content.',
-        'Supported explicit relationships and labeled potential automatic lookup matches are included. Other implicit props, dynamic SPL, tokens, navigation links, external integrations, and unobserved usage can add impact.',
+        'Supported explicit relationships, literal event-type/tag filters and labeled potential field/props bindings are included. Implicit classification, opaque PCRE, unsupported expressions, effective field availability, props precedence, dynamic SPL, tokens, navigation links, external integrations and unobserved usage can add impact.',
     ];
     if (potentialAffectedCount > 0 || outboundEdges.some((edge) => isPotentialRelation(edge.relation))) {
         caveats.push('Potential implicit paths are possibilities, not confirmed consumers or observed execution. Verify props precedence, renames, field availability and invoking-app bindings before remediation decisions.');

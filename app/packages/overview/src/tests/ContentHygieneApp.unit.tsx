@@ -561,7 +561,7 @@ test('runs a bounded live inventory from Settings and exposes its provenance', a
     expect(screen.getByText('Live inventory cache ready')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Run complete live scan' })).toBeEnabled();
     expect(
-        screen.getByText('Splunk Enterprise 10.2.8 and 10.4.4 (browser-validated)')
+        screen.getByText('Splunk Enterprise 10.2.5 or later; see the compatibility policy for exact tested builds.')
     ).toBeInTheDocument();
 });
 

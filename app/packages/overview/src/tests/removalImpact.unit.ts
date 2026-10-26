@@ -253,7 +253,7 @@ test('allows controlled change planning only after graph and review prerequisite
     const acl = { app: 'search', owner: 'analyst', sharing: 'app', perms: { read: ['user'], write: ['admin'] } };
     selected.configurationFingerprint = configurationFingerprint({ search: '| makeresults' }, acl);
     const parent = contentObject('app::search', 'Search', 'App', { configurationFingerprint: configurationFingerprint({}, acl) });
-    const collectors = Object.fromEntries(['apps', 'macros', 'dashboards', 'lookup_definitions', 'lookup_files', 'saved_searches', 'data_models', 'indexes', 'sourcetypes'].map((name) => [name, true]));
+    const collectors = Object.fromEntries(['apps', 'macros', 'dashboards', 'lookup_definitions', 'lookup_files', 'saved_searches', 'data_models', 'indexes', 'sourcetypes', 'event_types', 'tag_bindings'].map((name) => [name, true]));
     [selected.reviewEvidence] = (await attachReviewEvidence([selected, parent], [], {
         scanId: completeScan.scanId, observedAt: completeScan.startedAt, principal: 'operator',
         roles: ['operator'], mode: 'full', collectionComplete: true, analysisComplete: true, collectors: {},

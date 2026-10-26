@@ -1,4 +1,4 @@
-import { ContentFinding, ContentObject, DependencyEdge, FindingType } from '../types';
+import { ContentFinding, ContentObject, DependencyEdge, FieldLineageFacts, FindingType } from '../types';
 import {
     ParsedReference,
     ReferenceTarget,
@@ -6,21 +6,25 @@ import {
     parseDashboard,
     parseSpl,
     parseDataModel,
+    parseEventType,
 } from './dependencyParser';
 import { PrivateObjectCount, SourceCoverageGap } from './dependencyCoverage';
 import { buildAutomaticLookupMatcher, parseAutomaticLookup } from './automaticLookups';
-import { isPotentialRelation } from '../utils/dependencySemantics';
+import { isPotentialRelation, weakestDependencyConfidence } from '../utils/dependencySemantics';
+import { buildKnowledgeReferenceMatcher, parseTagBinding } from './knowledgeReferences';
+import { buildFieldDependencyMatcher, FIELD_TARGETS } from './fieldDependencies';
 
 export { extractSplReferences, extractDashboardReferences } from './dependencyParser';
 export type { ParsedReference } from './dependencyParser';
 
 export interface RawAnalysisSource {
     objectId: string;
-    kind: 'spl' | 'dashboard' | 'lookup' | 'data_model' | 'automatic_lookup';
+    kind: 'spl' | 'dashboard' | 'lookup' | 'data_model' | 'automatic_lookup' | 'event_type' | 'tag_binding' | 'field_lineage';
     text: string;
     sourceLocation: string;
     failure?: string;
     failureTargets?: ReferenceTarget[] | 'all';
+    fieldLineage?: FieldLineageFacts;
 }
 export interface AnalysisCompleteness {
     macros: boolean;
@@ -31,6 +35,12 @@ export interface AnalysisCompleteness {
     indexes: boolean;
     sourcetypes: boolean;
     automatic_lookups?: boolean;
+    event_types?: boolean;
+    tag_bindings?: boolean;
+    field_extractions?: boolean;
+    field_aliases?: boolean;
+    calculated_fields?: boolean;
+    field_transforms?: boolean;
 }
 export interface InventoryAnalysis {
     objects: ContentObject[];
@@ -43,12 +53,13 @@ export interface InventoryAnalysis {
 export interface AnalysisVisibility {
     privateObjects: PrivateObjectCount[];
     privateTargets?: Array<{ collector: string; app: string; name: string }>;
+    privateTargetGaps?: Array<{ collector: string; app: string }>;
 }
 interface Resolution {
     object: ContentObject | null;
     ambiguous: boolean;
 }
-type ReferenceIndex = Map<string, ContentObject[]>;
+interface ReferenceIndex { names: Map<string, ContentObject[]>; objects: Map<string, ContentObject> }
 
 function objectGroup(objectType: string): ReferenceTarget | null {
     if (objectType === 'Macro') {
@@ -73,6 +84,12 @@ function objectGroup(objectType: string): ReferenceTarget | null {
         return 'sourcetype';
     }
     if (objectType === 'Automatic Lookup') { return 'automatic_lookup'; }
+    if (objectType === 'Event Type') { return 'event_type'; }
+    if (objectType === 'Tag Binding') { return 'tag_binding'; }
+    if (objectType === 'Field Extraction') { return 'field_extraction'; }
+    if (objectType === 'Field Alias') { return 'field_alias'; }
+    if (objectType === 'Calculated Field') { return 'calculated_field'; }
+    if (objectType === 'Field Transform') { return 'field_transform'; }
     return null;
 }
 
@@ -82,8 +99,8 @@ function referenceKey(type: ReferenceTarget, name: string, arity = 0): string {
         : `${type}::${name}`;
 }
 
-function buildReferenceIndex(objects: ContentObject[]): ReferenceIndex {
-    const index: ReferenceIndex = new Map();
+function buildReferenceIndex(objects: ContentObject[], byId: Map<string, ContentObject>): ReferenceIndex {
+    const index = new Map<string, ContentObject[]>();
     objects.forEach((contentObject) => {
         const group = objectGroup(contentObject.objectType);
         if (!group) {
@@ -95,7 +112,7 @@ function buildReferenceIndex(objects: ContentObject[]): ReferenceIndex {
         matches.push(contentObject);
         index.set(key, matches);
     });
-    return index;
+    return { names: index, objects: byId };
 }
 
 function resolveReference(
@@ -103,14 +120,30 @@ function resolveReference(
     source: ContentObject,
     index: ReferenceIndex,
 ): Resolution {
+    if (reference.resolutionUncertain) { return { object: null, ambiguous: true }; }
+    if (reference.targetType === 'tag_binding' && !reference.targetObjectId) {
+        // Raw tag names must never collide with a JSON binding identity. Only
+        // the bounded field/value matcher can select exact assignment objects.
+        return { object: null, ambiguous: false };
+    }
+    if (source.objectType === 'Event Type' && source.sharing === 'global' && !reference.contextApp &&
+        !['index', 'sourcetype'].includes(reference.targetType)) {
+        return { object: null, ambiguous: true };
+    }
     const app = reference.contextApp ?? source.app;
+    if (reference.targetObjectId) {
+        const target = index.objects.get(reference.targetObjectId);
+        const visible = target && objectGroup(target.objectType) === reference.targetType &&
+            ['app', 'global'].includes(target.sharing ?? '') && (target.app === app || target.sharing === 'global');
+        return { object: visible ? target : null, ambiguous: !visible };
+    }
     const primary =
-        index.get(referenceKey(reference.targetType, reference.targetName, reference.macroArity)) ??
+        index.names.get(referenceKey(reference.targetType, reference.targetName, reference.macroArity)) ??
         [];
     // SPL accepts a CSV file or a same-named definition. Do not guess if both apply.
     const alternatives =
         reference.targetType === 'lookup_file' && reference.relation !== 'uses_file'
-            ? (index.get(referenceKey('lookup', reference.targetName)) ?? [])
+            ? (index.names.get(referenceKey('lookup', reference.targetName)) ?? [])
             : [];
     const candidates = [...primary, ...alternatives];
     const sameApp = candidates.filter((item) => item.app === app);
@@ -141,7 +174,14 @@ function parseSource(source: RawAnalysisSource): ParsedSource {
         return { references: [], warnings: [source.failure],
             gaps: [{ targets: source.failureTargets ?? 'all', message: source.failure, sourceLocation: source.sourceLocation }] };
     }
+    if (source.kind === 'field_lineage') {
+        return source.fieldLineage ? { references: [], warnings: [], gaps: [], fieldLineage: source.fieldLineage }
+            : { references: [], warnings: ['Compact field metadata is unavailable.'],
+                gaps: [{ targets: FIELD_TARGETS, message: 'Compact field metadata is unavailable.', sourceLocation: source.sourceLocation }] };
+    }
     if (source.kind === 'automatic_lookup') { return parseAutomaticLookup(source.text, source.sourceLocation); }
+    if (source.kind === 'event_type') { return parseEventType(source.text, source.sourceLocation); }
+    if (source.kind === 'tag_binding') { return parseTagBinding(source.text, source.sourceLocation); }
     if (source.kind === 'data_model') { return parseDataModel(source.text, source.sourceLocation); }
     if (source.kind === 'lookup') {
         return {
@@ -183,6 +223,10 @@ function targetCoverageComplete(
         index: 'indexes',
         sourcetype: 'sourcetypes',
         automatic_lookup: 'automatic_lookups',
+        event_type: 'event_types',
+        tag_binding: 'tag_bindings',
+        field_extraction: 'field_extractions', field_alias: 'field_aliases',
+        calculated_field: 'calculated_fields', field_transform: 'field_transforms',
     };
     return completeness[collectorByTarget[targetType]] === true;
 }
@@ -248,7 +292,7 @@ export function analyzeInventory(
     const objectById = new Map(
         objects.map((contentObject) => [contentObject.objectId, contentObject]),
     );
-    const referenceIndex = buildReferenceIndex(objects);
+    const referenceIndex = buildReferenceIndex(objects, objectById);
     const parserWarnings: string[] = [];
     const edgeByKey = new Map<string, DependencyEdge>();
     const assertedMissingBySource = new Map<string, string[]>();
@@ -260,20 +304,38 @@ export function analyzeInventory(
     const privateCounts = new Map(visibility?.privateObjects.map((row) => [`${row.collector}\0${row.app}`, row.count]) ?? []);
     const privateAnyNames = new Set(visibility?.privateTargets?.map((row) => `${row.collector}\0${row.name}`) ?? []);
     const privateAnyCollectors = new Set(visibility?.privateObjects.filter((row) => row.count > 0).map((row) => row.collector) ?? []);
+    const privateTargetGaps = new Set(visibility?.privateTargetGaps?.map(row => `${row.collector}\0${row.app}`) ?? []);
+    const privateTargetGapCollectors = new Set(visibility?.privateTargetGaps?.map(row => row.collector) ?? []);
     const collectorByTarget: Record<ReferenceTarget, string> = {
         macro: 'macros', lookup: 'lookup_definitions', lookup_file: 'lookup_files', saved_search: 'saved_searches',
         data_model: 'data_models', index: 'indexes', sourcetype: 'sourcetypes', automatic_lookup: 'automatic_lookups',
+        event_type: 'event_types', tag_binding: 'tag_bindings',
+        field_extraction: 'field_extractions', field_alias: 'field_aliases',
+        calculated_field: 'calculated_fields', field_transform: 'field_transforms',
     };
     const sourceParses = parsedSources ?? new Map<RawAnalysisSource, ParsedSource>();
     sources.forEach((source) => { if (!sourceParses.has(source)) { sourceParses.set(source, parseSource(source)); } });
     const automaticRules = sources.flatMap((source) => {
         const object = objectById.get(source.objectId); const rule = sourceParses.get(source)?.automaticLookup;
+        if (object && rule) {
+            const facts: FieldLineageFacts = { version: 1, operation: 'lookup', stanza: rule.stanza, attribute: rule.attribute,
+                scope: { field: rule.scopeField, value: rule.scopeValue, exact: rule.exactScope }, enabled: object.enabled,
+                inputs: rule.fieldInputs ?? [], outputs: [], aliases: [], transforms: [],
+                syntax: rule.fieldInputsComplete ? 'declared' : 'unsupported', sourceLocation: source.sourceLocation,
+                limitations: ['Only lookup event-input mappings are assessed; lookup outputs and later field-processing lineage are not inferred.',
+                    ...(rule.fieldInputsComplete ? [] : ['Automatic lookup input mappings are outside the supported literal subset; field-input lineage is unverified.'])] };
+            object.fieldLineage = facts;
+            sourceParses.set(source, { ...sourceParses.get(source)!, fieldLineage: facts });
+        }
         return object && rule ? [{ object, rule }] : [];
     });
     const automatic = buildAutomaticLookupMatcher(automaticRules, objects, {
         complete: completeness.automatic_lookups === true,
         privatePossible: visibility?.privateObjects.some((row) => row.collector === 'automatic_lookups' && row.count > 0) ?? false,
     });
+    const knowledgeReferences = buildKnowledgeReferenceMatcher(objects, visibility);
+    const fieldReferences = buildFieldDependencyMatcher(objects,
+        [completeness.field_extractions, completeness.field_aliases, completeness.calculated_fields, completeness.field_transforms].every(value => value === true), visibility);
     const parserCounts: Record<string, number> = {
         spl: 0,
         dashboard: 0,
@@ -282,12 +344,12 @@ export function analyzeInventory(
 
     sources.forEach((source) => {
         const sourceObject = objectById.get(source.objectId);
-        if (!sourceObject || (!source.text.trim() && !source.failure)) {
+        if (!sourceObject || (!source.text.trim() && !source.failure && !source.fieldLineage)) {
             return;
         }
         const original = sourceParses.get(source)!;
-        const parsed = source.kind === 'automatic_lookup'
-            ? automatic.bindings(sourceObject, original) : automatic.callers(sourceObject, original);
+        const parsed = fieldReferences(sourceObject, knowledgeReferences(sourceObject, source.kind === 'automatic_lookup'
+            ? automatic.bindings(sourceObject, original) : automatic.callers(sourceObject, original)));
         if (parsed.automaticLookup) {
             const rule = parsed.automaticLookup;
             sourceObject.evidence.push(`Search-time props rule: [${rule.stanza}] ${rule.attribute}; lookup definition ${rule.transform}.`,
@@ -296,13 +358,15 @@ export function analyzeInventory(
         }
         const { references } = parsed;
         const gaps = parsed.gaps ?? parsed.warnings.map((message) => ({ targets: 'all' as const, message, sourceLocation: source.sourceLocation }));
-        coverageGaps.push(...gaps.map((gap) => ({ ...gap, sourceId: source.objectId, app: sourceObject.app })));
+        const invocationNamespaceUnverified = ['Macro', 'Data Model', 'Event Type', 'Tag Binding', 'Field Extraction', 'Field Alias', 'Calculated Field', 'Field Transform', 'Automatic Lookup'].includes(sourceObject.objectType) && sourceObject.sharing === 'global';
+        coverageGaps.push(...gaps.map((gap) => ({ ...gap, sourceId: source.objectId, app: sourceObject.app,
+            ...(invocationNamespaceUnverified ? { invocationNamespaceUnverified: true } : {}) })));
         if (parsed.warnings.length) {
             dynamicSources.add(source.objectId);
-            sourceObject.analysisWarnings = [
+            sourceObject.analysisWarnings = uniqueEvidence([
                 ...(sourceObject.analysisWarnings ?? []),
                 ...parsed.warnings,
-            ];
+            ]);
             parserWarnings.push(
                 ...parsed.warnings.map((warning) => `${sourceObject.name}: ${warning}`),
             );
@@ -319,6 +383,8 @@ export function analyzeInventory(
             // when a different invoking app can supply the named definition.
             if (exportedAutomatic && !resolution.object) { resolution.ambiguous = true; }
             const privatePossible = targetCollectors.some((collector) => {
+                if (privateTargetGaps.has(`${collector}\0${contextApp}`) || privateTargetGaps.has(`${collector}\0unknown`) ||
+                    (exportedAutomatic && privateTargetGapCollectors.has(collector))) { return true; }
                 if (visibility?.privateTargets) {
                     return exportedAutomatic ? privateAnyNames.has(`${collector}\0${reference.targetName}`)
                         : privateNames.has(privateNameKey(collector, contextApp, reference.targetName, reference.macroArity));
@@ -327,9 +393,11 @@ export function analyzeInventory(
                     : (privateCounts.get(`${collector}\0${contextApp}`) ?? 0) > 0;
             });
             if (privatePossible) { resolution.object = null; resolution.ambiguous = true; }
+            const missingName = reference.targetType === 'tag_binding'
+                ? `tag${reference.tagField ? `::${reference.tagField}` : ''}=${reference.targetName}` : reference.targetName;
             const targetId =
                 resolution.object?.objectId ??
-                missingTargetId(reference.targetType, contextApp, reference.targetName);
+                missingTargetId(reference.targetType, contextApp, missingName);
             const resolved = Boolean(resolution.object);
             const coverageComplete =
                 targetCoverageComplete(reference.targetType, completeness) &&
@@ -342,7 +410,8 @@ export function analyzeInventory(
                     targets: reference.targetType === 'lookup_file' && reference.relation !== 'uses_file'
                         ? ['lookup_file', 'lookup'] : [reference.targetType],
                     targetName: reference.targetName, sourceLocation: reference.sourceLocation,
-                    message: 'Namespace visibility or multiple candidates prevent deterministic target resolution.' });
+                    message: 'Namespace visibility or multiple candidates prevent deterministic target resolution.',
+                    ...(invocationNamespaceUnverified ? { invocationNamespaceUnverified: true } : {}) });
             }
             let { confidence } = reference;
             if (resolution.ambiguous || (!resolved && (!coverageComplete || isPotentialRelation(reference.relation)))) {
@@ -350,7 +419,7 @@ export function analyzeInventory(
             } else if (
                 resolved &&
                 resolution.object &&
-                resolution.object.app !== sourceObject.app &&
+                resolution.object.app !== contextApp &&
                 resolution.object.sharing !== 'global'
             ) {
                 confidence = 'low';
@@ -376,15 +445,29 @@ export function analyzeInventory(
                 evidence,
                 sourceLocation: reference.sourceLocation,
                 resolved,
+                ...(reference.fieldProvenance ? { fieldProvenance: { ...reference.fieldProvenance,
+                    fields: [...new Set(reference.fieldProvenance.fields)].sort(),
+                    viaObjectIds: [...new Set(reference.fieldProvenance.viaObjectIds)].sort(),
+                    contextApps: [...new Set(reference.fieldProvenance.contextApps)].sort() } } : {}),
             };
             const edgeKey = [edge.sourceId, edge.targetId, edge.relation].join('|');
             const previous = edgeByKey.get(edgeKey);
             if (previous) {
+                edge.confidence = weakestDependencyConfidence(previous.confidence, edge.confidence);
                 edge.evidence = uniqueEvidence([previous.evidence, edge.evidence]).join('; ');
                 edge.sourceLocation = uniqueEvidence([
                     ...(previous.sourceLocation ?? '').split('; '),
                     edge.sourceLocation ?? '',
                 ]).join('; ');
+                if (previous.fieldProvenance && edge.fieldProvenance) {
+                    const before = previous.fieldProvenance; const current = edge.fieldProvenance;
+                    edge.fieldProvenance = { ...current,
+                        fields: uniqueEvidence([...before.fields, ...current.fields]).sort().slice(0, 250),
+                        transformPositions: [...new Set([...before.transformPositions, ...current.transformPositions])].sort((a, b) => a - b).slice(0, 250),
+                        viaObjectIds: uniqueEvidence([...before.viaObjectIds, ...current.viaObjectIds]).sort().slice(0, 250),
+                        contextApps: uniqueEvidence([...before.contextApps, ...current.contextApps]).sort().slice(0, 250),
+                        invocation: before.invocation === 'invoking_app_unverified' ? before.invocation : current.invocation };
+                }
             }
             edgeByKey.set(edgeKey, edge);
             if (!resolved) {

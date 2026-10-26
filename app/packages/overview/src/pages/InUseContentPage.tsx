@@ -88,6 +88,7 @@ function exportRows(report: InUseReport, rows: InUseRow[], scope: string): void 
             'Report coverage',
             'Traversal truncated',
             'Scope limitations',
+            'Declared field facts', 'Field witness provenance',
         ],
         rows.map((row) => {
             const retained = row.reasons.find((reason) => reason.kind === 'retained');
@@ -121,6 +122,8 @@ function exportRows(report: InUseReport, rows: InUseRow[], scope: string): void 
                 report.coverage,
                 report.truncated,
                 'Shared static footprint only; potential props paths are conditional, not proof of execution. Other implicit, private, dynamic and ad-hoc consumers remain unverified. Export coverage CSV or full JSON for diagnostics.',
+                row.fieldLineage ? JSON.stringify(row.fieldLineage) : '',
+                row.via?.fieldProvenance ? JSON.stringify(row.via.fieldProvenance) : '',
             ];
         }),
     );

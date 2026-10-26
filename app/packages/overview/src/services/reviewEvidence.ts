@@ -12,7 +12,7 @@ import {
 } from '../types';
 import { buildDependencyIndex, DependencyIndex } from './dependencyGraph';
 import { evidenceWindowFresh, usageValidity } from './usage';
-import { buildCoverageResolver, CoverageContext } from './dependencyCoverage';
+import { buildCoverageResolver, CoverageContext, SHARED_STATIC_POLICY } from './dependencyCoverage';
 
 export { evidenceDigest } from './evidenceDigest';
 
@@ -167,7 +167,7 @@ function relationshipEvidence(
         confidence: edge.confidence,
         resolved: edge.resolved,
         sourceLocation: edge.sourceLocation,
-        evidenceDigest: evidenceDigest(edge.evidence),
+        evidenceDigest: edge.fieldProvenance ? evidenceDigest([edge.evidence, edge.fieldProvenance]) : evidenceDigest(edge.evidence),
         neighborDigest: neighbor?.configurationFingerprint
             ? evidenceDigest([
                   neighbor.configurationFingerprint.digest,
@@ -252,7 +252,7 @@ export async function attachReviewEvidence(
         principal: scope.principal,
         roles: [...scope.roles].sort(),
         mode: scope.mode,
-        policy: 'shared-static-v1',
+        policy: SHARED_STATIC_POLICY,
     });
     const result: ContentObject[] = [];
     /* eslint-disable no-await-in-loop -- Yield between chunks to keep scan progress and cancellation responsive. */
@@ -321,7 +321,7 @@ function supportedEvidence(value: unknown): value is ObjectReviewEvidence {
                 hash(row.evidenceDigest) &&
                 (row.neighborDigest === null || hash(row.neighborDigest)),
         ) &&
-        (item.version === 1 || (item.coverage?.policy === 'shared-static-v1' &&
+        (item.version === 1 || (item.coverage !== undefined && ['shared-static-v1', 'shared-static-v2', SHARED_STATIC_POLICY].includes(item.coverage.policy) &&
             [item.coverage.configuration, item.coverage.access, item.coverage.outbound, item.coverage.inbound].every((area) =>
                 area && ['complete', 'partial', 'unavailable'].includes(area.status) &&
                 Array.isArray(area.reasons) && area.reasons.every((message) => typeof message === 'string') &&
@@ -400,6 +400,12 @@ export function compareReviewEvidence(
     const before = baseline.evidence;
     if (before.version !== 2 || current.version !== 2) {
         result.limitations.push('Legacy evidence predates object-scoped coverage. Run a complete scan and explicitly reaffirm after reviewing the new coverage; the saved decision is preserved.');
+    }
+    if (current.coverage?.policy !== SHARED_STATIC_POLICY) {
+        result.limitations.push('This inventory snapshot predates the current dependency-coverage policy (including field lineage). Run a new complete scan before verifying the saved review; its decision and baseline are preserved.');
+    }
+    if (before.coverage && before.coverage.policy !== current.coverage?.policy) {
+        result.reasons.push('Dependency coverage policy expanded. Inspect newly assessed catalogs and relationships before explicitly reaffirming this review.');
     }
     const currentUsageValidity = usageValidity(object, scan.scanId, now);
     if (baseline.usageAtCapture) {

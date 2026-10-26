@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.3.0 — 2026-10-26 (build 77)
+
+- Inventory shared Event Types and distinct Tag Bindings with exact native
+  identities, namespace-aware literal filters, inclusion/exclusion semantics,
+  disabled-state preservation and explicit private/system/encoding gaps.
+- Integrate four native shared field catalogs into existing app-local snapshots:
+  extractions, aliases, calculated fields and transforms. Retain ordered REPORT
+  positions, literal names, processing phases and compact provenance, not raw
+  expressions, regex, field values or fabricated effective outputs.
+- Add bounded potential REPORT/field-input/event-scope paths without alias or
+  EVAL chaining. Recheck producer namespace overrides, including local declarations
+  whose different outputs would otherwise leave ghost exported producers.
+- Share field facts across existing Explorer/Library details and propagate
+  provenance, conditional status and weakest confidence through impact,
+  required-content and CSV/JSON. Preserve all saved decisions and v1/v2 baselines;
+  expanded shared-static-v3 coverage requires explicit investigation/re-review.
+- Treat leading command-like words in event-type base searches as search terms,
+  not implicit savedsearch/lookup/datamodel execution. Keep unsupported pipelines
+  and dynamic/implicit knowledge behavior explicitly unverified.
+- Separate native entries from normalized assignments in scan reports, preserve
+  full baselines after incomplete collection, and align public schemas with every
+  supported historical/current policy and emitted relation.
+- Supply the exact calculated-field catalog through a GET-only Splunk Web
+  exposure for classic runtimes; no wildcard, child routes, source-write methods,
+  roles or capabilities are added. Stop field matching before exhausted scan
+  budgets and iterate candidates lazily instead of copying dense candidate lists.
+- Qualify release build 77 with 588 automated checks, pre-cert AppInspect,
+  fresh native catalog/cache and schema comparisons on Enterprise 10.2.5,
+  10.2.8 and 10.4.4, targeted light/dark checks and actual report downloads.
+  Earlier event/tag evidence is documented separately. Customer content remains
+  read-only; existing review decisions and historical evidence are preserved.
+
 ## 1.2.0 — 2026-10-25
 
 - Reserve collision-free space for wrapped graph relationship labels, separate

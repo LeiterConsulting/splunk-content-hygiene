@@ -97,6 +97,40 @@ export interface ContentObject {
     inventoryScanId?: string;
     configurationFingerprint?: ConfigurationFingerprint;
     reviewEvidence?: ObjectReviewEvidence;
+    fieldLineage?: FieldLineageFacts;
+}
+
+export interface FieldScope { field: 'sourcetype' | 'host' | 'source'; value: string; exact: boolean }
+export interface FieldAliasMapping { input: string; output: string; mode: 'AS' | 'ASNEW' }
+export type FieldPhase = 'extraction' | 'alias' | 'calculated' | 'lookup';
+/** Compact declared facts only: never an expression, regex, lookup row or value. */
+export interface FieldLineageFacts {
+    version: 1;
+    operation: 'inline' | 'report' | 'alias' | 'eval' | 'transform' | 'lookup';
+    stanza: string | null;
+    attribute: string | null;
+    scope: FieldScope | null;
+    enabled: boolean | null;
+    inputs: string[];
+    outputs: string[];
+    aliases: FieldAliasMapping[];
+    transforms: string[];
+    syntax: 'declared' | 'partial' | 'unsupported';
+    sourceLocation: string;
+    limitations: string[];
+}
+export interface FieldDependencyProvenance {
+    version: 1;
+    kind: 'report_binding' | 'field_input' | 'event_scope';
+    fields: string[];
+    scope: FieldScope | null;
+    consumerPhase: FieldPhase | null;
+    producerPhase: FieldPhase;
+    /** One-based native REPORT positions, retaining repeated targets. */
+    transformPositions: number[];
+    viaObjectIds: string[];
+    contextApps: string[];
+    invocation: 'fixed_app' | 'invoking_app_unverified';
 }
 
 export interface ConfigurationFingerprint {
@@ -115,7 +149,7 @@ export interface EvidenceCoverageDimension {
     digest: string;
 }
 export interface ReviewCoverage {
-    policy: 'shared-static-v1';
+    policy: 'shared-static-v1' | 'shared-static-v2' | 'shared-static-v3';
     configuration: EvidenceCoverageDimension;
     access: EvidenceCoverageDimension;
     outbound: EvidenceCoverageDimension;
@@ -173,6 +207,7 @@ export interface DependencyEdge {
     evidence: string;
     sourceLocation: string | null;
     resolved: boolean;
+    fieldProvenance?: FieldDependencyProvenance;
 }
 
 export interface AppComposition {
@@ -234,8 +269,12 @@ export interface ScanSummary {
     warningCount: number;
     warnings: string[];
     errors: string[];
+    /** Normalized shared records; a tag assignment is one record. */
     collectorCounts: Record<string, number>;
+    /** Native endpoint paging totals; tags are counted as stanzas here. */
     collectorTotals: Record<string, number>;
+    /** Native entries (such as tag stanzas) can expand into many normalized records. */
+    collectorNativeCounts?: Record<string, number>;
     analysisStatus: 'pending' | 'complete' | 'partial' | 'failed';
     dataSource: 'live';
     snapshotVersion?: number;

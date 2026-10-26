@@ -42,6 +42,28 @@ base searches, constraints, lookup calculations, and inherited query scope are
 analyzed. Boolean branches and independent subsearches must establish their own
 positive index scope. A possible source is not an asserted dependency.
 
+The 1.3 event-type/tag milestone introduced `shared-static-v2`; the
+field-lineage increment generates `shared-static-v3` while retaining read support
+for v1/v2 baselines. A policy expansion
+requires explicit re-review, not migration of saved decisions or evidence. The
+evidence schema accepts both supported policies and rejects no historical record
+merely because the current scanner uses the newer policy.
+
+Event Type identities use their exact native name and app namespace. Tag Binding
+canonical names encode `[nativeFieldValueStanza, tagName]` as a JSON array; display
+names are not identity keys. Disabled assignments remain separate records.
+URI-like values remain verbatim and do not become guessed decoded identities.
+Raw event-type SPL is used transiently for bounded parsing and fingerprinting,
+not retained as a shared-cache definition body.
+
+Field Extraction, Field Alias, Calculated Field and Field Transform identities
+retain their exact native name/app namespace. Optional `field_lineage` stores only
+versioned, fixed-key facts: operation, props stanza/attribute, exact-or-unverified
+scope, nullable enabled state, literal input/output names, AS/ASNEW assignments,
+ordered REPORT names, syntax status, provenance and limitations. Names remain
+values, never dotted/dollar-prefixed KV keys. Raw declaration bodies are hashed
+transiently and are not retained. See [field metadata schema](../schemas/field-lineage.schema.json).
+
 Configuration fingerprint version 2 uses locale-independent canonical ordering.
 Different normalization versions are not direct proof of a configuration edit.
 Legacy evidence is retained and remains unverified until a supported scan and
@@ -67,11 +89,30 @@ event-selector caller; `may_use_lookup` records a possible exported-rule binding
 in another invoking app. These `may_*` relations never prove execution or a
 broken target. There is no broad sourcetype-to-rule join across app namespaces.
 
+Field relations are explicitly potential: `may_use_field_transform` retains
+ordered REPORT positions; `may_read_extracted_field`, `may_read_aliased_field` and
+`may_read_calculated_field` record phase-qualified declared inputs;
+`may_apply_field_extraction`, `may_apply_field_alias` and
+`may_apply_calculated_field` record positive exact event-scope witnesses.
+Optional `field_provenance` retains fields, scope, consumer/producer phases,
+one-based REPORT positions, intermediate transform IDs and possible app contexts.
+These facts are hashed with relationship evidence so changed provenance can
+require re-review. Required-content and impact exports retain them and propagate
+potential status/weakest confidence. No synthetic field object or runtime value
+is manufactured, and no EVAL-to-EVAL or alias-to-alias chain is inferred.
+
 Derived report witnesses include `conditional: true` if any relationship in their
 chosen path is potential, including later lookup-definition/file hops. This flag
 and the weakest path confidence are preserved in CSV/JSON; the original edge
 relation remains the authoritative configuration-vs-potential distinction.
 No review migration or rewrite is performed when the catalog expands.
+
+The 1.3 named relations include `matches_event_type`,
+`excludes_event_type`, `matches_tag`, `excludes_tag` and `tags_event_type`.
+Their conditional counterparts use `may_match_*`, `may_exclude_*` and
+`may_tag_event_type`. Exclusions retain their polarity; they are dependencies,
+not evidence that an object is unnecessary. Reusable exported definitions do
+not acquire a guessed owning-app invocation context.
 
 ## Findings
 
@@ -94,6 +135,13 @@ A scan run records mode, lifecycle status, start and completion times, analysis
 status, object/edge/finding counts, per-collector cached and visible totals,
 warnings, and errors. Status may be queued, running, partial, succeeded, failed,
 or cancelled.
+
+The 1.3 scan format separates `collector_counts` (normalized records),
+`collector_totals` (visible native entries) and optional `collector_native_counts`
+(native entries actually returned). A tag stanza can produce several normalized
+assignments. Missing native-entry counts in old snapshots mean unavailable, not
+zero. Inventory completeness, source parsing and target resolution remain
+separate gates.
 
 Snapshot version 2 uses a `ch_settings` manifest with separate complete-baseline
 and latest-run pointers. Retirement removes only superseded derived evidence;

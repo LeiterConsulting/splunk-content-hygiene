@@ -6,7 +6,7 @@ import { analyzeRemovalImpact } from '../services/removalImpact';
 import { ContentObject, ReviewRecord, ScanSummary } from '../types';
 
 const collectors = Object.fromEntries(['apps', 'macros', 'dashboards', 'lookup_definitions', 'lookup_files',
-    'saved_searches', 'data_models', 'indexes', 'sourcetypes'].map((name) => [name, true]));
+    'saved_searches', 'data_models', 'indexes', 'sourcetypes', 'event_types', 'tag_bindings'].map((name) => [name, true]));
 const completeness = { macros: true, lookup_definitions: true, lookup_files: true, saved_searches: true,
     data_models: true, indexes: true, sourcetypes: false };
 const context: CoverageContext = { collectors, gaps: [], privateObjects: [], identityKnown: true };
@@ -153,4 +153,31 @@ test('data-model constraints, base searches and lookup calculations expose stati
 test('dynamic lookup names cover both definition and file possibilities without poisoning other types', () => {
     expect(parseSpl('| inputlookup $table$').gaps?.map((gap) => gap.targets)).toEqual([['lookup', 'lookup_file']]);
     expect(parseSpl('index=*').gaps?.map((gap) => gap.targets)).toEqual([['index']]);
+});
+
+test('exported reusable definitions cannot hide uncertainty from app-only targets in a different invoking app', async () => {
+    const definition = object('exported', 'one', 'Event Type', 'global');
+    const target = object('base', 'two'); const unrelated = object('other', 'two');
+    const result = await analyze([definition, target, unrelated], [{ objectId: definition.objectId,
+        kind: 'event_type', text: 'index=main `base`', sourceLocation: 'eventtypes.conf.search' }]);
+    const affected = result.byId.get(target.objectId)!.reviewEvidence!.coverage!.inbound;
+    expect(affected.status).toBe('partial');
+    expect(affected.sourceCount).toBe(1);
+    expect(affected.sourceObjectIds).toEqual([definition.objectId]);
+    expect(result.byId.get(unrelated.objectId)!.reviewEvidence!.coverage!.inbound.sourceCount).toBe(0);
+});
+
+test('new-policy comparisons preserve old scoped baselines and require explicit re-review', async () => {
+    const result = await analyze([object('target')], []); const current = result.byId.get('Macro::one::target')!;
+    const record = saved(current);
+    record.evidenceBaseline!.evidence = JSON.parse(JSON.stringify(current.reviewEvidence));
+    record.evidenceBaseline!.evidence.coverage!.policy = 'shared-static-v1';
+    const original = JSON.stringify(record);
+    const freshness = compareReviewEvidence(record, current, scan);
+    expect(freshness.status).toBe('needs_review');
+    expect(freshness.reasons.join(' ')).toMatch(/coverage policy expanded/i);
+    expect(JSON.stringify(record)).toBe(original);
+    const oldSnapshot = { ...current, reviewEvidence: record.evidenceBaseline!.evidence };
+    expect(compareReviewEvidence(record, oldSnapshot, scan)).toMatchObject({ status: 'cannot_verify',
+        limitations: expect.arrayContaining([expect.stringContaining('predates the current dependency-coverage policy')]) });
 });

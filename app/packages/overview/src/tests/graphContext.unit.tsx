@@ -154,6 +154,7 @@ test('graph grouping changes cannot leave a stale context dialog attached to a d
     expect(await visibleContextDialog('Relationship context')).toBeVisible();
     rerender(frame('dark', inspect, [center, caller], [edge(caller.objectId, center.objectId)]));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(screen.getByRole('region', { name: `Dependency graph centered on ${longName}` })).toHaveFocus();
     rerender(
         frame(
             'dark',

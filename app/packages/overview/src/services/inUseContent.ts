@@ -36,11 +36,13 @@ export interface InUseRow {
         depth: number;
         confidence: DependencyEdge['confidence'];
         conditional: boolean;
+        fieldProvenance?: DependencyEdge['fieldProvenance'];
     };
     usage: ContentObject['usageEvidence'];
     usageValidity: string;
     outboundCoverage: string;
     outboundLimitations: string[];
+    fieldLineage?: ContentObject['fieldLineage'];
 }
 export interface InUseReport {
     scanId: string;
@@ -57,7 +59,8 @@ export interface InUseReport {
 }
 const implicitGaps = [
     'This is a supported shared static dependency footprint, not a complete migration manifest or proof that excluded objects are unused.',
-    'Event types, tags, field extractions, field aliases, calculated fields, transforms, workflow actions and navigation menus are not inventoried.',
+    'Shared event types and distinct tag assignments have bounded literal-reference coverage. Implicit classification, wildcard names, encoded tag values, system inheritance and invoking-app contexts are not exhaustively resolved.',
+    'Field extractions, aliases, calculated fields and transforms have bounded declared-metadata coverage. Potential field paths respect extraction → alias → parallel calculated fields → lookup; regex outputs, effective values, cross-scope precedence and chaining remain unverified. Workflow actions and navigation menus are outside inventory.',
     'Automatic props lookup rules and exact-selector caller matches cover only part of search-time props. Patterns, precedence, renames, field availability and inherited invocation contexts remain unverified; potential paths do not establish execution.',
     'Ad-hoc searches, private content, dynamic SPL/tokens and external consumers may require additional objects.',
     'App-containment and ownership links are metadata, not dependency closure. Retaining an app is not an app-wide retain rule.',
@@ -77,6 +80,12 @@ export function buildInUseReport(
     const gaps = new Set(implicitGaps);
     if (!Object.prototype.hasOwnProperty.call(snapshot.scan.collectorCounts, 'automatic_lookups')) {
         gaps.add('This snapshot predates automatic lookup collection. Run a new complete scan to assess that catalog.');
+    }
+    if (!['event_types', 'tag_bindings'].every(collector => Object.prototype.hasOwnProperty.call(snapshot.scan.collectorCounts, collector))) {
+        gaps.add('This snapshot predates event-type/tag collection. Run a new complete scan to assess these catalogs; existing decisions are unchanged.');
+    }
+    if (!['field_extractions', 'field_aliases', 'calculated_fields', 'field_transforms'].every(collector => Object.prototype.hasOwnProperty.call(snapshot.scan.collectorCounts, collector))) {
+        gaps.add('This snapshot predates field-lineage collection. Run a new complete scan; absence of these paths does not establish that a field definition is unused.');
     }
     const maxObjects = Math.max(1, options.maxObjects ?? 50000);
     const maxEdges = Math.max(1, options.maxEdges ?? 250000);
@@ -100,6 +109,7 @@ export function buildInUseReport(
             inInventory: Boolean(object && !/^Unresolved\b/i.test(object.objectType)),
             reasons: [],
             usage: object?.usageEvidence ?? null,
+            ...(object?.fieldLineage ? { fieldLineage: object.fieldLineage } : {}),
             usageValidity: object
                 ? usageValidity(object, snapshot.scan.scanId, now)
                 : 'not_measured',
@@ -271,6 +281,7 @@ export function buildInUseReport(
                                 edge.confidence,
                             ),
                             conditional: parent.via?.conditional === true || isPotentialRelation(edge.relation),
+                            ...(edge.fieldProvenance ? { fieldProvenance: edge.fieldProvenance } : {}),
                         };
                         queue.push(row.objectId);
                     }
@@ -285,7 +296,7 @@ export function buildInUseReport(
     }
     const conditional = [...rows.values()].filter((row) => row.via?.conditional).length;
     if (conditional) {
-        gaps.add(`${conditional} included identities have a shortest witness path containing a potential automatic lookup relationship; inclusion is not proof of runtime use or an unconditional requirement.`);
+        gaps.add(`${conditional} included identities have a shortest witness path containing a potential configuration relationship; inclusion is not proof of runtime use or an unconditional requirement.`);
     }
     const missing = [...rows.values()].filter((row) => !row.inInventory).length;
     if (missing) {

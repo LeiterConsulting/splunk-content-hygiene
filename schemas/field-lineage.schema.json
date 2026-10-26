@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/splunk-content-hygiene/field-lineage.schema.json",
+  "title": "Content Hygiene Declared Field Metadata",
+  "$defs": {
+    "names": { "type": "array", "maxItems": 250, "items": { "type": "string", "minLength": 1, "maxLength": 4096 } },
+    "scope": { "anyOf": [{ "type": "null" }, {
+      "type": "object", "required": ["field", "value", "exact"], "additionalProperties": false,
+      "properties": { "field": { "enum": ["sourcetype", "host", "source"] },
+        "value": { "type": "string", "minLength": 1, "maxLength": 4096 }, "exact": { "type": "boolean" } }
+    }] },
+    "phase": { "enum": ["extraction", "alias", "calculated", "lookup"] },
+    "facts": {
+      "type": "object", "additionalProperties": false,
+      "required": ["version", "operation", "stanza", "attribute", "scope", "enabled", "inputs", "outputs", "aliases", "transforms", "syntax", "sourceLocation", "limitations"],
+      "properties": {
+        "version": { "const": 1 },
+        "operation": { "enum": ["inline", "report", "alias", "eval", "transform", "lookup"] },
+        "stanza": { "type": ["string", "null"] }, "attribute": { "type": ["string", "null"] },
+        "scope": { "$ref": "#/$defs/scope" }, "enabled": { "type": ["boolean", "null"] },
+        "inputs": { "$ref": "#/$defs/names" }, "outputs": { "$ref": "#/$defs/names" }, "transforms": { "$ref": "#/$defs/names" },
+        "aliases": { "type": "array", "maxItems": 250, "items": {
+          "type": "object", "additionalProperties": false, "required": ["input", "output", "mode"],
+          "properties": { "input": { "type": "string", "minLength": 1, "maxLength": 4096 },
+            "output": { "type": "string", "minLength": 1, "maxLength": 4096 }, "mode": { "enum": ["AS", "ASNEW"] } }
+        } },
+        "syntax": { "enum": ["declared", "partial", "unsupported"] }, "sourceLocation": { "type": "string" },
+        "limitations": { "type": "array", "maxItems": 250, "items": { "type": "string" } }
+      }
+    },
+    "provenance": {
+      "type": "object", "additionalProperties": false,
+      "required": ["version", "kind", "fields", "scope", "consumerPhase", "producerPhase", "transformPositions", "viaObjectIds", "contextApps", "invocation"],
+      "properties": {
+        "version": { "const": 1 }, "kind": { "enum": ["report_binding", "field_input", "event_scope"] },
+        "fields": { "$ref": "#/$defs/names" }, "scope": { "$ref": "#/$defs/scope" },
+        "consumerPhase": { "anyOf": [{ "$ref": "#/$defs/phase" }, { "type": "null" }] }, "producerPhase": { "$ref": "#/$defs/phase" },
+        "transformPositions": { "type": "array", "maxItems": 250, "items": { "type": "integer", "minimum": 1, "maximum": 250 } },
+        "viaObjectIds": { "type": "array", "maxItems": 250, "items": { "type": "string", "minLength": 1, "maxLength": 16384 } }, "contextApps": { "$ref": "#/$defs/names" },
+        "invocation": { "enum": ["fixed_app", "invoking_app_unverified"] }
+      }
+    }
+  }
+}

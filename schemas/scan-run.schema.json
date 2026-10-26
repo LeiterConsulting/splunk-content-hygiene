@@ -54,6 +54,21 @@
         "type": "string"
       }
     },
+    "collector_counts": {
+      "description": "Normalized shared records produced by each collector.",
+      "type": "object",
+      "additionalProperties": { "type": "integer", "minimum": 0 }
+    },
+    "collector_totals": {
+      "description": "Visible native-entry totals, not expanded assignment counts.",
+      "type": "object",
+      "additionalProperties": { "type": "integer", "minimum": 0 }
+    },
+    "collector_native_counts": {
+      "description": "Native entries actually collected. Optional for older snapshots.",
+      "type": "object",
+      "additionalProperties": { "type": "integer", "minimum": 0 }
+    },
     "inventory_scan_id": {
       "type": "string"
     },

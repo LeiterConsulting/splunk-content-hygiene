@@ -6,6 +6,8 @@ import { splunkRequest, SplunkRequestError as RestRequestError } from './rest';
 import { AnalysisCompleteness, RawAnalysisSource, analyzeInventoryAsync } from './analysis';
 import { attachReviewEvidence, configurationFingerprint } from './reviewEvidence';
 import { PrivateObjectCount } from './dependencyCoverage';
+import { CatalogIssue, decodeEventType, decodeTagBindings, MAX_TAG_BINDINGS_PER_STANZA } from './knowledgeCatalog';
+import { decodeFieldLineage, FieldCatalog, fieldLineageFacts, readFieldLineageFacts, readFieldProvenance } from './fieldLineage';
 import {
     CollectedUsageSource,
     DASHBOARD_ACCESS_SOURCE_ID,
@@ -111,6 +113,7 @@ interface KvScanRecord extends JsonRecord {
     errors: string[];
     collector_counts: Record<string, number>;
     collector_totals: Record<string, number>;
+    collector_native_counts?: Record<string, number>;
     analysis_status?: string;
     inventory_scan_id?: string;
     usage_window_days?: number;
@@ -268,6 +271,28 @@ const objectCollectors: ObjectCollectorDefinition[] = [
         namespace: { owner: '-', app: '-' },
         objectType: 'Automatic Lookup',
     },
+    {
+        id: 'event_types',
+        label: 'Event types',
+        endpoint: 'saved/eventtypes',
+        namespace: { owner: '-', app: '-' },
+        objectType: 'Event Type',
+    },
+    {
+        id: 'tag_bindings',
+        label: 'Tag binding stanzas',
+        endpoint: 'configs/conf-tags',
+        namespace: { owner: '-', app: '-' },
+        objectType: 'Tag Binding',
+    },
+    { id: 'field_extractions', label: 'Field extractions (props)', endpoint: 'data/props/extractions',
+        namespace: { owner: '-', app: '-' }, objectType: 'Field Extraction' },
+    { id: 'field_aliases', label: 'Field aliases (props)', endpoint: 'data/props/fieldaliases',
+        namespace: { owner: '-', app: '-' }, objectType: 'Field Alias' },
+    { id: 'calculated_fields', label: 'Calculated fields (props)', endpoint: 'data/props/calcfields',
+        namespace: { owner: '-', app: '-' }, objectType: 'Calculated Field' },
+    { id: 'field_transforms', label: 'Field transforms', endpoint: 'data/transforms/extractions',
+        namespace: { owner: '-', app: '-' }, objectType: 'Field Transform' },
     {
         id: 'lookup_files',
         label: 'Lookup files',
@@ -575,6 +600,126 @@ export function normalizeObjectEntry(
     };
 }
 
+export interface NormalizedKnowledgeCatalog {
+    records: KvObjectRecord[];
+    sources: RawAnalysisSource[];
+    complete: boolean;
+    /** All supported shared inventory identities retained, independently of
+     * unverified system inheritance, encoding and enabled-state semantics. */
+    inventoryComplete: boolean;
+    warnings: string[];
+}
+export const KNOWLEDGE_OBJECT_LIMIT = 10000;
+export const FIELD_CATALOGS: FieldCatalog[] = ['field_extractions', 'field_aliases', 'calculated_fields', 'field_transforms'];
+
+/** Native field definitions are fingerprinted transiently. Only compact facts
+ * with fixed document keys are stored; customer SPL/PCRE is never cached. */
+export function normalizeFieldEntries(
+    entries: SplunkRestEntry[], collector: ObjectCollectorDefinition, scanId: string, collectedAt: string,
+    requestedLimit = KNOWLEDGE_OBJECT_LIMIT,
+): NormalizedKnowledgeCatalog {
+    const catalog = FIELD_CATALOGS.find(id => id === collector.id);
+    const expected = { field_extractions: 'Field Extraction', field_aliases: 'Field Alias',
+        calculated_fields: 'Calculated Field', field_transforms: 'Field Transform' };
+    if (!catalog || collector.objectType !== expected[catalog]) { throw new Error('Unsupported native field collector or object type.'); }
+    const limit = Number.isSafeInteger(requestedLimit) ? Math.min(KNOWLEDGE_OBJECT_LIMIT, Math.max(1, requestedLimit)) : KNOWLEDGE_OBJECT_LIMIT;
+    const records: KvObjectRecord[] = []; const sources: RawAnalysisSource[] = [];
+    const issues: CatalogIssue[] = []; const seen = new Set<string>(); const collisions = new Set<string>();
+    let identityIncomplete = false;
+    entries.slice(0, limit).forEach(entry => {
+        const decoded = decodeFieldLineage(entry, catalog); issues.push(...decoded.issues);
+        if (!decoded.records.length && decoded.issues.some(issue => !['private_excluded', 'unsupported_visibility'].includes(issue.code))) { identityIncomplete = true; }
+        decoded.records.forEach(definition => {
+            const record = normalizeObjectEntry(entry, collector, scanId, collectedAt);
+            record.enabled = definition.enabled;
+            const facts = fieldLineageFacts(definition, decoded.issues);
+            record.field_lineage = facts;
+            record.analysis_warnings = facts.limitations;
+            if (seen.has(record.object_id)) { collisions.add(record.object_id); }
+            seen.add(record.object_id); records.push(record);
+            sources.push({ objectId: record.object_id, kind: 'field_lineage', text: '',
+                sourceLocation: facts.sourceLocation, fieldLineage: facts });
+        });
+    });
+    if (entries.length > limit) {
+        identityIncomplete = true;
+        issues.push({ code: 'limit', message: `Field catalog reached its ${limit}-object budget; remaining definitions are unverified.`, sourceLocation: collector.endpoint });
+    }
+    if (collisions.size) { identityIncomplete = true; issues.push({ code: 'identity_unavailable',
+        message: 'Duplicate shared field identities were omitted instead of selecting a winning definition.', sourceLocation: collector.endpoint }); }
+    return { records: records.filter(record => !collisions.has(record.object_id)),
+        sources: sources.filter(source => !collisions.has(source.objectId)),
+        inventoryComplete: !identityIncomplete,
+        complete: !issues.some(issue => issue.code !== 'private_excluded'),
+        warnings: [...new Set(issues.filter(issue => issue.code !== 'private_excluded').map(issue => issue.message))] };
+}
+
+/** Native stanzas may produce multiple assignment objects. Keep their paging
+ * counts separate from produced objects, and never cache raw source searches. */
+export function normalizeKnowledgeEntries(
+    entries: SplunkRestEntry[], collector: ObjectCollectorDefinition, scanId: string, collectedAt: string,
+    requestedLimit = KNOWLEDGE_OBJECT_LIMIT,
+): NormalizedKnowledgeCatalog {
+    const expectedType = collector.id === 'event_types' ? 'Event Type' : 'Tag Binding';
+    if (!['event_types', 'tag_bindings'].includes(collector.id) || collector.objectType !== expectedType) {
+        throw new Error('Unsupported native knowledge collector or object type.');
+    }
+    const objectLimit = Number.isSafeInteger(requestedLimit) ? Math.min(KNOWLEDGE_OBJECT_LIMIT, Math.max(1, requestedLimit)) : KNOWLEDGE_OBJECT_LIMIT;
+    const records: KvObjectRecord[] = [];
+    const sources: RawAnalysisSource[] = [];
+    const issues: CatalogIssue[] = [];
+    const seen = new Set<string>();
+    const collisions = new Set<string>();
+    /* eslint-disable no-restricted-syntax -- Catalog expansion stops at a fixed per-family object budget. */
+    for (const entry of entries) {
+        if (records.length >= objectLimit) {
+            issues.push({ code: 'limit', message: `Knowledge-object normalization reached its ${objectLimit}-object budget; additional native entries remain unverified.`, sourceLocation: collector.endpoint });
+            break;
+        }
+        const decoded = collector.id === 'event_types'
+            ? decodeEventType(entry, `eventtypes.conf[${JSON.stringify(entry.name)}].search`)
+            : decodeTagBindings(entry, 'tags.conf');
+        issues.push(...decoded.issues);
+        for (const definition of decoded.records) {
+            if (records.length >= objectLimit) {
+                issues.push({ code: 'limit', message: `Knowledge-object normalization reached its ${objectLimit}-object budget; additional assignments remain unverified.`, sourceLocation: collector.endpoint });
+                break;
+            }
+            let normalized: KvObjectRecord;
+            let source: RawAnalysisSource;
+            if ('search' in definition) {
+                normalized = normalizeObjectEntry(entry, collector, scanId, collectedAt);
+                source = { objectId: normalized.object_id, kind: 'event_type', text: definition.search, sourceLocation: definition.sourceLocation };
+            } else {
+                // Fixed document keys only: field names and tags stay values,
+                // including dots, dollar signs and prototype-like tag names.
+                const content = { native_stanza: definition.nativeName, tag: definition.tag, field: definition.field,
+                    rawFieldValue: definition.rawFieldValue, literalFieldValue: definition.literalFieldValue,
+                    configuredEnabled: definition.configuredEnabled, enabled: definition.enabled,
+                    disabled: definition.enabled === null ? null : !definition.enabled,
+                    label: `${definition.tag} · ${definition.field}=${definition.rawFieldValue}` };
+                normalized = normalizeObjectEntry({ ...entry, acl: entryAcl(entry), name: definition.canonicalName, content }, collector, scanId, collectedAt);
+                normalized.enabled = definition.enabled;
+                normalized.source.source_name = definition.nativeName;
+                source = { objectId: normalized.object_id, kind: 'tag_binding', text: JSON.stringify(content), sourceLocation: definition.sourceLocation };
+            }
+            if (decoded.issues.length) { normalized.analysis_warnings = [...new Set(decoded.issues.map(issue => issue.message))]; }
+            if (seen.has(normalized.object_id)) { collisions.add(normalized.object_id); }
+            seen.add(normalized.object_id);
+            records.push(normalized); sources.push(source);
+        }
+    }
+    /* eslint-enable no-restricted-syntax */
+    if (collisions.size) { issues.push({ code: 'identity_unavailable',
+        message: 'Duplicate shared identities were omitted rather than overwriting one namespace candidate with another.', sourceLocation: collector.endpoint }); }
+    return { records: records.filter(record => !collisions.has(record.object_id)),
+        sources: sources.filter(source => !collisions.has(source.objectId)),
+        complete: !issues.some(issue => issue.code !== 'private_excluded'),
+        inventoryComplete: !issues.some(issue => ['identity_unavailable', 'invalid_definition', 'invalid_binding', 'limit'].includes(issue.code)),
+        warnings: [...new Set(issues.filter(issue => issue.code !== 'private_excluded').map(issue => issue.message))],
+    };
+}
+
 function analysisSourceForEntry(
     entry: SplunkRestEntry,
     collector: ObjectCollectorDefinition,
@@ -799,6 +944,9 @@ async function collectEntries(
     const maximum = mode === 'bounded' ? BOUNDED_SCAN_LIMIT : FULL_SCAN_MAX_PER_COLLECTOR;
     const pageSize = mode === 'bounded' ? BOUNDED_SCAN_LIMIT : FULL_SCAN_PAGE_SIZE;
     const entries: SplunkRestEntry[] = [];
+    const strictNative = ['event_types', 'tag_bindings'].includes(collector.id) || FIELD_CATALOGS.includes(collector.id as FieldCatalog);
+    const pages = new Set<string>();
+    let expectedTotal: number | null = null;
     let total = 0;
     let offset = 0;
 
@@ -809,9 +957,23 @@ async function collectEntries(
             count,
             offset,
             output_mode: 'json',
+            ...(strictNative ? { sort_key: 'name', sort_dir: 'asc' } : {}),
         });
         const response = await requestJson<SplunkRestResponse>(url);
         const page = response.entry ?? [];
+        if (strictNative) {
+            if (!Array.isArray(response.entry) || !Number.isInteger(response.paging?.total) ||
+                Number(response.paging?.total) < 0 || page.length > count) {
+                throw new Error('Native knowledge catalog has no authoritative bounded entry list or paging total.');
+            }
+            if (expectedTotal !== null && response.paging!.total !== expectedTotal) {
+                throw new Error('Native knowledge catalog paging total changed during collection; run a new scan.');
+            }
+            expectedTotal = response.paging!.total!;
+            const key = JSON.stringify(page.map(entry => [entry.name, entryAcl(entry).app, entryAcl(entry).owner, entryAcl(entry).sharing]));
+            if (page.length && pages.has(key)) { throw new Error('Native knowledge catalog repeated a page; collection is unverified.'); }
+            pages.add(key);
+        }
         total = numberValue(response.paging?.total ?? page.length);
         entries.push(...page);
         offset += page.length;
@@ -824,7 +986,7 @@ async function collectEntries(
     return {
         entries,
         total,
-        complete: entries.length >= total,
+        complete: strictNative ? entries.length === total : entries.length >= total,
     };
 }
 
@@ -1021,6 +1183,8 @@ function scanRecordToSummary(record: KvScanRecord): ScanSummary {
         errors,
         collectorCounts,
         collectorTotals,
+        collectorNativeCounts: Object.fromEntries(Object.entries(asRecord(record.collector_native_counts))
+            .map(([key, value]) => [key, numberValue(value)])),
         analysisStatus:
             record.analysis_status === 'complete' ||
             record.analysis_status === 'partial' ||
@@ -1072,6 +1236,7 @@ function objectRecordToContentObject(record: KvObjectRecord): ContentObject {
         inventoryScanId: record.scan_id,
         configurationFingerprint: record.configuration_fingerprint as ContentObject['configurationFingerprint'],
         reviewEvidence: record.review_evidence as ContentObject['reviewEvidence'],
+        fieldLineage: readFieldLineageFacts(record.field_lineage),
         analysisWarnings: stringArray(record.analysis_warnings),
         healthStatus: isHealthStatus(healthStatus) ? healthStatus : 'unknown',
         abandonmentConfidence: nullableScore(record.abandonment_confidence),
@@ -1098,6 +1263,7 @@ function edgeRecordToDependencyEdge(record: KvEdgeRecord): DependencyEdge {
         evidence: stringValue(record.evidence, 'No evidence text was recorded'),
         sourceLocation: stringValue(record.source_location) || null,
         resolved: Boolean(record.resolved),
+        ...(record.field_provenance ? { fieldProvenance: readFieldProvenance(record.field_provenance) } : {}),
     };
 }
 
@@ -1226,6 +1392,7 @@ function analyzedObjectToRecord(original: KvObjectRecord, analyzed: ContentObjec
         evidence: analyzed.evidence,
         analysis_warnings: analyzed.analysisWarnings ?? [],
         suggested_action: analyzed.suggestedAction,
+        ...(analyzed.fieldLineage ? { field_lineage: analyzed.fieldLineage } : {}),
     };
 }
 
@@ -1240,6 +1407,7 @@ function dependencyEdgeToRecord(edge: DependencyEdge, scanId: string): KvEdgeRec
         evidence: edge.evidence,
         source_location: edge.sourceLocation,
         resolved: edge.resolved,
+        ...(edge.fieldProvenance ? { field_provenance: edge.fieldProvenance } : {}),
         scan_id: scanId,
     };
 }
@@ -1616,6 +1784,7 @@ async function runInventoryScan(
     const totalCollectors = objectCollectors.length + 2;
     const collectorCounts: Record<string, number> = {};
     const collectorTotals: Record<string, number> = {};
+    const collectorNativeCounts: Record<string, number> = {};
     const completeness: AnalysisCompleteness = {
         macros: false,
         lookup_definitions: false,
@@ -1625,6 +1794,12 @@ async function runInventoryScan(
         indexes: false,
         sourcetypes: false,
         automatic_lookups: false,
+        event_types: false,
+        tag_bindings: false,
+        field_extractions: false,
+        field_aliases: false,
+        calculated_fields: false,
+        field_transforms: false,
     };
     const warnings: string[] = [];
     const errors: string[] = [];
@@ -1632,6 +1807,8 @@ async function runInventoryScan(
     const analysisSources: RawAnalysisSource[] = [];
     const privateCounts = new Map<string, PrivateObjectCount>();
     const privateTargets: Array<{ collector: string; app: string; name: string }> = [];
+    const privateTargetGaps = new Map<string, { collector: string; app: string }>();
+    const privateTagTargetCount = { value: 0 };
     const collectorCoverage: Record<string, boolean> = {};
     let completedCollectors = 0;
     let objectCount = 0;
@@ -1664,7 +1841,9 @@ async function runInventoryScan(
         collector_totals: {},
         collector_versions: {
             rest_inventory: '0.2.0',
-            dependency_analysis: '1.2.0',
+            dependency_analysis: '1.3.0',
+            knowledge_catalogs: '1.0.0',
+            field_lineage: '1.0.0',
             classification: '1.0.0',
             review_evidence: '1.0.0',
         },
@@ -1707,39 +1886,63 @@ async function runInventoryScan(
                 );
                 const excluded = collected.entries.length - eligibleEntries.length;
                 collected.entries.filter((entry) => entryAcl(entry).sharing === 'user').forEach((entry) => {
-                    const app = stringValue(entryAcl(entry).app, 'unknown');
+                    const app = stringValue(entryAcl(entry).app).trim() || 'unknown';
                     const key = `${collector.id}\0${app}`;
                     const current = privateCounts.get(key) ?? { collector: collector.id, app, count: 0 };
                     current.count += 1; privateCounts.set(key, current);
-                    privateTargets.push({ collector: collector.id, app, name: entry.name });
+                    if (app === 'unknown') { privateTargetGaps.set(key, { collector: collector.id, app }); }
+                    if (collector.id === 'tag_bindings') {
+                        const content = asRecord(entry.content);
+                        const keys = Object.keys(content);
+                        const tagKeys = keys.filter(tag => !tag.startsWith('eai:') && tag !== 'disabled');
+                        const reservedAmbiguity = keys.some(tag => (tag.startsWith('eai:') || tag === 'disabled') &&
+                            (content[tag] === 'enabled' || content[tag] === 'disabled'));
+                        if (tagKeys.length > MAX_TAG_BINDINGS_PER_STANZA || app === 'unknown' || reservedAmbiguity) { privateTargetGaps.set(key, { collector: collector.id, app }); }
+                        tagKeys.slice(0, MAX_TAG_BINDINGS_PER_STANZA).forEach(tag => {
+                            if (privateTagTargetCount.value >= KNOWLEDGE_OBJECT_LIMIT) { privateTargetGaps.set(key, { collector: collector.id, app }); return; }
+                            privateTargets.push({ collector: collector.id, app, name: JSON.stringify([entry.name, tag]) });
+                            privateTagTargetCount.value += 1;
+                        });
+                    } else { privateTargets.push({ collector: collector.id, app, name: entry.name }); }
                 });
                 if (excluded) {
                     warnings.push(
                         `${collector.label}: ${excluded} private object(s) excluded from the shared hygiene inventory.`,
                     );
                 }
-                const records = eligibleEntries.map((entry) =>
-                    normalizeObjectEntry(entry, collector, scanId, collectedAt),
-                );
+                let knowledge: NormalizedKnowledgeCatalog | null = null;
+                if (FIELD_CATALOGS.includes(collector.id as FieldCatalog)) {
+                    knowledge = normalizeFieldEntries(eligibleEntries, collector, scanId, collectedAt);
+                } else if (['event_types', 'tag_bindings'].includes(collector.id)) {
+                    knowledge = normalizeKnowledgeEntries(eligibleEntries, collector, scanId, collectedAt);
+                }
+                const records = knowledge?.records ?? eligibleEntries.map((entry) => normalizeObjectEntry(entry, collector, scanId, collectedAt));
+                if (knowledge) {
+                    analysisSources.push(...knowledge.sources);
+                    warnings.push(...knowledge.warnings.map(message => `${collector.label}: ${message}`));
+                    collectorCoverage[collector.id] = collected.complete && knowledge.complete;
+                    if (!knowledge.inventoryComplete) { collectionComplete = false; }
+                }
                 await batchSave('ch_objects', records);
                 allObjectRecords.push(...records);
-                eligibleEntries.forEach((entry, index) => {
+                if (!knowledge) { eligibleEntries.forEach((entry, index) => {
                     const source = analysisSourceForEntry(entry, collector, records[index]);
                     if (source) {
                         analysisSources.push(source);
                     }
-                });
+                }); }
                 collectorCounts[collector.id] = records.length;
                 collectorTotals[collector.id] = collected.total;
+                collectorNativeCounts[collector.id] = collected.entries.length;
                 if (collector.id in completeness) {
-                    completeness[collector.id as keyof AnalysisCompleteness] = collected.complete;
+                    completeness[collector.id as keyof AnalysisCompleteness] = collectorCoverage[collector.id];
                 }
                 if (!collected.complete) {
                     collectionComplete = false;
                     const scanLabel = mode === 'bounded' ? 'bounded live scan' : 'full scan';
-                    warnings.push(
-                        `${collector.label}: ${scanLabel} cached ${records.length.toLocaleString()} of ${collected.total.toLocaleString()} visible records.`,
-                    );
+                    warnings.push(knowledge
+                        ? `${collector.label}: ${scanLabel} read ${collected.entries.length.toLocaleString()} of ${collected.total.toLocaleString()} visible native entries and produced ${records.length.toLocaleString()} supported shared objects.`
+                        : `${collector.label}: ${scanLabel} cached ${records.length.toLocaleString()} of ${collected.total.toLocaleString()} visible records.`);
                 }
                 objectCount += records.length;
             } catch (error) {
@@ -1752,6 +1955,7 @@ async function runInventoryScan(
                 warnings.push(`${collector.label}: ${message}`);
                 collectorCounts[collector.id] = 0;
                 collectorTotals[collector.id] = 0;
+                collectorNativeCounts[collector.id] = 0;
             }
 
             completedCollectors += 1;
@@ -1760,6 +1964,7 @@ async function runInventoryScan(
                 warnings,
                 collector_counts: collectorCounts,
                 collector_totals: collectorTotals,
+                collector_native_counts: collectorNativeCounts,
                 completed_collectors: completedCollectors,
                 total_collectors: totalCollectors,
             });
@@ -1780,6 +1985,7 @@ async function runInventoryScan(
             await batchSave('ch_owners', ownerRecords);
             collectorCounts.owners = ownerRecords.length;
             collectorTotals.owners = collected.total;
+            collectorNativeCounts.owners = collected.entries.length;
             if (!collected.complete) {
                 collectionComplete = false;
                 const scanLabel = mode === 'bounded' ? 'bounded live scan' : 'full scan';
@@ -1813,7 +2019,7 @@ async function runInventoryScan(
                 allObjectRecords.map(objectRecordToContentObject),
                 analysisSources,
                 assertionCompleteness,
-                { privateObjects: [...privateCounts.values()], privateTargets },
+                { privateObjects: [...privateCounts.values()], privateTargets, privateTargetGaps: [...privateTargetGaps.values()] },
             );
             if (analysis.parserWarnings.length) {
                 const affectedCount = analysis.objects.filter(
@@ -1897,6 +2103,7 @@ async function runInventoryScan(
             errors,
             collector_counts: collectorCounts,
             collector_totals: collectorTotals,
+            collector_native_counts: collectorNativeCounts,
             completed_collectors: completedCollectors,
             total_collectors: totalCollectors,
             duration_ms: Date.now() - new Date(startedAt).getTime(),

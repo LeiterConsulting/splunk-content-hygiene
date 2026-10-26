@@ -166,7 +166,7 @@ test('potential applicability and weakest confidence propagate through footprint
     [rule.value.objectId, definition.objectId, file.objectId].forEach((id) => {
         expect(report.rows.find((row) => row.objectId === id)?.via).toMatchObject({ conditional: true, confidence: 'medium' });
     });
-    expect(report.gaps.some((gap) => gap.includes('potential automatic lookup'))).toBe(true);
+    expect(report.gaps.some((gap) => gap.includes('potential configuration relationship'))).toBe(true);
     const impact = analyzeRemovalImpact(file, result.objects, result.edges, [], data.scan, 5, now);
     expect(impact.affectedObjects.find((row) => row.objectId === caller.objectId)).toMatchObject({ conditional: true, confidence: 'medium' });
     expect(impact.affectedObjects.find((row) => row.objectId === caller.objectId)?.likelyOutcome).toContain('Potential impact only');
@@ -206,7 +206,7 @@ test('bounded matcher discloses per-object and whole-scan limits instead of prod
 test('new catalog/relationships change evidence assessment, never the existing decision or baseline', async () => {
     const definition = item('owners', 'Lookup Definition'); const parent = item('example', 'App'); const rule = automatic();
     const scope = { scanId: 'scan-fixture', observedAt: new Date(now).toISOString(), principal: 'operator', roles: ['operator'], mode: 'full', collectionComplete: true, analysisComplete: true,
-        collectors: { apps: true, macros: true, saved_searches: true, dashboards: true, data_models: true, indexes: true, sourcetypes: true, lookup_definitions: true, lookup_files: true, automatic_lookups: true } };
+        collectors: { apps: true, macros: true, saved_searches: true, dashboards: true, data_models: true, indexes: true, sourcetypes: true, lookup_definitions: true, lookup_files: true, automatic_lookups: true, event_types: true, tag_bindings: true } };
     const before = await attachReviewEvidence([definition, parent], [], scope);
     const saved = review(definition.objectId, { evidenceBaseline: { capturedAt: scope.observedAt, capturedBy: 'reviewer', evidence: before[0].reviewEvidence! } });
     const bytes = JSON.stringify(saved);
@@ -221,7 +221,7 @@ test('new catalog/relationships change evidence assessment, never the existing d
 test('automatic lookup and other implicit props coverage stays separate from unrelated macro coverage', () => {
     const rule = automatic(); const lookup = item('owners', 'Lookup Definition'); const macro = item('unrelated', 'Macro');
     const resolver = buildCoverageResolver({ gaps: [], privateObjects: [], identityKnown: true,
-        collectors: { apps: true, macros: true, saved_searches: true, dashboards: true, data_models: true, automatic_lookups: false } });
+        collectors: { apps: true, macros: true, saved_searches: true, dashboards: true, data_models: true, automatic_lookups: false, event_types: true, tag_bindings: true } });
     expect(resolver(rule.value, [], true).inbound.status).toBe('partial');
     expect(resolver(lookup, [], true).inbound.reasons.join(' ')).toContain('automatic_lookups');
     expect(resolver(macro, [], true).inbound.status).toBe('complete');
