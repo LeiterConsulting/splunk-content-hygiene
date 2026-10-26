@@ -10,7 +10,8 @@
   full context is open, including mixed mouse-hover and keyboard activation.
 - Keep UI persistence tests focused on real save/reopen behavior, with scoped
   accessible queries and real paste input. Test graph/table inspection contracts
-  independently in both themes without increasing timeouts or dropping assertions.
+  independently in both themes and wait for native modal visibility without
+  increasing timeouts or dropping assertions.
 - Inventory native automatic `LOOKUP-*` rules through the paginated read-only
   props REST catalog, preserving app/ACL identity, canonical transform binding,
   configuration fingerprints and explicit collection/parse/resolution gaps.

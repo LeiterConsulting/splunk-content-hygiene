@@ -47,6 +47,14 @@ function frame(
     );
 }
 
+async function visibleContextDialog(name: string): Promise<HTMLElement> {
+    const dialog = await screen.findByRole('dialog', { name });
+    // The native Modal exposes its accessible dialog before its fade-in ends.
+    // Wait for the actual visible state, not a machine-dependent event delay.
+    await waitFor(() => expect(dialog).toBeVisible());
+    return dialog;
+}
+
 test.each(['light', 'dark'] as const)(
     'long names/apps have persistent full context and return focus without changing the center in %s',
     async (scheme) => {
@@ -55,7 +63,7 @@ test.each(['light', 'dark'] as const)(
         render(frame(scheme, inspect));
         const trigger = screen.getByRole('button', { name: `Full context for ${longName}` });
         await user.click(trigger);
-        const dialog = screen.getByRole('dialog', { name: 'Object context' });
+        const dialog = await visibleContextDialog('Object context');
         expect(within(dialog).getByText(longName)).toBeVisible();
         expect(within(dialog).getByText(longApp)).toBeVisible();
         expect(within(dialog).getByText(center.objectId)).toBeVisible();
@@ -89,7 +97,7 @@ test.each(['light', 'dark'] as const)(
         await user.hover(screen.getByRole('button', { name: `Inspect ${longName}` }));
         await waitFor(() => expect(screen.getByRole('tooltip')).toHaveTextContent('Select to inspect'));
         await user.keyboard('{Enter}');
-        const dialog = screen.getByRole('dialog', { name: 'Relationship context' });
+        const dialog = await visibleContextDialog('Relationship context');
         await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument());
         expect(within(dialog).getByText(explanation.trim())).toBeVisible();
         expect(within(dialog).getByText(location)).toBeVisible();
@@ -120,7 +128,7 @@ test('group context is paginated and retains individual member drill-through', a
         ),
     );
     await user.click(screen.getByRole('button', { name: 'Full context for example' }));
-    const dialog = screen.getByRole('dialog', { name: 'Grouped object context' });
+    const dialog = await visibleContextDialog('Grouped object context');
     expect(within(dialog).getAllByRole('listitem')).toHaveLength(25);
     expect(within(dialog).queryByRole('button', { name: 'Member 39' })).not.toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Go to next page' }));
@@ -143,7 +151,7 @@ test('graph grouping changes cannot leave a stale context dialog attached to a d
         ),
     );
     await user.click(screen.getByRole('button', { name: /Relationship context:/ }));
-    expect(screen.getByRole('dialog')).toBeVisible();
+    expect(await visibleContextDialog('Relationship context')).toBeVisible();
     rerender(frame('dark', inspect, [center, caller], [edge(caller.objectId, center.objectId)]));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     rerender(
