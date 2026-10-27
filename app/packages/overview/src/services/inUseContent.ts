@@ -1,7 +1,9 @@
+/* eslint-disable no-underscore-dangle -- Policy provenance retains native revision IDs. */
 import { ContentObject, DependencyEdge, InventorySnapshot, ReviewRecord } from '../types';
 import { compareReviewEvidence } from './reviewEvidence';
 import { usageSourceForObject, usageValidity } from './usage';
 import { isPotentialRelation } from '../utils/dependencySemantics';
+import { AppPolicyStore, appPolicyStore, buildPolicyProtection } from './appPolicies';
 
 export interface InUseOptions {
     activity: 'all' | 'dashboard_view' | 'saved_search_execution' | 'none';
@@ -12,12 +14,14 @@ export interface InUseOptions {
     maxEdges?: number;
 }
 export interface InUseReason {
-    kind: 'observed' | 'retained' | 'selected';
+    kind: 'observed' | 'retained' | 'app_policy' | 'selected';
     detail: string;
     reviewer?: string;
     reviewedAt?: string;
     revisionId?: string;
     evidenceStatus?: string;
+    policyApp?: string;
+    policyConflict?: boolean;
 }
 export interface InUseRow {
     objectId: string;
@@ -56,6 +60,7 @@ export interface InUseReport {
     coverage: 'partial';
     truncated: boolean;
     gaps: string[];
+    appPolicies: AppPolicyStore;
 }
 const implicitGaps = [
     'This is a supported shared static dependency footprint, not a complete migration manifest or proof that excluded objects are unused.',
@@ -74,10 +79,12 @@ export function buildInUseReport(
     options: InUseOptions,
     now = Date.now(),
     reviewsVerified = true,
+    policies: AppPolicyStore = appPolicyStore([]),
 ): InUseReport {
     const objects = new Map(snapshot.objects.map((object) => [object.objectId, object]));
     const rows = new Map<string, InUseRow>();
     const gaps = new Set(implicitGaps);
+    if (!policies.verified) { gaps.add('App retention policy history could not be verified. No policy-derived roots are inferred; content is not proven unprotected.'); }
     if (!Object.prototype.hasOwnProperty.call(snapshot.scan.collectorCounts, 'automatic_lookups')) {
         gaps.add('This snapshot predates automatic lookup collection. Run a new complete scan to assess that catalog.');
     }
@@ -235,6 +242,18 @@ export function buildInUseReport(
                 );
             }
         }
+        if (options.includeRetained && policies.verified) {
+            const protection = buildPolicyProtection(snapshot, policies, reviews);
+            let unverified = 0;
+            protection.forEach((reason, id) => {
+                if (reason.status === 'scope_unverified') { unverified += 1; }
+                if (reason.status !== 'retained' || !reason.policy) { return; }
+                add(id)?.reasons.push({ kind: 'app_policy', detail: reason.detail, policyApp: reason.policy.app_id,
+                    policyConflict: reason.conflict, reviewer: reason.policy.updated_by, reviewedAt: reason.policy.updated_at,
+                    revisionId: reason.policy._key, evidenceStatus: 'exact_app_policy_not_activity' });
+            });
+            if (unverified) { gaps.add(`${unverified} shared objects have an active app policy with unverified current scope; no policy roots were guessed for them. Resolve policy scope before cleanup.`); }
+        }
     }
     const roots = [...rows.keys()];
     const queue = [...roots];
@@ -340,6 +359,7 @@ export function buildInUseReport(
         coverage: 'partial',
         truncated,
         gaps: [...gaps],
+        appPolicies: policies,
     };
 }
 

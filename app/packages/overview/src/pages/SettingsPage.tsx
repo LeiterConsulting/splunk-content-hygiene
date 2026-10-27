@@ -44,6 +44,7 @@ const collections = [
     ['ch_settings', 'Application settings', 'Defined'],
     ['ch_reviews', 'Preserved legacy review decisions (read-only in the app)', 'Defined'],
     ['ch_review_revisions', 'Conflict-safe review revision journal', 'Defined'],
+    ['ch_app_policy_revisions', 'Independent exact-app retention policy history', 'Defined'],
 ];
 
 interface SettingsPageProps {

@@ -31,6 +31,9 @@ export function FieldLineagePanel({ object }: { object: ContentObject }): React.
     const phases = { inline: 'Extraction (declared inline regex)', report: 'Extraction (ordered REPORT targets)',
         transform: 'Transform (scope supplied by REPORT callers)', alias: 'Alias (after extraction)',
         eval: 'Calculated (parallel EVAL declarations)', lookup: 'Lookup (after aliases and calculated fields)' };
+    let lookupMode = 'Output columns are not enumerated; no lookup data is read.';
+    if (facts.lookupMapping?.outputMode === 'OUTPUTNEW') { lookupMode = 'OUTPUTNEW preserves each existing event output field.'; }
+    else if (facts.lookupMapping?.outputMode === 'OUTPUT') { lookupMode = 'OUTPUT may overwrite or clear event output fields when no lookup row matches.'; }
     return <section aria-label="Declared field lineage">
         <strong>Declared field lineage</strong>
         <SmallText>Configured names and provenance only—not field values, proven execution or removal approval.</SmallText>
@@ -41,6 +44,15 @@ export function FieldLineagePanel({ object }: { object: ContentObject }): React.
             <dt>Supported syntax</dt><dd>{facts.syntax}</dd>
             <dt>Declared inputs</dt><dd><FieldNames names={facts.inputs} label="input names" /></dd>
             <dt>Declared outputs</dt><dd><FieldNames names={facts.outputs} label="output names" /></dd>
+            {facts.lookupMapping ? <><dt>Lookup mappings</dt><dd>
+                <SmallText>{lookupMode}</SmallText>
+                <CollapsiblePanel appearance="subtle" title="Configured lookup field mappings">
+                    <EvidenceList aria-label="Configured lookup field mappings">
+                        {facts.lookupMapping.inputs.map(row => <li key={`in-${row.position}`}>Input {row.position}: lookup column <strong>{row.lookupField}</strong> ← event field <strong>{row.eventField}</strong></li>)}
+                        {facts.lookupMapping.outputs.map(row => <li key={`out-${row.position}`}>{facts.lookupMapping!.outputMode} {row.position}: lookup column <strong>{row.lookupField}</strong> → event field <strong>{row.eventField}</strong></li>)}
+                    </EvidenceList>
+                </CollapsiblePanel>
+            </dd></> : null}
             {facts.outputProvenance ? <><dt>Output attribution</dt><dd>
                 {outputMethods[facts.outputProvenance.method]}
                 <SmallText>Input: {facts.outputProvenance.sourceField ?? 'not established'} · {facts.outputProvenance.sourceOrigin.replace(/_/g, ' ')}.
@@ -69,14 +81,27 @@ export function FieldLineagePanel({ object }: { object: ContentObject }): React.
 
 export function FieldProvenanceDetails({ provenance }: { provenance?: FieldDependencyProvenance }): React.ReactElement | null {
     if (!provenance) { return null; }
+    let phases = `${provenance.consumerPhase ?? 'Original-event search'} → ${provenance.producerPhase} dependency`;
+    if (provenance.kind === 'report_binding') { phases = 'REPORT configuration → named transform'; }
+    else if (provenance.kind === 'lookup_binding') { phases = 'LOOKUP configuration → named lookup definition (not a lookup execution chain)'; }
     return <section aria-label="Field relationship provenance">
         <DefinitionList>
             <dt>Declared fields</dt><dd>{provenance.fields.join(', ') || 'Scope/configuration binding only—not proven field consumption'}</dd>
-            <dt>Dependency phases</dt><dd>{provenance.kind === 'report_binding' ? 'REPORT configuration → named transform' : `${provenance.consumerPhase ?? 'Original-event search'} → ${provenance.producerPhase} dependency`}</dd>
+            <dt>Dependency phases</dt><dd>{phases}</dd>
             <dt>Scope</dt><dd>{provenance.scope ? `${provenance.scope.field}=${provenance.scope.value}` : 'Not established independently'}</dd>
             {provenance.transformPositions.length ? <><dt>REPORT positions</dt><dd>{provenance.transformPositions.join(', ')} (one-based)</dd></> : null}
             {provenance.viaObjectIds.length ? <><dt>Transform provenance</dt><dd>{provenance.viaObjectIds.join('; ')}</dd></> : null}
             <dt>Namespace</dt><dd>{provenance.contextApps.join(', ')} · {provenance.invocation === 'fixed_app' ? 'fixed caller app' : 'possible invoking app, unverified at runtime'}</dd>
+            {provenance.contexts?.length ? <><dt>Configuration contexts</dt><dd>
+                <SmallText>Candidate bindings only, not an effective-props winner. Other relationship rows can represent alternatives. Cross-scope, system and user-private precedence remain unverified.</SmallText>
+                <CollapsiblePanel appearance="subtle" title={`Possible configuration contexts (${provenance.contexts.length})`}>
+                    <EvidenceList aria-label="Possible configuration contexts">{provenance.contexts.map(row => <li key={JSON.stringify(row)}>
+                        <strong>Invoking app: {row.invokingApp}</strong>
+                        <SmallText>Source: {row.declaringApp} · {row.declaration.replace(/_/g, ' ')}. Dependency: {row.dependencyApp ?? 'not resolved'} · {row.dependency.replace(/_/g, ' ')}.</SmallText>
+                        {row.selector ? <SmallText>Original selector: {row.selector.field}={row.selector.value} · {row.selector.sourceLocation}. Case-insensitive literal comparison; native identities are unchanged.</SmallText> : null}
+                    </li>)}</EvidenceList>
+                </CollapsiblePanel>
+            </dd></> : <><dt>Configuration contexts</dt><dd>Not recorded by this snapshot. Run a complete scan to collect context evidence.</dd></>}
             {provenance.outputDeclarations?.length ? <><dt>Output attribution</dt><dd>
                 <CollapsiblePanel appearance="subtle" title={`Matched output declarations (${provenance.outputDeclarations.length})`}>
                     <SmallText>Declared producer locations, not proof of matching or field availability. Offsets are zero-based UTF-16; capture numbers are one-based.</SmallText>

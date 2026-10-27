@@ -1,5 +1,39 @@
 # Changelog
 
+## 1.5.0 — 2026-10-27 (build 82)
+
+- Withhold REPORT and declared field-input bindings when local/private source
+  rules contradict a proposed invoking-app context. Keep valid alternatives,
+  exact identities and uncertainty diagnostics without changing review records.
+- Record possible declaring/invoking/dependency namespaces and exact selector
+  witnesses in shared field/automatic-lookup provenance. Expose accessible,
+  wrapping disclosures and preserve context through reports and CSV/JSON.
+- Retain literal automatic-lookup input/output column mappings, AS destinations,
+  and OUTPUT/OUTPUTNEW semantics without reading lookup rows or inventing
+  lookup-to-lookup execution chains. Add bounded ordinary multivalue EVAL inputs;
+  dynamic/binding functions remain unsupported.
+- Add independent, reversible exact-app retention policies for current and
+  future shared objects. Preview scope explicitly, preserve individual decisions,
+  disclose conflicts, and separate policy protection from activity/impact scores.
+- Coordinate app-policy revisions through the existing role-checked server
+  endpoint and a separate append-only journal. Recheck expected parents, app
+  configuration/ACL scope and complete preview scans; attribute actor/time on the
+  server. Disable/archive/restore retain history and work with missing apps.
+- Carry separate policy reasons through Library, candidates, required-content,
+  impact blockers and CSV/JSON. Add paginated policy/history browsing, exports,
+  strict journal validation, consistent keyset reads and lost-response readback.
+- Normalize native disabled-flag casing for automatic lookups. Bound inspected
+  candidates, not only emitted edges, including duplicate/withheld contexts;
+  retain explicit gaps when the work budget is exhausted.
+- Qualify the exact build with 775 automated checks, pre-cert AppInspect and
+  fresh three-runtime read-only catalog/schema, seven-page Light/Dark and
+  representative export validation. Native own-app policy saves, viewer/reviewer
+  denials, serialized concurrent edits, replay protection, disable/archive/restore
+  and history CSV/JSON pass on all three runtimes. Original individual decisions
+  and appearance preferences are preserved; temporary accounts are removed and
+  test policies are recoverably archived. Workflow/navigation
+  coverage and broader dependency follow-up #8 remain open.
+
 ## 1.4.0 — 2026-10-26 (build 79)
 
 - Attribute supported inline named captures and declared source fields without

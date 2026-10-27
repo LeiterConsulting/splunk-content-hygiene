@@ -20,6 +20,7 @@ import { ReviewStageBadge } from './ReviewStageBadge';
 import { ReviewWorkflowContext } from './ReviewWorkflowContext';
 import { ReviewHistoryPanel } from './ReviewHistoryPanel';
 import { useReviewNavigation } from './ReviewNavigationContext';
+import { AppRetentionNotice } from './AppPolicyContext';
 
 interface ReviewEditorProps {
     contentObject: ContentObject;
@@ -176,6 +177,7 @@ export function ReviewEditor({
 
     return (
         <>
+            <AppRetentionNotice object={contentObject} />
             {review ? (
                 <section aria-label="Saved review decision">
                     <ButtonRow>

@@ -223,7 +223,7 @@ test.each(['inline', 'transform'] as const)('%s output provenance survives colle
     const edge = result.edges.find(row => row.relation === 'may_read_extracted_field')!;
     expect(edge.fieldProvenance?.outputDeclarations).toMatchObject([{ field: 'actor', objectId: nativeOrigin.objectId, capture: 2, offset: 8 }]);
     expect([...collections.get('ch_edges')!.values()].find(row => row.relation === edge.relation)).toMatchObject({ field_provenance: edge.fieldProvenance });
-    expect(result.scan.collectorVersions).toMatchObject({ field_lineage: '1.1.0', dependency_analysis: '1.4.0' });
+    expect(result.scan.collectorVersions).toMatchObject({ field_lineage: '1.2.0', dependency_analysis: '1.5.0' });
     const cached = await splunkInventoryClient.getLatestSnapshot();
     expect(cached?.objects.find(row => row.objectId === nativeOrigin.objectId)?.fieldLineage).toEqual(nativeOrigin.fieldLineage);
     expect(cached?.edges.find(row => row.edgeId === edge.edgeId)?.fieldProvenance).toEqual(edge.fieldProvenance);
@@ -273,11 +273,11 @@ test.each(['missing_total', 'repeat', 'shrinking_total'] as const)('strict field
     expect(result.latestCheck?.analysisStatus).toBe('partial');
 });
 
-test('native automatic lookup collection paginates, excludes private identities, fingerprints mappings and never stores raw declarations', async () => {
+test('native automatic lookup collection paginates, excludes private identities and retains only declared field names/mappings, not raw declarations', async () => {
     automaticEntries = Array.from({ length: 201 }, (_, index) => ({
         name: `events : LOOKUP-example-${index}`,
         acl: { app: 'example', owner: 'nobody', sharing: index === 200 ? 'user' : 'app' },
-        content: { stanza: 'events', attribute: `LOOKUP-example-${index}`, transform: 'owners', type: 'LOOKUP', value: 'owners key OUTPUT private_output_marker', 'lookup.field.output.0': 'owner' },
+        content: { stanza: 'events', attribute: `LOOKUP-example-${index}`, transform: 'owners', type: 'LOOKUP', value: 'owners key OUTPUT declared_output_name', 'lookup.field.output.0': 'owner' },
     }));
     const result = await splunkInventoryClient.runFullScan();
     expect(result.scan.collectorCounts.automatic_lookups).toBe(200);
@@ -288,7 +288,8 @@ test('native automatic lookup collection paginates, excludes private identities,
     expect(automatic[0].configurationFingerprint).toMatchObject({ version: 2, digest: expect.stringMatching(/^[a-f0-9]{64}$/) });
     expect(result.edges.filter((row) => row.relation === 'uses_lookup')).toHaveLength(200);
     const stored = JSON.stringify(Array.from(collections.get('ch_objects')!.values()));
-    expect(stored).not.toContain('private_output_marker');
+    expect(stored).not.toContain('owners key OUTPUT declared_output_name');
+    expect(automatic[0].fieldLineage).toMatchObject({ outputs: ['declared_output_name'], lookupMapping: { outputMode: 'OUTPUT', outputs: [{ lookupField: 'declared_output_name', eventField: 'declared_output_name' }] } });
     expect(stored).not.toContain('LOOKUP-example-200');
     expect(requests.filter((row) => row.method !== 'GET').every((row) => row.path.includes('/storage/collections/data/'))).toBe(true);
 });

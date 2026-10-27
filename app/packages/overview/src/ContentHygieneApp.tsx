@@ -5,6 +5,7 @@ import { InlineNotice, Page, StyledApp } from './AppStyles';
 import { ScanStatusBanner } from './components/ScanStatusBanner';
 import { ReviewWorkflowContext } from './components/ReviewWorkflowContext';
 import { ReviewNavigationProvider } from './components/ReviewNavigationContext';
+import { AppPolicyProvider } from './components/AppPolicyContext';
 import { getHygieneAccess } from './services/access';
 import { splunkInventoryClient } from './services/inventory';
 import { splunkReviewClient } from './services/reviews';
@@ -305,7 +306,11 @@ export function ContentHygieneApp({
                             />
                         }
                     >
-                        <ReviewWorkflowContext.Provider value={workflow}>{content}</ReviewWorkflowContext.Provider>
+                        <ReviewWorkflowContext.Provider value={workflow}>
+                            <AppPolicyProvider enabled={inventoryClient === splunkInventoryClient} canManage={access.canCollect} snapshot={snapshot} reviews={usableReviews} reviewsVerified={!isLoadingReviews && !reviewLoadError}>
+                                {content}
+                            </AppPolicyProvider>
+                        </ReviewWorkflowContext.Provider>
                     </Suspense>
                 </Page>
             </StyledApp></ReviewNavigationProvider>

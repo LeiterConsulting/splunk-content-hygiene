@@ -60,8 +60,12 @@ export function ScanStatusBanner({
         let fieldNotice: string | null = null;
         if (!['field_extractions', 'field_aliases', 'calculated_fields', 'field_transforms'].every(collector => Object.prototype.hasOwnProperty.call(scan.collectorCounts, collector))) {
             fieldNotice = 'This snapshot predates field-lineage coverage. Run a new complete scan from Settings; existing decisions and baselines are unchanged.';
-        } else if (scan.collectorVersions?.field_lineage !== '1.1.0') {
-            fieldNotice = 'This snapshot lacks current extraction-output attribution. Run a new complete scan from Settings; existing decisions and captured evidence are preserved.';
+        } else if (scan.collectorVersions?.field_lineage !== '1.2.0') {
+            if (scan.collectorVersions?.field_lineage === '1.1.0') {
+                fieldNotice = 'This snapshot lacks current lookup-output and configuration-context evidence. Run a new complete scan; existing decisions and captured baselines are preserved.';
+            } else {
+                fieldNotice = 'This snapshot lacks current extraction-output attribution. Run a new complete scan from Settings; existing decisions and captured evidence are preserved.';
+            }
         }
         let bannerState: 'ready' | 'warning' | 'error' = 'ready';
         if (scan.status === 'failed') { bannerState = 'error'; }

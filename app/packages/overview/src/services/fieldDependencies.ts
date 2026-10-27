@@ -8,6 +8,7 @@ export const FIELD_INDEX_ENTRY_LIMIT = 50000;
 export const FIELD_CANDIDATE_VISIT_LIMIT = 100000;
 export const FIELD_SOURCE_VISIT_LIMIT = 5000;
 export const FIELD_LINEAGE_LIMITATION = 'Declared field paths are potential search-time dependencies, not proof a regex matched, a field exists, a declaration executes or a particular props override wins. Cross-scope precedence, wildcard/default rules, private/system inheritance and external consumers remain unverified.';
+export const FIELD_SOURCE_CONTEXT_LIMITATION = 'Invoking-app context cannot establish this source declaration because local, private or omitted field configuration may override it. No shared binding is guessed for that context.';
 export const FIELD_TARGETS: ReferenceTarget[] = ['field_extraction', 'field_alias', 'calculated_field', 'field_transform'];
 export interface FieldVisibility {
     privateObjects: Array<{ collector: string; app: string; count: number }>;
@@ -60,7 +61,7 @@ export function buildFieldDependencyMatcher(objects: ContentObject[], catalogCom
     const privateTarget = (collector: string, name: string, app: string): boolean => privateGaps.has(`${collector}\0${app}`) || privateGaps.has(`${collector}\0unknown`) || privateCounts.has(`${collector}\0unknown`) ||
         (visibility?.privateTargets ? privateNames.has(`${collector}\0${app}\0${name}`) : privateCounts.has(`${collector}\0${app}`));
     const collectorFor = (object: ContentObject): string => ({ 'Field Extraction': 'field_extractions', 'Field Alias': 'field_aliases',
-        'Calculated Field': 'calculated_fields', 'Field Transform': 'field_transforms' }[object.objectType] ?? 'field_extractions');
+        'Calculated Field': 'calculated_fields', 'Field Transform': 'field_transforms', 'Automatic Lookup': 'automatic_lookups' }[object.objectType] ?? 'field_extractions');
     const gapDuringBuild = (object: ContentObject, message: string): void => {
         const messages = buildGaps.get(object.objectId) ?? [];
         if (!messages.includes(message)) { messages.push(message); buildGaps.set(object.objectId, messages); }
@@ -74,6 +75,13 @@ export function buildFieldDependencyMatcher(objects: ContentObject[], catalogCom
             addIndex(scoped, scopeKey(item.facts.scope), item.object.app, item.object.sharing === 'global', item);
         }
     });
+    // Search-time context applies to the source rule as well as its target.
+    // Withhold a contradicted/hidden source rather than claiming an effective
+    // props winner from the shared catalog. This is an indexed identity check,
+    // not a new search, user-private inventory or complete precedence evaluator.
+    const sourceContextAvailable = (object: ContentObject, app: string): boolean =>
+        !privateTarget(collectorFor(object), object.canonicalName, app) &&
+        (object.app === app || !localIdentities.has(`${app}\0${object.objectType}\0${object.canonicalName}`));
     const visibleTransforms = (name: string, app: string): Candidate[] => {
         if (privateTarget('field_transforms', name, app)) { return []; }
         const scopes = transforms.get(name); const local = scopes?.get(`app:${app}`) ?? [];
@@ -98,6 +106,7 @@ export function buildFieldDependencyMatcher(objects: ContentObject[], catalogCom
                     if (buildVisits <= 0) { gapDuringBuild(object, 'REPORT namespace candidate-visit budget reached; additional bindings remain unverified.'); break; }
                     buildVisits -= 1;
                     const app = reusable ? target.object.app : object.app;
+                    if (!sourceContextAvailable(object, app)) { gapDuringBuild(object, FIELD_SOURCE_CONTEXT_LIMITATION); continue; }
                     const visible = visibleTransforms(name, app);
                     if (visible.length !== 1 || visible[0].object.objectId !== target.object.objectId || seen.has(target.object.objectId)) { continue; }
                     if (rows.length >= FIELD_MATCH_LIMIT || bindingBudget <= 0) { break; }
@@ -177,6 +186,7 @@ export function buildFieldDependencyMatcher(objects: ContentObject[], catalogCom
                         const consumer = phase(own);
                         if (producer.object.objectId === object.objectId || producer.phase === 'calculated' && consumer !== 'lookup' || producer.phase === 'alias' && consumer === 'alias') { continue; }
                         const app = reusable ? producer.via?.object.app ?? producer.object.app : object.app;
+                        if (!sourceContextAvailable(object, app)) { gap(FIELD_SOURCE_CONTEXT_LIMITATION); continue; }
                         if (privateTarget(collectorFor(producer.object), producer.object.canonicalName, app)) {
                             gap('Private or omitted field declarations can change the producer binding; no shared output path is guessed for that context.'); continue;
                         }
@@ -185,7 +195,7 @@ export function buildFieldDependencyMatcher(objects: ContentObject[], catalogCom
                             if (visible.length !== 1 || visible[0].object.objectId !== producer.via.object.objectId) { continue; }
                         }
                         // Same-named local declarations can shadow exported ones.
-                        if (!reusable && producer.object.app !== app && localIdentities.has(`${app}\0${producer.object.objectType}\0${producer.object.canonicalName}`)) { continue; }
+                        if (producer.object.app !== app && localIdentities.has(`${app}\0${producer.object.objectType}\0${producer.object.canonicalName}`)) { continue; }
                         const key = `${producer.object.objectId}\0${app}`;
                         const origin = producer.via ?? producer;
                         const declared: ProducerOutputDeclaration[] = (origin.facts.outputProvenance?.declarations ?? [])
@@ -239,6 +249,9 @@ export function buildFieldDependencyMatcher(objects: ContentObject[], catalogCom
                     const type = targetType(candidate.object);
                     const proof = provenance('event_scope', candidate.facts.scope, null, phase(candidate.facts), false);
                     proof.contextApps = [object.app];
+                    proof.contexts = [{ declaringApp: object.app, dependencyApp: candidate.object.app, invokingApp: object.app,
+                        declaration: 'local_candidate', dependency: candidate.object.app === object.app ? 'local_candidate' : 'exported_candidate',
+                        selector: { field: selector.field, value: selector.value, sourceLocation: selector.sourceLocation } }];
                     let relation = 'may_apply_field_extraction';
                     if (type === 'field_alias') { relation = 'may_apply_field_alias'; }
                     else if (type === 'calculated_field') { relation = 'may_apply_calculated_field'; }

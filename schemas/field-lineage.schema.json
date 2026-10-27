@@ -10,6 +10,26 @@
         "value": { "type": "string", "minLength": 1, "maxLength": 4096 }, "exact": { "type": "boolean" } }
     }] },
     "phase": { "enum": ["extraction", "alias", "calculated", "lookup"] },
+    "lookupMapping": {
+      "type": "object", "additionalProperties": false, "required": ["version", "inputs", "outputs", "outputMode"],
+      "properties": { "version": { "const": 1 }, "outputMode": { "enum": ["OUTPUT", "OUTPUTNEW", "implicit"] },
+        "inputs": { "type": "array", "minItems": 1, "maxItems": 250, "items": { "$ref": "#/$defs/lookupField" } },
+        "outputs": { "type": "array", "maxItems": 250, "items": { "$ref": "#/$defs/lookupField" } } }
+    },
+    "lookupField": {
+      "type": "object", "additionalProperties": false, "required": ["lookupField", "eventField", "position"],
+      "properties": { "lookupField": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "eventField": { "type": "string", "minLength": 1, "maxLength": 4096 }, "position": { "type": "integer", "minimum": 1, "maximum": 250 } }
+    },
+    "context": {
+      "type": "object", "additionalProperties": false, "required": ["declaringApp", "dependencyApp", "invokingApp", "declaration", "dependency", "selector"],
+      "properties": { "declaringApp": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "dependencyApp": { "type": ["string", "null"], "minLength": 1, "maxLength": 4096 },
+        "invokingApp": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "declaration": { "enum": ["local_candidate", "exported_candidate"] }, "dependency": { "enum": ["local_candidate", "exported_candidate", "unresolved"] },
+        "selector": { "anyOf": [{ "type": "null" }, { "type": "object", "additionalProperties": false, "required": ["field", "value", "sourceLocation"],
+          "properties": { "field": { "enum": ["sourcetype", "host", "source"] }, "value": { "type": "string", "minLength": 1, "maxLength": 4096 }, "sourceLocation": { "type": "string", "minLength": 1, "maxLength": 4096 } } }] } }
+    },
     "outputMethod": { "enum": ["inline_named_captures", "transform_named_captures", "transform_format", "transform_fields"] },
     "outputDeclaration": {
       "type": "object", "additionalProperties": false, "required": ["field", "capture", "offset", "attribute"],
@@ -63,20 +83,22 @@
         } },
         "syntax": { "enum": ["declared", "partial", "unsupported"] }, "sourceLocation": { "type": "string" },
         "limitations": { "type": "array", "maxItems": 250, "items": { "type": "string" } },
-        "outputProvenance": { "$ref": "#/$defs/outputProvenance" }
+        "outputProvenance": { "$ref": "#/$defs/outputProvenance" },
+        "lookupMapping": { "$ref": "#/$defs/lookupMapping" }
       }
     },
     "provenance": {
       "type": "object", "additionalProperties": false,
       "required": ["version", "kind", "fields", "scope", "consumerPhase", "producerPhase", "transformPositions", "viaObjectIds", "contextApps", "invocation"],
       "properties": {
-        "version": { "const": 1 }, "kind": { "enum": ["report_binding", "field_input", "event_scope"] },
+        "version": { "const": 1 }, "kind": { "enum": ["report_binding", "lookup_binding", "field_input", "event_scope"] },
         "fields": { "$ref": "#/$defs/names" }, "scope": { "$ref": "#/$defs/scope" },
         "consumerPhase": { "anyOf": [{ "$ref": "#/$defs/phase" }, { "type": "null" }] }, "producerPhase": { "$ref": "#/$defs/phase" },
         "transformPositions": { "type": "array", "maxItems": 250, "items": { "type": "integer", "minimum": 1, "maximum": 250 } },
         "viaObjectIds": { "type": "array", "maxItems": 250, "items": { "type": "string", "minLength": 1, "maxLength": 16384 } }, "contextApps": { "$ref": "#/$defs/names" },
         "invocation": { "enum": ["fixed_app", "invoking_app_unverified"] },
-        "outputDeclarations": { "type": "array", "maxItems": 250, "items": { "$ref": "#/$defs/producerDeclaration" } }
+        "outputDeclarations": { "type": "array", "maxItems": 250, "items": { "$ref": "#/$defs/producerDeclaration" } },
+        "contexts": { "type": "array", "maxItems": 250, "items": { "$ref": "#/$defs/context" } }
       }
     }
   }

@@ -1,4 +1,4 @@
-import { ConfidenceLevel, FieldDependencyProvenance, FieldLineageFacts } from '../types';
+import { ConfidenceLevel, FieldDependencyProvenance, FieldLineageFacts, LookupMappingFacts } from '../types';
 import { hasUnboundedIndexScope } from './indexScope';
 
 export type ReferenceTarget =
@@ -19,6 +19,7 @@ export interface AutomaticLookupRule {
     disabled: boolean;
     fieldInputs?: string[];
     fieldInputsComplete?: boolean;
+    fieldMapping?: LookupMappingFacts;
 }
 export interface ParsedReference {
     targetType: ReferenceTarget;

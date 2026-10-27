@@ -38,14 +38,14 @@ test.each(['light', 'dark'] as const)('invalid type/app filters recover when Ret
     await choose(user, 'Included type', 'Lookup file');
     await choose(user, 'Included app', 'lookup_app');
     expect(screen.getByRole('heading', { name: '1 included identities' })).toBeVisible();
-    await user.click(screen.getByRole('checkbox', { name: 'Include active Retain decisions' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Include active Retain decisions and app policies' }));
     expect(screen.getByRole('combobox', { name: 'Included type' })).toHaveTextContent('All types');
     expect(screen.getByRole('combobox', { name: 'Included app' })).toHaveTextContent('All apps');
     expect(screen.getByRole('heading', { name: '1 included identities' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Observed' })).toBeVisible();
     expect(screen.getByText(/Included type and app filters were reset/).closest('[role="status"]')).toHaveAttribute('aria-live', 'polite');
     // Restoring the old roots must not reactivate the obsolete stored filters.
-    await user.click(screen.getByRole('checkbox', { name: 'Include active Retain decisions' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Include active Retain decisions and app policies' }));
     expect(screen.getByRole('heading', { name: '3 included identities' })).toBeVisible();
     expect(screen.getByRole('combobox', { name: 'Included app' })).toHaveTextContent('All apps');
     await user.click(screen.getByRole('button', { name: 'Lookup file: 1' }));

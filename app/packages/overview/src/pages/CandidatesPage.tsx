@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useContext, useState } from 'react';
 import Checkbox from '@splunk/react-ui/Checkbox';
+import { AppPolicyContext, AppRetentionLabel } from '../components/AppPolicyContext';
+import { PolicyProtection } from '../services/appPolicies';
 import {
     ButtonRow,
     Card,
@@ -126,6 +128,7 @@ function exportCandidates(
     rows: ContentObject[],
     findingsByObject: Map<string, ContentFinding[]>,
     reviewByObject: Map<string, ReviewRecord>,
+    protection: ReadonlyMap<string, PolicyProtection>,
 ): void {
     const header = [
         'Object ID',
@@ -157,6 +160,7 @@ function exportCandidates(
         'Assigned to',
         'Review note',
         'Review updated',
+        'App policy protection (separate from individual decision)',
     ];
     downloadCsv(
         'content-hygiene-candidates.csv',
@@ -196,6 +200,7 @@ function exportCandidates(
                 review?.assignedTo ?? '',
                 review?.note ?? '',
                 review?.updatedAt ?? '',
+                JSON.stringify(protection.get(contentObject.objectId) ?? null),
             ];
         }),
     );
@@ -206,6 +211,7 @@ function exportCandidatesJson(
     findingsByObject: Map<string, ContentFinding[]>,
     reviewByObject: Map<string, ReviewRecord>,
     scanId: string | null,
+    protection: ReadonlyMap<string, PolicyProtection>,
 ): void {
     downloadJson('content-hygiene-candidates.json', {
         scanId,
@@ -214,6 +220,7 @@ function exportCandidatesJson(
             object: contentObject,
             findings: findingsByObject.get(contentObject.objectId) ?? [],
             review: reviewByObject.get(contentObject.objectId) ?? null,
+            appPolicyProtection: protection.get(contentObject.objectId) ?? null,
         })),
     });
 }
@@ -227,6 +234,8 @@ export function CandidatesPage({
     onDeleteReview,
 }: CandidatesPageProps): React.ReactElement {
     const { navigate } = useReviewNavigation();
+    const policies = useContext(AppPolicyContext);
+    const [policyFilter, setPolicyFilter] = useState('all');
     const [statusFilter, setStatusFilter] = useState(readQueryParam('status') || 'all');
     const [typeFilter, setTypeFilter] = useState('all');
     const [appFilter, setAppFilter] = useState(readQueryParam('app') || 'all');
@@ -276,6 +285,9 @@ export function CandidatesPage({
                 review?.stage === reviewFilter;
             const usageState = usageEvidenceState(contentObject);
             const matchesUsage = usageFilter === 'all' || usageState === usageFilter;
+            const policy = policies.protection.get(contentObject.objectId);
+            const matchesPolicy = policyFilter === 'all' || policyFilter === 'conflict' && policy?.conflict ||
+                (policyFilter === 'none' ? !policy?.blocksCleanup : policy?.status === policyFilter);
             const matchesQuery =
                 normalizedQuery.length === 0 ||
                 [contentObject.name, contentObject.app, ownerLabel(contentObject)].some((value) =>
@@ -288,6 +300,7 @@ export function CandidatesPage({
                 matchesApp &&
                 matchesReview &&
                 matchesUsage &&
+                matchesPolicy &&
                 matchesQuery
             );
         })
@@ -317,7 +330,7 @@ export function CandidatesPage({
     const pageCandidates = filteredCandidates.slice(pageStart, pageStart + PAGE_SIZE);
     // Paging/sorting preserve selection; a changed filter or scan cannot carry
     // hidden identities into a new decision scope.
-    const bulkScope = JSON.stringify([snapshot?.scan.scanId, query, statusFilter, typeFilter, appFilter, reviewFilter, usageFilter]);
+    const bulkScope = JSON.stringify([snapshot?.scan.scanId, query, statusFilter, typeFilter, appFilter, reviewFilter, usageFilter, policyFilter, policies.store.verified, policies.store.heads.map(row => [row.app_id, row.revision_number])]);
     // Reset the interaction epoch before committing a different scope. Merely
     // hiding old IDs would resurrect them when a filter was later cleared.
     if (bulkSelection.scope !== bulkScope) { setBulkSelection({ scope: bulkScope, ids: new Set() }); }
@@ -362,6 +375,7 @@ export function CandidatesPage({
                                     filteredCandidates,
                                     findingsByObject,
                                     reviewByObject,
+                                    policies.protection,
                                 )
                             },
                         { label: 'Candidates JSON', onClick: () =>
@@ -370,6 +384,7 @@ export function CandidatesPage({
                                     findingsByObject,
                                     reviewByObject,
                                     snapshot?.scan.scanId ?? null,
+                                    policies.protection,
                                 )
                             },
                     ]} /> : undefined
@@ -464,6 +479,11 @@ export function CandidatesPage({
                         ))}
                     </Select>
                 </FilterField>
+                <FilterField>Policy protection<Select value={policyFilter} onChange={event => { setPolicyFilter(event.currentTarget.value); setPage(0); }}>
+                    <option value="all">All policy states</option><option value="retained">Retained by app policy</option>
+                    <option value="conflict">Policy / individual decision conflict</option><option value="scope_unverified">Policy scope unverified</option>
+                    <option value="store_unverified">Policy history unavailable</option><option value="none">No active policy protection</option>
+                </Select></FilterField>
                 <FilterField>
                     Usage evidence
                     <Select
@@ -508,6 +528,7 @@ export function CandidatesPage({
                         setAppFilter('all');
                         setReviewFilter('all');
                         setUsageFilter('all');
+                        setPolicyFilter('all');
                         setSortOrder('confidence');
                         setQuery('');
                         setPage(0);
@@ -591,6 +612,7 @@ export function CandidatesPage({
                                                     <StatusBadge
                                                         status={contentObject.healthStatus}
                                                     />
+                                                    <div><AppRetentionLabel objectId={contentObject.objectId} /></div>
                                                 </td>
                                                 <td>
                                                     {reviewByObject.has(contentObject.objectId) ? (
@@ -652,8 +674,8 @@ export function CandidatesPage({
                                 <StyledButton type="button" $primary onClick={() => navigate(() => navigateToView('dependencies', { object: selected.objectId, scan: snapshot?.scan.scanId }))}>Explore dependencies</StyledButton>
                                 {reviewByObject.has(selected.objectId) ? <StyledButton onClick={() => navigate(() => navigateToView('reviews', { object: selected.objectId }))}>Open in review library</StyledButton> : null}
                                 <ExportMenu label="Export this object" items={[
-                                    { label: 'Selected finding CSV', onClick: () => exportCandidates([selected], findingsByObject, reviewByObject) },
-                                    { label: 'Selected finding JSON', onClick: () => exportCandidatesJson([selected], findingsByObject, reviewByObject, snapshot?.scan.scanId ?? null) },
+                                    { label: 'Selected finding CSV', onClick: () => exportCandidates([selected], findingsByObject, reviewByObject, policies.protection) },
+                                    { label: 'Selected finding JSON', onClick: () => exportCandidatesJson([selected], findingsByObject, reviewByObject, snapshot?.scan.scanId ?? null, policies.protection) },
                                 ]} />
                             </ButtonRow>
                         </WorkspaceHeader>

@@ -28,6 +28,7 @@ import { navigateToView } from '../utils/navigation';
 import { ResultPagination } from './ResultPagination';
 import { ReviewWorkflowContext } from './ReviewWorkflowContext';
 import { useReviewNavigation } from './ReviewNavigationContext';
+import { AppPolicyContext } from './AppPolicyContext';
 
 export function BulkReviewPanel({
     objects,
@@ -43,6 +44,8 @@ export function BulkReviewPanel({
     onSave: (input: ReviewInput) => Promise<ReviewRecord>;
 }): React.ReactElement {
     const workflow = useContext(ReviewWorkflowContext);
+    const policies = useContext(AppPolicyContext);
+    const policyProtected = objects.filter(object => policies.protection.get(object.objectId)?.blocksCleanup).length;
     const { navigate, setDraft } = useReviewNavigation();
     const trigger = useRef<HTMLButtonElement | null>(null);
     const cancel = useRef(false);
@@ -213,6 +216,7 @@ export function BulkReviewPanel({
                         Customer knowledge objects stay read-only. This applies ordinary per-object
                         review decisions, not an app-wide rule or removal approval.
                     </SmallText>
+                    {policyProtected ? <InlineNotice>{policyProtected} selected objects have app-policy protection or unverified policy scope. Bulk review changes only individual decisions; it cannot override a policy or qualify policy-protected content for cleanup. Any conflict remains visible.</InlineNotice> : null}
                     {error ? <InlineNotice role="alert">{error}</InlineNotice> : null}
                     {phase === 'edit' ? (
                         <>

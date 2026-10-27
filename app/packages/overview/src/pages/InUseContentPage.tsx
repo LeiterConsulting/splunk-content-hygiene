@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useContext, useMemo, useState } from 'react';
 import Checkbox from '@splunk/react-ui/Checkbox';
+import { AppPolicyContext } from '../components/AppPolicyContext';
 import {
     ButtonRow,
     Card,
@@ -49,6 +50,7 @@ function reasonLabel(row: InUseRow): string {
                 if (reason.kind === 'retained') {
                     return 'Retained by review';
                 }
+                if (reason.kind === 'app_policy') { return 'Retained by app policy'; }
                 return 'Explicit starting object';
             })
             .join(' + ') ||
@@ -89,6 +91,7 @@ function exportRows(report: InUseReport, rows: InUseRow[], scope: string): void 
             'Traversal truncated',
             'Scope limitations',
             'Declared field facts', 'Field witness provenance',
+            'Policy-derived retention (not an individual decision)',
         ],
         rows.map((row) => {
             const retained = row.reasons.find((reason) => reason.kind === 'retained');
@@ -124,6 +127,7 @@ function exportRows(report: InUseReport, rows: InUseRow[], scope: string): void 
                 'Shared static footprint only; potential props paths are conditional, not proof of execution. Other implicit, private, dynamic and ad-hoc consumers remain unverified. Export coverage CSV or full JSON for diagnostics.',
                 row.fieldLineage ? JSON.stringify(row.fieldLineage) : '',
                 row.via?.fieldProvenance ? JSON.stringify(row.via.fieldProvenance) : '',
+                JSON.stringify(row.reasons.filter(reason => reason.kind === 'app_policy')),
             ];
         }),
     );
@@ -141,6 +145,7 @@ export function InUseContentPage({
     reviewsVerified: boolean;
 }): React.ReactElement {
     const { navigate } = useReviewNavigation();
+    const policies = useContext(AppPolicyContext);
     const now = useEvidenceClock();
     const [mode, setMode] = useState(readQueryParam('object') ? 'selected' : 'evidence');
     const [startIds, setStartIds] = useState<string[]>(() =>
@@ -174,6 +179,7 @@ export function InUseContentPage({
                       },
                       now,
                       reviewsVerified,
+                      policies.store,
                   )
                 : null,
         [
@@ -186,6 +192,7 @@ export function InUseContentPage({
             startIds,
             now,
             reviewsVerified,
+            policies.store,
         ],
     );
     const objects = useMemo(
@@ -247,7 +254,7 @@ export function InUseContentPage({
         <>
             <PageHeader
                 title="In-use & required content"
-                subtitle="Observed activity, deliberate Retain decisions, and the supported outbound objects they require. Customer content stays read-only."
+                subtitle="Observed activity, individual Retain decisions, app-wide policies, and their supported outbound requirements. Customer content stays read-only."
                 actions={
                     <ExportMenu
                         label="Export required-content report"
@@ -350,7 +357,7 @@ export function InUseContentPage({
                             checked={includeRetained}
                             onChange={(_event, data) => setIncludeRetained(data.checked)}
                         >
-                            Include active Retain decisions
+                            Include active Retain decisions and app policies
                         </Checkbox>
                         <Checkbox
                             checked={successfulOnly}
@@ -448,7 +455,7 @@ export function InUseContentPage({
                 </strong>
                 <p>
                     Absence from this report is not proof of inactivity or removal eligibility.
-                    Retain is a reviewer decision, not a usage observation. Review the coverage and
+                    Individual Retain and app-policy retention are separate from observed usage. Review the coverage and
                     limitations below before relying on this list.
                 </p>
             </InlineNotice>
@@ -575,7 +582,7 @@ export function InUseContentPage({
                                 {inspected.reasons.map((reason) => (
                                     <li key={reason.kind}>
                                         {reason.detail}
-                                        {reason.kind === 'retained'
+                                        {reason.kind === 'retained' || reason.kind === 'app_policy'
                                             ? ` Reviewer: ${reason.reviewer}; date: ${reason.reviewedAt}; review evidence: ${reason.evidenceStatus?.replace(/_/g, ' ')}.`
                                             : ''}
                                     </li>

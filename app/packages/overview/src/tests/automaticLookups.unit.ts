@@ -98,6 +98,37 @@ test('disabled rules do not gain caller or backing-definition edges', () => {
     expect(result.edges.some((edge) => edge.sourceId === rule.value.objectId || edge.targetId === rule.value.objectId)).toBe(false);
 });
 
+test.each(['True', 'TRUE', 'true', true, 1, '1'])('native disabled encoding %s never creates an enabled lookup binding', disabled => {
+    const rule = automatic('access_log', 'owners', 'example', 'app', { disabled });
+    expect(rule.parsed.automaticLookup?.disabled).toBe(true);
+    expect(rule.parsed.references).toEqual([]);
+});
+
+test('withheld exported bindings have a candidate-visit budget, not only an emitted-edge budget', () => {
+    const source = automatic('access_log', 'owners', 'origin', 'global');
+    const definitions = Array.from({ length: 6000 }, (_, i) => item('owners', 'Lookup Definition', `scope_${i}`));
+    const shadows = definitions.map(target => ({ ...source.value, app: target.app, sharing: 'app', objectId: `local::${target.app}` }));
+    const matcher = buildAutomaticLookupMatcher([{ object: source.value, rule: source.parsed.automaticLookup! }], [source.value, ...shadows, ...definitions], { complete: true, privatePossible: false });
+    const result = matcher.bindings(source.value, source.parsed);
+    expect(result.references.filter(row => row.relation === 'may_use_lookup')).toEqual([]);
+    expect(result.gaps?.some(row => row.message.includes('candidate-visit budget'))).toBe(true);
+    expect(result.warnings.filter(row => row.includes('guessed binding is withheld'))).toHaveLength(1);
+});
+
+test('duplicate caller candidates consume per-source and whole-scan visit budgets', () => {
+    const rules = Array.from({ length: 6000 }, (_, i) => automatic('access_log', 'owners', `scope_${i}`, 'global'));
+    const matcher = buildAutomaticLookupMatcher(rules.map(row => ({ object: row.value, rule: row.parsed.automaticLookup! })), rules.map(row => row.value), { complete: true, privatePossible: false });
+    const caller = item('Caller', 'Saved Search');
+    for (let i = 0; i < 20; i += 1) {
+        const result = matcher.callers(caller, parseSpl('index=main sourcetype=access_log'));
+        expect(result.references.filter(row => row.targetType === 'automatic_lookup')).toHaveLength(1);
+        expect(result.gaps?.some(row => row.message.includes('candidate-visit budget'))).toBe(true);
+    }
+    const exhausted = matcher.callers(caller, parseSpl('index=main sourcetype=access_log'));
+    expect(exhausted.references.filter(row => row.targetType === 'automatic_lookup')).toEqual([]);
+    expect(exhausted.gaps?.some(row => row.message.includes('candidate-visit budget'))).toBe(true);
+});
+
 test('namespace-local rule overrides an exported same-name rule; foreign app-only rules are not callers', () => {
     const local = automatic(); const exported = automatic('access_log', 'owners', 'other', 'global'); const foreign = automatic('host::server-a', 'owners', 'other');
     const caller = item('Caller', 'Saved Search'); const result = analyzeInventory([caller, local.value, exported.value, foreign.value, item('owners', 'Lookup Definition')],

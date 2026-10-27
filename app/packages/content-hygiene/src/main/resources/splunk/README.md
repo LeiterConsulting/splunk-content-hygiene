@@ -23,8 +23,8 @@ decision; restore and revision history remain available. This is application
 history, not a tamper-proof audit against privileged direct KV changes.
 Saves use an authenticated server-side coordinator on a standalone POSIX search
 head. The coordinator uses the caller's existing permissions, receives no system
-token, and has only one fixed app-local journal insert destination. SHC and Windows
-coordinated review writes are unsupported in 1.0. KV key uniqueness alone is not
+token, and has only fixed app-local review/policy journal insert destinations. SHC and Windows
+coordinated writes are unsupported. KV key uniqueness alone is not
 used as an atomic concurrency guarantee.
 Derived usage evidence is persisted in
 `ch_usage_evidence`; raw SPL and actor lists are not stored. Review records and
@@ -66,6 +66,25 @@ inheritance, pattern scopes, opaque PCRE, unsupported expressions, props precede
 and effective field availability remain unverified. Empty field-name lists are
 not proof a declaration produces or consumes nothing. Build-specific runtime and
 theme qualification is documented in the repository compatibility policy.
+
+## Configuration contexts and app policies
+
+Version 1.5 adds literal automatic-lookup OUTPUT/OUTPUTNEW/AS mappings and
+possible configuration contexts in the existing field/relationship details.
+Only configured names are retained; lookup rows and event values are never read.
+Local/private source overrides withhold guessed exported bindings. Supported
+multivalue calculated inputs are lexical facts, not evaluated expressions.
+
+Review Library also provides explicit exact-app retention policies for current
+and future shared content. Policies use the independent `ch_app_policy_revisions`
+journal, not bulk edits to individual decisions. Operators preview and confirm
+scope, then can disable, archive or reactivate it with retained history. Policy
+retention is separate from activity, dependency completeness and impact scoring;
+an individual Confirmed eligible stage does not override it. App identity or
+configuration/ACL uncertainty blocks cleanup planning pending scope confirmation.
+Back up policy history as well as both review collections. Direct privileged KV
+changes are outside the coordinator's conflict-safety contract. Workflow actions,
+navigation menus and full effective props evaluation remain outside coverage.
 
 ## Requirements
 

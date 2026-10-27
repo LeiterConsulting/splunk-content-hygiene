@@ -2,7 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import Modal from '@splunk/react-ui/Modal';
 import { InlineNotice, StyledButton } from '../AppStyles';
 
-interface DraftState { objectId: string; dirty: boolean; busy: boolean; onDiscard?: () => void }
+interface DraftState { objectId: string; dirty: boolean; busy: boolean; kind?: 'policy'; onDiscard?: () => void }
 const ReviewNavigationContext = createContext({
     navigate: (action: () => void): void => action(),
     setDraft: (_state: DraftState): void => undefined,
@@ -42,13 +42,13 @@ export function ReviewNavigationProvider({ children }: { children: React.ReactNo
     }, [navigate]);
     const context = useMemo(() => ({ navigate, setDraft }), [navigate, setDraft]);
     return <ReviewNavigationContext.Provider value={context}>
-        {busyNotice ? <InlineNotice role="status">Wait for the review save to finish before leaving this object.</InlineNotice> : null}
+        {busyNotice ? <InlineNotice role="status">{draft.current.kind === 'policy' ? 'Wait for the policy save to finish before leaving this scope.' : 'Wait for the review save to finish before leaving this object.'}</InlineNotice> : null}
         {children}
         <Modal open={pending !== null} onRequestClose={() => setPending(null)}
             returnFocus={() => origin.current?.isConnected && origin.current.focus()}
             style={{ width: 520, maxWidth: 'calc(100vw - 32px)' }}>
-            <Modal.Header title="Leave unsaved review changes?" />
-            <Modal.Body data-content-hygiene-portal="true">Your investigation note, stage, or reviewer has unsaved changes. Stay to save them, or discard this draft and continue. The saved decision will not be changed.</Modal.Body>
+            <Modal.Header title={draft.current.kind === 'policy' ? 'Leave unsaved policy changes?' : 'Leave unsaved review changes?'} />
+            <Modal.Body data-content-hygiene-portal="true">{draft.current.kind === 'policy' ? 'Your app retention policy draft has unsaved changes. Stay to save it, or discard this draft and continue. Saved policies and individual decisions will not be changed.' : 'Your investigation note, stage, or reviewer has unsaved changes. Stay to save them, or discard this draft and continue. The saved decision will not be changed.'}</Modal.Body>
             <Modal.Footer>
                 <StyledButton onClick={() => { const action = pending; draft.current.onDiscard?.(); draft.current = { ...draft.current, dirty: false }; origin.current = null; setPending(null); action?.(); }}>Discard draft and continue</StyledButton>
                 <StyledButton $primary onClick={() => setPending(null)}>Keep editing</StyledButton>

@@ -102,6 +102,22 @@ export interface ContentObject {
 
 export interface FieldScope { field: 'sourcetype' | 'host' | 'source'; value: string; exact: boolean }
 export interface FieldAliasMapping { input: string; output: string; mode: 'AS' | 'ASNEW' }
+export interface LookupFieldMapping { lookupField: string; eventField: string; position: number }
+export interface LookupMappingFacts {
+    version: 1;
+    inputs: LookupFieldMapping[];
+    outputs: LookupFieldMapping[];
+    outputMode: 'OUTPUT' | 'OUTPUTNEW' | 'implicit';
+}
+/** Possible shared configuration context, never an effective-props assertion. */
+export interface FieldContextEvidence {
+    declaringApp: string;
+    dependencyApp: string | null;
+    invokingApp: string;
+    declaration: 'local_candidate' | 'exported_candidate';
+    dependency: 'local_candidate' | 'exported_candidate' | 'unresolved';
+    selector: { field: FieldScope['field']; value: string; sourceLocation: string } | null;
+}
 export type FieldPhase = 'extraction' | 'alias' | 'calculated' | 'lookup';
 export interface FieldOutputDeclaration {
     field: string;
@@ -138,10 +154,11 @@ export interface FieldLineageFacts {
     sourceLocation: string;
     limitations: string[];
     outputProvenance?: ExtractionOutputProvenance;
+    lookupMapping?: LookupMappingFacts;
 }
 export interface FieldDependencyProvenance {
     version: 1;
-    kind: 'report_binding' | 'field_input' | 'event_scope';
+    kind: 'report_binding' | 'lookup_binding' | 'field_input' | 'event_scope';
     fields: string[];
     scope: FieldScope | null;
     consumerPhase: FieldPhase | null;
@@ -152,6 +169,7 @@ export interface FieldDependencyProvenance {
     contextApps: string[];
     invocation: 'fixed_app' | 'invoking_app_unverified';
     outputDeclarations?: ProducerOutputDeclaration[];
+    contexts?: FieldContextEvidence[];
 }
 
 export interface ConfigurationFingerprint {

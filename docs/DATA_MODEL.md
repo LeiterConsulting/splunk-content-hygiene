@@ -120,6 +120,32 @@ and the weakest path confidence are preserved in CSV/JSON; the original edge
 relation remains the authoritative configuration-vs-potential distinction.
 No review migration or rewrite is performed when the catalog expands.
 
+Version 1.5 adds optional `lookupMapping` facts: literal lookup/event field pairs,
+one-based declaration positions and OUTPUT/OUTPUTNEW/implicit output mode. It
+never stores lookup rows or effective values. Optional relationship `contexts`
+retain declaring/dependency/invoking namespaces, candidate status and original
+exact selector witnesses. The strict projector accepts older facts without these
+extensions, but new context/output collection requires a fresh complete scan.
+
+## App-wide retention policy revisions
+
+`ch_app_policy_revisions` is independent of review decisions and scan retention.
+See [the policy revision schema](../schemas/app-policy-revision.schema.json).
+Each immutable revision has a deterministic app/sequence key, expected parent,
+exact app identity, Active/Disabled/Archived state, reason, confirmed preview scan,
+combined app configuration/ACL fingerprint, request ID, and server actor/time.
+The existing standalone coordinator serializes append checks; it never rewrites
+individual stages, notes, assignees or baselines. Complete consistent keyset reads
+validate every policy lineage before deriving protection.
+
+Policy-derived retention is evaluated against current shared inventory, not
+persisted onto individual objects or reviews. Exact unchanged app scope can
+protect future shared objects; missing/changed scope remains unverified and blocks
+cleanup without fabricating verified roots. Other app identities never inherit
+the policy. Same-name physical reinstalls may be indistinguishable. Disabled or
+archived heads stop policy effects while preserving history. Reports carry policy
+reasons separately from observed activity, individual Retain and impact scores.
+
 The 1.3 named relations include `matches_event_type`,
 `excludes_event_type`, `matches_tag`, `excludes_tag` and `tags_event_type`.
 Their conditional counterparts use `may_match_*`, `may_exclude_*` and

@@ -89,6 +89,16 @@ is no destructive migration. Both collections are required for recovery. Back
 them up together using your supported Splunk KV Store backup process; a CSV or
 filtered Library export is a report, not a complete journal backup.
 
+Version 1.5 adds the separate `ch_app_policy_revisions` journal. Include it in
+app-local backups; no individual decisions are migrated or rewritten. The existing
+coordinator route adds operator-only policy handling without broadening customer
+source permissions. Before managing policies, verify the upgraded coordinator is
+active. An older in-memory handler causes a clear no-write readiness error; use
+your approved app activation/maintenance process rather than bypassing it. A
+shared-server restart is an administrator-scheduled maintenance action, not a
+requirement to clear ordinary frontend assets. Run a complete scan for new
+lookup-output/context evidence and policy scope previews.
+
 After upgrading from 0.5, run a fresh complete scan. Evidence and fingerprint
 policies are versioned; old decisions remain visible, but old unscoped evidence
 cannot silently become Current. Review the four coverage dimensions, save any

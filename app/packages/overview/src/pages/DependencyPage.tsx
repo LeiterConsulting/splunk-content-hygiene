@@ -1,4 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { AppPolicyContext, AppRetentionLabel, AppRetentionNotice } from '../components/AppPolicyContext';
+import { PolicyProtection } from '../services/appPolicies';
 import { WorkspaceTabs as TabLayout } from '../components/WorkspaceTabs';
 import {
     Breadcrumbs,
@@ -153,6 +155,7 @@ function exportRelationships(
     selected: ContentObject,
     rows: RelatedNode[],
     reviewByObject: Map<string, ReviewRecord>,
+    protection: ReadonlyMap<string, PolicyProtection>,
 ): void {
     downloadCsv(
         `content-hygiene-dependencies-${selected.name}.csv`,
@@ -178,6 +181,7 @@ function exportRelationships(
             'Evidence',
             'Source location',
             'Field relationship provenance', 'Center declared field facts', 'Related declared field facts',
+            'Center app policy protection', 'Related app policy protection',
         ],
         rows.map((row) => [
             selected.objectId,
@@ -203,6 +207,7 @@ function exportRelationships(
             row.edge.fieldProvenance ? JSON.stringify(row.edge.fieldProvenance) : '',
             selected.fieldLineage ? JSON.stringify(selected.fieldLineage) : '',
             row.contentObject?.fieldLineage ? JSON.stringify(row.contentObject.fieldLineage) : '',
+            JSON.stringify(protection.get(selected.objectId) ?? null), JSON.stringify(protection.get(row.objectId) ?? null),
         ]),
     );
 }
@@ -237,6 +242,7 @@ function exportRemovalImpact(selected: ContentObject, analysis: RemovalImpactAna
             'Path contains potential implicit relationship',
             'Evidence',
             'Field relationship provenance', 'Selected declared field facts', 'Affected declared field facts',
+            'Selected app policy protection', 'Affected app policy protection',
         ],
         rows.map((affected) => [
             selected.objectId,
@@ -266,6 +272,7 @@ function exportRemovalImpact(selected: ContentObject, analysis: RemovalImpactAna
             affected?.fieldProvenance ? JSON.stringify(affected.fieldProvenance) : '',
             selected.fieldLineage ? JSON.stringify(selected.fieldLineage) : '',
             affected?.fieldLineage ? JSON.stringify(affected.fieldLineage) : '',
+            JSON.stringify(analysis.policyProtection ?? null), JSON.stringify(affected?.policyProtection ?? null),
         ]),
     );
 }
@@ -308,6 +315,7 @@ export function DependencyPage({
     onDeleteReview,
 }: DependencyPageProps): React.ReactElement {
     const { navigate } = useReviewNavigation();
+    const policies = useContext(AppPolicyContext);
     const inspectionTitle = useRef<HTMLHeadingElement | null>(null);
     const focusInspection = useRef(false);
     const [selectedId, setSelectedId] = useState(() => readQueryParam('object'));
@@ -449,9 +457,9 @@ export function DependencyPage({
     const impact = useMemo(
         () =>
             selected && scan
-                ? analyzeRemovalImpact(selected, objects, edges, reviews, scan, impactDepth, evidenceNow)
+                ? analyzeRemovalImpact(selected, objects, edges, reviews, scan, impactDepth, evidenceNow, policies.protection)
                 : null,
-        [selected, objects, edges, reviews, scan, impactDepth, evidenceNow],
+        [selected, objects, edges, reviews, scan, impactDepth, evidenceNow, policies.protection],
     );
     const detailId = inspectedId || selected?.objectId || '';
     const detail = index.objects.get(detailId);
@@ -563,15 +571,17 @@ export function DependencyPage({
                     selected && impact ? (
                         <ExportMenu label="Export investigation" items={[
                             { label: 'Filtered relationships CSV', disabled: !relatedRows.length,
-                                onClick: () => exportRelationships(selected, relatedRows, reviewByObject) },
+                                onClick: () => exportRelationships(selected, relatedRows, reviewByObject, policies.protection) },
                             { label: 'Filtered relationships JSON', disabled: !relatedRows.length,
                                 onClick: () =>
                                     downloadJson('content-hygiene-dependencies.json', {
                                         exportedAt: new Date().toISOString(),
                                         scanId: snapshot?.scan.scanId,
                                         centerObject: selected,
+                                        centerAppPolicyProtection: policies.protection.get(selected.objectId) ?? null,
                                         relationships: relatedRows.map((row) => ({
                                             ...row,
+                                            appPolicyProtection: policies.protection.get(row.objectId) ?? null,
                                             usageValidity: row.contentObject
                                                 ? usageValidity(row.contentObject)
                                                 : 'not_applicable',
@@ -728,6 +738,7 @@ export function DependencyPage({
                                 <DetailTitle>{selected.name}</DetailTitle>
                                 <p>{selected.objectType} · {selected.app} · {selected.inboundReferences} inbound · {selected.outboundReferences} outbound</p>
                                 <StatusBadge status={selected.healthStatus} />
+                                <div><AppRetentionLabel objectId={selected.objectId} /></div>
                             </div>
                             <ButtonRow>
                                 <StyledButton onClick={() => setTab('impact')}>Assess removal impact</StyledButton>
@@ -736,6 +747,7 @@ export function DependencyPage({
                                 {reviewByObject.has(selected.objectId) ? <StyledButton onClick={() => navigate(() => navigateToView('reviews', { object: selected.objectId }))}>Open center in review library</StyledButton> : null}
                             </ButtonRow>
                         </WorkspaceHeader>
+                        <AppRetentionNotice object={selected} />
                         {selected.fieldLineage || ['Automatic Lookup', 'Event Type', 'Tag Binding'].includes(selected.objectType) || relatedRows.some((row) => isPotentialRelation(row.edge.relation)) ? (
                             <InlineNotice>
                                 <strong>Configuration is not execution evidence</strong>

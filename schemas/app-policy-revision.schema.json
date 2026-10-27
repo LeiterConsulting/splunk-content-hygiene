@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/splunk-content-hygiene/app-policy-revision.schema.json",
+  "title": "Content Hygiene App Retention Policy Revision",
+  "description": "Independent append-only app-local policy state. The existing standalone POSIX coordinator serializes expected-parent inserts and supplies actor/time. This is not a tamper-proof store against privileged direct KV changes. No individual review record or customer object is rewritten.",
+  "type": "object", "additionalProperties": false,
+  "required": ["version", "_key", "app_id", "app_object_id", "revision_number", "parent_revision", "state", "note", "scope", "scan_id", "app_fingerprint", "request_id", "created_at", "updated_at", "updated_by"],
+  "properties": {
+    "version": { "const": 1 }, "_key": { "type": "string", "pattern": "^app-policy-r1-[a-f0-9]{64}$" },
+    "app_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$" },
+    "app_object_id": { "type": "string", "minLength": 1, "maxLength": 524 },
+    "revision_number": { "type": "integer", "minimum": 1, "maximum": 10000 },
+    "parent_revision": { "anyOf": [{ "type": "null" }, { "type": "string", "pattern": "^app-policy-r1-[a-f0-9]{64}$" }] },
+    "state": { "enum": ["active", "disabled", "archived"] }, "note": { "type": "string", "maxLength": 4000 },
+    "scope": { "const": "shared_exact_app_current_and_future" }, "scan_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "app_fingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "request_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "created_at": { "type": "string", "format": "date-time" }, "updated_at": { "type": "string", "format": "date-time" },
+    "updated_by": { "type": "string", "minLength": 1, "maxLength": 256 }, "_user": { "type": "string" }
+  }
+}

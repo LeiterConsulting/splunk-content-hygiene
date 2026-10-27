@@ -122,14 +122,16 @@ unconfirmed saves, failures and skips remain distinct in the CSV/JSON receipt.
 Authentication failures or unconfirmed writes stop further saves. Retry only
 explicit failed items after recheck; inspect conflicts and unconfirmed outcomes
 individually. The result receipt includes each saved revision, actor and time.
-There is no persistent app-wide rule: newly discovered objects are not retained
-automatically by an earlier batch.
+An earlier bulk batch does not retain newly discovered objects automatically.
+Use a separate, explicitly confirmed [app-wide retention policy](#app-wide-retention-policies)
+when that is your intent; a bulk decision never creates one implicitly.
 
 ## In-use and required content
 
 Open **In-use Content** from navigation or Overview. The default starting set is
-current attributable dashboard/saved-search activity plus active **Retain** review
-decisions. Choose activity kinds and whether saved-search activity must include a
+current attributable dashboard/saved-search activity, active **Retain** review
+decisions and verified active app-policy roots. Each has a separate reason.
+Choose activity kinds and whether saved-search activity must include a
 successful execution. Scheduled and manual saved-search runs cannot be separated
 by the available telemetry. Failed/skipped attempts are disclosed, not called
 successful runs. Historical, modified or expired observations are not silently
@@ -139,7 +141,9 @@ Retain remains a human decision, not proof of usage. The report records the
 reviewer, review date and evidence status, and still includes a retained identity
 whose current definition is no longer visible with an explicit missing-definition
 warning. Archived or unverifiable persisted decisions are not accepted as roots.
-**Retained content report** in Review Library starts with Retain decisions only.
+**Retained content report** in Review Library starts with individual Retain and
+verified app-policy roots, not activity roots. Missing/unverifiable policy scope
+remains a blocker to cleanup but does not fabricate verified required objects.
 
 Use **Explicitly selected objects** to choose one or more exact starting identities
 without claiming usage. **Required content report** on an Explorer center opens
@@ -149,7 +153,10 @@ other objects. Missing identities are disclosed, not replaced with a default.
 The report follows all supported outbound dependency hops, including macro,
 lookup and lookup-file chains, deduplicates identities, and handles cycles. App
 containment/ownership links are metadata, not required-content closure. Retaining
-an App object does not imply retaining every object in that app. Groups and display
+an App object individually does not imply retaining every object in that app.
+An explicit app-wide policy instead selects the currently visible shared
+identities in its exact namespace as independently labeled starting objects.
+Groups and display
 filters help browse the result; filtering a type/app does not alter the underlying
 closure. Each required row has one shortest witness path, with conservative path
 confidence. Inspect it or drill into Explorer to investigate further.
@@ -423,6 +430,50 @@ identifier. Later note/stage edits retain those original at-review facts.
 **Archive library record** asks for confirmation and archives only the active app-local entry. Select
 **Archived** or **All** in the Library state filter to inspect it and restore the
 preserved decision. Customer content is never archived or removed by this action.
+
+### App-wide retention policies
+
+Expand **App-wide retention policies** in the Library list. Only a Content Hygiene
+operator or administrator can manage them; viewers and reviewers can inspect and
+export the same app-local policy history. Policies do not edit individual stages,
+notes, assignees, original at-review facts, evidence baselines or revision history.
+
+1. Choose an exact app namespace and select **Preview app policy**.
+2. Inspect its app identity, current visible shared-object count, preview scan,
+   conflicts and full-scope preview export. The App object itself is included.
+3. Choose Active, record the reason and explicitly confirm that this includes
+   **current and future shared objects** in that exact namespace.
+4. Select **Confirm policy revision**. This appends an attributable policy
+   revision; it does not bulk-create individual Retain reviews.
+
+An active policy is an additional protective reason. **Confirmed eligible** remains
+visible as the individual's decision, but cannot override policy retention.
+Candidates can filter by policy state or policy/individual-decision conflict.
+Explorer impact blocks planning for policy-protected or unverifiable scope, without
+inflating the dependency-impact score or calling it observed activity. Required
+content and CSV/JSON preserve the separate policy reason and revision identity.
+
+Scope binds the exact logical app identity and its returned configuration/ACL
+fingerprint from a complete preview scan. Newly discovered shared objects in that
+unchanged app acquire policy protection, not fabricated review decisions. Changed
+app metadata/ACL or missing app identity requires explicit scope reconfirmation;
+it remains a cleanup blocker, not proof of verified policy roots. Private content
+and unseen objects are not enumerated. Renamed/different app IDs never inherit a
+policy. Native metadata may not distinguish a same-name reinstall, so review that
+case explicitly. Retention does not prove activity or complete dependency coverage.
+
+**Review or change policy** can append Disabled or Archived without erasing earlier
+revisions, even if the app is missing. Neither state applies policy retention.
+Reactivation requires a current complete preview and renewed confirmation. Policy
+lists and history are paginated; history exports include all accepted loaded
+journal revisions, not only the visible page. The journal has a 10,000-revision
+safety capacity; preserve/export/back it up and involve the administrator before
+that limit. Do not prune individual revisions.
+
+If another operator saves first, the policy draft remains visible. Reload saved
+history, compare the accepted revision, explicitly use it as the new draft base,
+and confirm again. Saves are never silently merged or automatically retried.
+Unavailable or invalid policy history means **unknown**, not “unprotected.”
 
 ### Concurrent edits and history
 

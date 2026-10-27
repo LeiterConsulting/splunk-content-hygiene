@@ -27,9 +27,67 @@ the minimum is not a recommendation to downgrade or remain on an old patch.
 
 | Runtime | Purpose | Current evidence |
 | --- | --- | --- |
-| 10.2.5 | Exact minimum; classic navigation; coordinator and reported regressions | App 1.4.0 build 79: isolated Linux VM; fresh bounded/full scans, native catalog/cache and schema parity, output/dependency investigations and CSV/JSON in light/dark; earlier broader 1.1.1 checks remain distinct below |
-| 10.2.8 | Representative 10.2 maintenance release and real-estate regression | App 1.4.0 build 79: real-data scans, native catalog/cache and schema parity, targeted light/dark output/dependency/Library investigations and exports; original decisions unchanged |
-| 10.4.4 | Modern navigation, current theme host, and newer bundled runtime | App 1.4.0 build 79: real-data scans, native catalog/cache and schema parity, targeted light/dark output/dependency/Library investigations and exports; original decisions unchanged |
+| 10.2.5 | Exact minimum; classic navigation; coordinator and reported regressions | App 1.5.0 build 82: isolated Linux VM; bounded/full scans, native catalog/cache and schema parity, seven-page light/dark checks, context/mapping investigations, policy API/UI lifecycle and CSV/JSON; earlier broader accessibility checks remain distinct below |
+| 10.2.8 | Representative 10.2 maintenance release and real-estate regression | App 1.5.0 build 82: real-data scans, catalog/cache and schema parity, seven-page light/dark checks, context/mapping investigations, policy API/UI lifecycle and exports; original decisions unchanged |
+| 10.4.4 | Modern navigation, current theme host, and newer bundled runtime | App 1.5.0 build 82: real-data scans, catalog/cache and schema parity, seven-page light/dark checks, context/mapping investigations, policy API/UI lifecycle and exports; original decisions unchanged |
+
+### 1.5.0 context and policy qualification
+
+The exact release build 82 was installed on the three representative runtimes
+above without requiring a restart. Fresh bounded scans preserve the prior full
+baseline; complete scans and GET-only native comparisons verify shared identities,
+declared automatic-lookup field mappings and possible configuration contexts.
+Real cached rows pass local-only Draft 2020-12 schema validation. Original review
+rows, journals, stages, notes, assignees and captured baselines remain unchanged.
+
+All seven pages have native Light/Dark smoke checks on Enterprise 10.2.5, 10.2.8
+and 10.4.4. Targeted checks cover wrapped lookup mapping disclosures, keyboard-
+expanded declaring/invoking-app context, grouped relationship details and exact-
+app policy previews at 1280×720 and 1434×940. Sampled new field/dialog text exceeds
+4.5:1 contrast; captured graph labels do not overlap cards or one another. Actual
+relationship CSV/JSON, removal-impact JSON, an exact-app scope preview and an
+existing review-library export agree with the current native/cache evidence.
+These are bounded checks, not full accessibility or production-scale certification.
+
+Source-shadow exclusions and ordinary multivalue-expression cases also have
+adversarial synthetic contracts. The native captures do not supply every shadow,
+expression, future-object or conflicting-decision scenario; no removal of false
+native dependency paths is claimed merely from passing those contracts. No new
+individual review is saved or reaffirmed solely for this increment.
+
+The full automated pipeline passes 775 checks (728 overview, 16 host, 22 server,
+9 archive), lint/stylelint, types, branding, production build and package checks.
+Pre-cert AppInspect 4.3.1 reports zero errors/failures/future failures, three known
+advisories and one manifest skip. Bundle-size advisories remain. Emulated-VM UI
+readiness/download waits needed fresh ready-state checks and a verified download
+retry; those failed harness attempts are distinct from accepted captures, without
+increasing application timeout limits.
+
+Native own-app policy validation also passes on all three runtimes. Viewer and
+reviewer writes are denied; operator writes use server attribution. Changed
+fingerprints, stale previews and spoofed attribution are rejected without saved
+rows. Six competing edits accept one revision and reject five stale parents;
+exact replay creates no duplicate, and changed-content replay is rejected.
+Installed Light/Dark dialogs exercise scope confirmation, save, disable and
+reactivation. Native history and required-content CSV/JSON, impact JSON and final
+recoverable archive readback pass. These checks add 42 parsed downloads and 40
+accepted captures; an initial capture that raced document readiness is excluded.
+
+The policy contributes 17 own-app roots while active and zero while disabled.
+Removal-impact protection clears after archival without changing the dependency
+score or affected-object set. Candidate policy-filter checks supply no positive
+cleanup candidates in this own-app scope, so no live conflicting individual
+decision is invented. New/deleted/renamed-object and
+individual-stage conflict behavior is covered by synthetic contracts, not
+claimed as a native witness. All original individual review data remains
+unchanged, temporary role accounts are removed, test policy history is archived
+and native appearance preferences are restored. The isolated VM is shut down
+with its disk and authentication preserved.
+
+Workflow actions, navigation menus, full effective props precedence,
+private/system inheritance, dynamic expressions and observed lookup execution
+remain outside this bounded #8 slice. Same-name app reinstallation cannot always
+be distinguished using native metadata and requires explicit scope review.
 
 ### 1.4.0 extraction-output qualification
 

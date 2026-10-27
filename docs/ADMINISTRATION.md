@@ -8,12 +8,12 @@ therefore limited to REST resources that user is allowed to see.
 The server enforces an explicit hygiene audience. Assign these roles only to
 trusted operators authorized to see shared operational metadata and review notes:
 
-| Role | View and export | Maintain reviews | Collect inventory and usage |
-| --- | --- | --- | --- |
-| `content_hygiene_viewer` | Yes | No | No |
-| `content_hygiene_reviewer` | Yes | Yes | No |
-| `content_hygiene_operator` | Yes | Yes | Yes |
-| `admin` / `sc_admin` | Yes | Yes | Yes |
+| Role | View and export | Maintain reviews | Manage app-wide policies | Collect inventory and usage |
+| --- | --- | --- | --- | --- |
+| `content_hygiene_viewer` | Yes | No | No | No |
+| `content_hygiene_reviewer` | Yes | Yes | No | No |
+| `content_hygiene_operator` | Yes | Yes | Yes | Yes |
+| `admin` / `sc_admin` | Yes | Yes | Yes | Yes |
 
 No role is assigned automatically. Use the named role directly on an account
 for the corresponding UI actions. These roles do not grant broader source REST
@@ -66,6 +66,8 @@ process exits; do not delete it while saves are active.
 - `ch_reviews`: preserved legacy decisions, read-only to the application
 - `ch_review_revisions`: accepted review revisions, evidence captures, and
   archive/restore history
+- `ch_app_policy_revisions`: independent exact-app retention policy revisions,
+  with server-attributed actor/time and recoverable disable/archive/reactivation
 - `ch_settings`: scan lock and verified inventory manifest
 - `ch_exemptions`: reserved app-owned configuration state
 
@@ -119,6 +121,20 @@ Library loading validates all compact revision headers, then fetches heads and
 referenced captures in bounded batches. History details load 20 at a time. This
 reduces payload duplication but does not make journal growth free or establish an
 unlimited-scale guarantee.
+
+Back up `ch_app_policy_revisions` as well. It is independent from individual
+decisions and never retired with scans. Policy writes use the same serialized
+coordinator but require the operator/admin role and exact collection permission;
+reviewer authority alone cannot manage a policy. The server validates expected
+parents and current full-preview app configuration/ACL scope before activation.
+Disabling/archiving preserves the last scope and works for missing apps. Policy
+history is not tamper-proof against privileged direct KV modification. The UI
+requires consistent complete keyset reads; duplicate, gapped, malformed or
+over-capacity history is unavailable, never silently treated as no protection.
+There is a 10,000-policy-revision safety capacity across all apps, with a warning
+at 9,000. Plan supported backup/recovery or capacity work before exhaustion;
+do not delete individual revisions as a workaround. Policy/history displays page
+25 rows, and full history exports are separate from snapshot/Library backups.
 
 Usage runs share the same lock and are stored separately from inventory
 snapshots. They retain only aggregate counts and timestamps; raw search strings

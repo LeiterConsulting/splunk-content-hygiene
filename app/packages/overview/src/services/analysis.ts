@@ -9,7 +9,7 @@ import {
     parseEventType,
 } from './dependencyParser';
 import { PrivateObjectCount, SourceCoverageGap } from './dependencyCoverage';
-import { buildAutomaticLookupMatcher, parseAutomaticLookup } from './automaticLookups';
+import { buildAutomaticLookupMatcher, fieldContext, parseAutomaticLookup } from './automaticLookups';
 import { isPotentialRelation, weakestDependencyConfidence } from '../utils/dependencySemantics';
 import { buildKnowledgeReferenceMatcher, parseTagBinding } from './knowledgeReferences';
 import { buildFieldDependencyMatcher, FIELD_TARGETS } from './fieldDependencies';
@@ -320,9 +320,11 @@ export function analyzeInventory(
         if (object && rule) {
             const facts: FieldLineageFacts = { version: 1, operation: 'lookup', stanza: rule.stanza, attribute: rule.attribute,
                 scope: { field: rule.scopeField, value: rule.scopeValue, exact: rule.exactScope }, enabled: object.enabled,
-                inputs: rule.fieldInputs ?? [], outputs: [], aliases: [], transforms: [],
+                inputs: rule.fieldInputs ?? [], outputs: rule.fieldMapping?.outputs.map(row => row.eventField) ?? [], aliases: [], transforms: [],
                 syntax: rule.fieldInputsComplete ? 'declared' : 'unsupported', sourceLocation: source.sourceLocation,
-                limitations: ['Only lookup event-input mappings are assessed; lookup outputs and later field-processing lineage are not inferred.',
+                ...(rule.fieldMapping ? { lookupMapping: rule.fieldMapping } : {}),
+                limitations: ['Lookup mappings are configured names only. Lookup rows, matching events, field availability and effective values are not read or inferred. No same-phase lookup chain is inferred.',
+                    ...(rule.fieldMapping?.outputMode === 'implicit' ? ['No explicit OUTPUT/OUTPUTNEW list: output columns are unknown without reading lookup data, which this app does not do.'] : []),
                     ...(rule.fieldInputsComplete ? [] : ['Automatic lookup input mappings are outside the supported literal subset; field-input lineage is unverified.'])] };
             object.fieldLineage = facts;
             sourceParses.set(source, { ...sourceParses.get(source)!, fieldLineage: facts });
@@ -332,6 +334,7 @@ export function analyzeInventory(
     const automatic = buildAutomaticLookupMatcher(automaticRules, objects, {
         complete: completeness.automatic_lookups === true,
         privatePossible: visibility?.privateObjects.some((row) => row.collector === 'automatic_lookups' && row.count > 0) ?? false,
+        visibility,
     });
     const knowledgeReferences = buildKnowledgeReferenceMatcher(objects, visibility);
     const fieldReferences = buildFieldDependencyMatcher(objects,
@@ -436,6 +439,21 @@ export function analyzeInventory(
                 evidence = `${evidence}; target inventory is incomplete or non-authoritative, so absence cannot be asserted`;
             }
 
+            let fieldProof = reference.fieldProvenance;
+            if (!fieldProof && (source.kind === 'automatic_lookup' || reference.relation === 'may_apply_automatic_lookup')) {
+                const scope = sourceObject.fieldLineage?.scope ?? resolution.object?.fieldLineage?.scope ?? null;
+                const selector = reference.relation === 'may_apply_automatic_lookup'
+                    ? parsed.eventSelectors?.find(row => row.sourceLocation === reference.sourceLocation && row.field === scope?.field && row.value.toLowerCase() === scope.value.toLowerCase()) ?? null : null;
+                fieldProof = { version: 1, kind: selector ? 'event_scope' : 'lookup_binding', fields: [], scope,
+                    consumerPhase: selector ? null : 'lookup', producerPhase: 'lookup', transformPositions: [], viaObjectIds: [], contextApps: [contextApp],
+                    invocation: invocationNamespaceUnverified ? 'invoking_app_unverified' : 'fixed_app',
+                    contexts: [fieldContext(sourceObject, resolution.object ?? undefined, contextApp, selector)] };
+            }
+            if (fieldProof && !fieldProof.contexts) {
+                fieldProof = { ...fieldProof, contexts: [fieldContext(sourceObject, resolution.object ?? undefined, contextApp)] };
+            } else if (fieldProof && !resolved) {
+                fieldProof = { ...fieldProof, contexts: fieldProof.contexts?.map(row => ({ ...row, dependencyApp: null, dependency: 'unresolved' as const })) };
+            }
             const edge: DependencyEdge = {
                 edgeId: `edge::${source.objectId}::${reference.relation}::${targetId}`,
                 sourceId: source.objectId,
@@ -445,10 +463,10 @@ export function analyzeInventory(
                 evidence,
                 sourceLocation: reference.sourceLocation,
                 resolved,
-                ...(reference.fieldProvenance ? { fieldProvenance: { ...reference.fieldProvenance,
-                    fields: [...new Set(reference.fieldProvenance.fields)].sort(),
-                    viaObjectIds: [...new Set(reference.fieldProvenance.viaObjectIds)].sort(),
-                    contextApps: [...new Set(reference.fieldProvenance.contextApps)].sort() } } : {}),
+                ...(fieldProof ? { fieldProvenance: { ...fieldProof,
+                    fields: [...new Set(fieldProof.fields)].sort(),
+                    viaObjectIds: [...new Set(fieldProof.viaObjectIds)].sort(),
+                    contextApps: [...new Set(fieldProof.contextApps)].sort() } } : {}),
             };
             const edgeKey = [edge.sourceId, edge.targetId, edge.relation].join('|');
             const previous = edgeByKey.get(edgeKey);
@@ -462,15 +480,21 @@ export function analyzeInventory(
                 if (previous.fieldProvenance && edge.fieldProvenance) {
                     const before = previous.fieldProvenance; const current = edge.fieldProvenance;
                     const declarations = [...new Map([...(before.outputDeclarations ?? []), ...(current.outputDeclarations ?? [])].map(item => [JSON.stringify(item), item])).values()];
+                    const contexts = [...new Map([...(before.contexts ?? []), ...(current.contexts ?? [])].map(item => [JSON.stringify(item), item])).values()];
                     if (declarations.length > 250) {
                         coverageGaps.push({ sourceId: source.objectId, app: sourceObject.app, targets: [reference.targetType], sourceLocation: reference.sourceLocation,
                             message: 'Merged output-declaration evidence reached its 250-position budget; additional positions remain unverified.' });
+                    }
+                    if (contexts.length > 250) {
+                        coverageGaps.push({ sourceId: source.objectId, app: sourceObject.app, targets: [reference.targetType], sourceLocation: reference.sourceLocation,
+                            message: 'Merged configuration-context evidence reached its 250-context budget; additional possibilities remain unverified.' });
                     }
                     edge.fieldProvenance = { ...current,
                         fields: uniqueEvidence([...before.fields, ...current.fields]).sort().slice(0, 250),
                         transformPositions: [...new Set([...before.transformPositions, ...current.transformPositions])].sort((a, b) => a - b).slice(0, 250),
                         viaObjectIds: uniqueEvidence([...before.viaObjectIds, ...current.viaObjectIds]).sort().slice(0, 250),
                         contextApps: uniqueEvidence([...before.contextApps, ...current.contextApps]).sort().slice(0, 250),
+                        ...((before.contexts || current.contexts) ? { contexts: contexts.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))).slice(0, 250) } : {}),
                         ...((before.outputDeclarations || current.outputDeclarations) ? { outputDeclarations: declarations
                             .sort((a, b) => { const left = JSON.stringify(a); const right = JSON.stringify(b); if (left < right) { return -1; } return left > right ? 1 : 0; }).slice(0, 250) } : {}),
                         invocation: before.invocation === 'invoking_app_unverified' ? before.invocation : current.invocation };

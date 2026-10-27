@@ -13,9 +13,34 @@ The app keeps customer content read-only:
 
 - It reads real Splunk data and never falls back to a demonstration dataset.
 - It does not delete, disable, reassign, or rewrite customer content.
-- It stores scan results and review workflow records only in app-local KV Store
-  collections.
+- It stores scan results, review workflow records and retention policies only in
+  app-local KV Store collections.
 - Every finding carries reasons, evidence, and a suggested investigation step.
+
+## Version 1.5.0 — context accuracy and app retention
+
+[Release 1.5.0, build 82](https://github.com/LeiterConsulting/splunk-content-hygiene/releases/tag/v1.5.0) adds explicit possible configuration contexts,
+literal automatic-lookup OUTPUT/OUTPUTNEW/AS mappings, and independent exact-app
+retention policies for current and future shared content. Individual decisions,
+notes, assignees, baselines and history are not rewritten. Policy conflicts remain
+visible; operator-only policy revisions are reversible and exportable.
+
+Build 82 passes 775 automated checks, packaging and pre-cert
+AppInspect with no errors/failures. Fresh read-only catalog/cache/schema checks,
+seven-page Light/Dark smoke checks, detailed context/mapping checks and actual
+report downloads cover Enterprise 10.2.5, 10.2.8 and 10.4.4. Native app-policy
+saves, role denials, concurrent-edit conflicts, reversible lifecycle and history
+exports also pass on all three runtimes. Existing individual decisions and user
+appearance preferences are preserved. See the [qualification and limits](docs/COMPATIBILITY.md#150-context-and-policy-qualification).
+
+Workflow actions, navigation menus and full effective-props evaluation remain outside coverage;
+follow-up #8 remains open. See [policy behavior](docs/USER_GUIDE.md#app-wide-retention-policies).
+
+![Exact-app retention scope preview for Content Hygiene's own shared content](docs/images/app-policy-scope-light.jpg)
+
+The native Light-mode preview distinguishes policy protection from individual
+decisions. The object count is an example from installed content, not a fixed
+scope or a demonstration dataset.
 
 ## Version 1.4.0 — declared extraction outputs
 
@@ -83,6 +108,9 @@ and [field-lineage investigation guide](docs/USER_GUIDE.md#declared-field-lineag
   eligibility, retain, and blocked stages, with independent review-evidence
   validity, scoped coverage, change explanations, explicit reaffirmation,
   conflict-safe saves, recoverable archiving, revision history, and evidence exports
+- Independent exact-app retention policies for current and future shared objects,
+  with explicit scope confirmation, operator-only coordinated revisions,
+  preserved individual decisions, recoverable lifecycle and history exports
 - Full-width selected-object workspaces with investigation actions at the top,
   focused evidence/decision/history tabs, previous/next review navigation, and
   unsaved-draft protection
@@ -114,12 +142,14 @@ the shared cache; access is restricted to explicit hygiene roles.
    connectivity check succeeds.
 
 The support baseline is Splunk Enterprise **10.2.5 or later** on a standalone
-Linux x86-64 search head with KV Store. Release 1.4.0 **build 79** has targeted
+Linux x86-64 search head with KV Store. Release 1.5.0 **build 82** has
 real-data qualification on **10.2.5, 10.2.8 and 10.4.4**: fresh bounded/full scans,
-native catalog/cache and schema comparisons, field/dependency investigations,
-required-content and removal-impact exports, and the existing Review Library in
-light/dark modes. Saved decisions and evidence baselines are preserved. This is
-bounded static coverage, not execution telemetry or a large-estate benchmark.
+native catalog/cache and schema comparisons, seven-page light/dark smoke checks,
+field/dependency investigations, required-content and removal-impact exports,
+and the existing Review Library. Native policy saves, permission denials,
+concurrent edits and reversible lifecycle also pass. Saved decisions and evidence
+baselines are preserved. This is bounded static coverage, not execution telemetry
+or a large-estate benchmark.
 
 Release 1.2.0 (build 72) adds wrapped labels, opaque
 relationship surfaces, hover/focus previews and full-context dialogs. Targeted
@@ -160,8 +190,9 @@ shared static scope matches a recent reviewed baseline—not that no hidden,
 private, dynamic, or external consumer exists. Removal-impact planning retains
 its wider, conservative blockers.
 
-After upgrading to 1.4, run a complete scan to collect output attribution and
-the expanded shared event/tag and field catalogs alongside automatic lookup rules. Follow configured
+After upgrading to 1.5, run a complete scan to collect output mappings, possible
+configuration contexts, output attribution and the expanded shared event/tag and
+field catalogs alongside automatic lookup rules. Follow configured
 definitions and declared field paths in Explorer. **May apply**, **may read** and
 **may use** links remain explicitly potential through
 multi-hop reports, impact explanations and exports. New evidence may require
@@ -239,7 +270,7 @@ yarn validate
 ```
 
 The verified installable archive is written to
-`app/dist/content_hygiene-<VERSION>.tar.gz` (currently 1.4.0, build 79).
+`app/dist/content_hygiene-<VERSION>.tar.gz` (currently 1.5.0, build 82).
 Run `yarn release:prepare` to
 perform the complete validation and update `SHA256SUMS`.
 

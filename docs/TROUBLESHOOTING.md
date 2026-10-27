@@ -240,6 +240,28 @@ choose which decision is authoritative. There is no automatic reconciliation or
 safe blind overwrite. Close older editing tabs and resolve the origin/journal
 through a backed-up, reviewed administrative recovery procedure.
 
+## App retention policy is unavailable, conflicted or cannot save
+
+Unknown policy history is not an empty policy set. Check KV Store health, the
+installed coordinator version and read permission to `ch_app_policy_revisions`.
+Only named operators/admins may manage app-wide policies; do not grant reviewer
+or customer-source permissions as a workaround. If readiness reports the upgraded
+handler is not active, use an approved administrator maintenance window to
+activate it. No policy payload is submitted to an older handler.
+
+An active policy wins as a separate protective reason; a conflicting individual
+Confirmed eligible stage is preserved. Resolve the policy explicitly. Missing
+app identity, changed app configuration/ACL, or an incomplete preview scan requires
+new scope confirmation. Disable/archive remains available for a missing app and
+does not erase history. Renamed app IDs do not inherit policies; same-name
+reinstallation may not be distinguishable in native metadata.
+
+On a save conflict or uncertain response, keep the draft, reload history, compare
+and explicitly choose the new base before reconfirming. Invalid/duplicate/gapped
+history or the 10,000-revision capacity must be handled through preserved backups
+and administrator-led recovery. Do not delete rows or use raw KV writes to force
+a policy through. Export reports are not a substitute for a full KV backup.
+
 ## An archived review seems missing
 
 Select **Archived** or **All** in Review Library. Restore the retained decision

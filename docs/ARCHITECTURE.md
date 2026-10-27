@@ -30,7 +30,7 @@ normalization + dependency analysis       coverage + attribution
   endpoint coordinates review inserts; there is no external service.
 - Production views read only the latest persisted live snapshot.
 - End-user writes are limited to app-local inventory, usage-evidence, lifecycle,
-  and `ch_review_revisions` workflow state. Legacy `ch_reviews` records are read
+  and separate `ch_review_revisions` / `ch_app_policy_revisions` workflow state. Legacy `ch_reviews` records are read
   and preserved, not rewritten.
 - Customer knowledge objects are never deleted, disabled, reassigned, or
   rewritten.
@@ -98,8 +98,11 @@ Exported rules can bind differently in another invoking app; alternative visible
 definition contexts remain potential and no missing originating-app definition
 alone proves the exported rule broken.
 
-Matching is capped at 250 inferred edges per source and 50,000 per scan, with
-explicit gaps when capped. Customer regex is not executed: pattern props stanzas,
+Matching is capped at 250 inferred edges per source and 50,000 per scan. Inspected
+candidates also consume a shared 100,000-visit scan budget and a 5,000-visit
+per-source budget, including duplicate or withheld contexts. Exhaustion is an
+explicit coverage gap, never evidence that omitted relationships do not exist.
+Customer regex is not executed: pattern props stanzas,
 precedence, sourcetype renames, inherited scopes and input-field availability
 remain unverified. Other props families and uninventoried source types remain
 separate coverage limitations. Collection, parsing and resolution stay distinct.
@@ -161,6 +164,30 @@ every reached ceiling adds a coverage gap. PCRE compilation/matching, expression
 cross-transform availability, full props precedence and effective values remain
 outside the supported contract. Installed/native qualification is build-specific;
 see the compatibility policy rather than treating decoder tests as runtime proof.
+
+Source-context hardening also checks the declaration being invoked,
+not only its dependency target. Exact same-identity local overrides or excluded/
+unmapped private source configuration withhold that namespace's guessed REPORT
+or field-input binding and add an uncertainty diagnostic. Unshadowed alternatives
+remain potential. This is not complete effective-props evaluation. Build-specific
+native qualification is separate. Splunk's [app/user configuration precedence](https://help.splunk.com/en/splunk-enterprise/administer/admin-manual/10.4/administer-splunk-enterprise-with-configuration-files/configuration-file-precedence)
+distinguishes the invoking app and current user from other exported definitions;
+the shared cache cannot prove every user's resulting configuration.
+
+Compact optional configuration contexts retain the source/dependency declaring
+apps, possible invoking namespace, local/exported candidate status and original
+literal selector witness. They do not assert an effective winner. Bounded merged
+contexts retain partial diagnostics at their 250-context ceiling. Ordinary
+multivalue calculated inputs (`mvappend`, `mvcount`, `mvindex`, `mvjoin`, `mvdedup`,
+`split`) extend the lexical subset; binding/dynamic functions remain unsupported.
+
+Automatic lookup facts include literal input/output column-to-event AS mappings
+and explicit OUTPUT/OUTPUTNEW mode. No output list means unknown output columns,
+not lookup-row sampling. No lookup producer joins or same-phase chaining is
+introduced. These fixed-key facts and context evidence share strict cache/schema
+projection, review-evidence hashing, Explorer/Library disclosures, required-content,
+impact and CSV/JSON. The [native props specification](https://help.splunk.com/en/splunk-enterprise/administer/admin-manual/10.2/configuration-file-reference/10.2.7-configuration-file-reference/props.conf)
+defines overwrite/preserve semantics; configured mappings do not establish values.
 
 The 1.4 development increment adds a bounded lexical capture-declaration reader,
 not a regex engine. It recognizes supported named groups and numbering while

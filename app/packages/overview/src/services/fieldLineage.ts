@@ -1,6 +1,6 @@
 /* eslint-disable no-restricted-syntax, no-continue -- Lexing and parsing have explicit byte/token/depth budgets. */
 import { CatalogIssue, CatalogResult, decodeSharedKnowledgeIdentity, NativeKnowledgeEntry, SharedKnowledgeIdentity } from './knowledgeCatalog';
-import { ExtractionOutputProvenance, FieldAliasMapping, FieldDependencyProvenance, FieldLineageFacts, FieldOutputDeclaration, FieldScope, ProducerOutputDeclaration } from '../types';
+import { ExtractionOutputProvenance, FieldAliasMapping, FieldContextEvidence, FieldDependencyProvenance, FieldLineageFacts, FieldOutputDeclaration, FieldScope, LookupMappingFacts, ProducerOutputDeclaration } from '../types';
 import { inlineExtractionDeclarations, namedCaptureDeclarations } from './extractionDeclarations';
 
 export type { FieldAliasMapping, FieldScope } from '../types';
@@ -53,6 +53,10 @@ export function readFieldLineageFacts(value: unknown): FieldLineageFacts | undef
         (row.stanza !== null && !identifier(row.stanza)) || (row.attribute !== null && !identifier(row.attribute)) ||
         row.scope !== null && (!row.scope || !['sourcetype', 'host', 'source'].includes(row.scope.field) || !identifier(row.scope.value) || typeof row.scope.exact !== 'boolean')) { return undefined; }
     const outputProvenance = row.outputProvenance === undefined ? undefined : readOutputProvenance(row.outputProvenance);
+    const lookupMapping = row.lookupMapping === undefined ? undefined : readLookupMapping(row.lookupMapping);
+    if (row.lookupMapping !== undefined && (!lookupMapping || row.operation !== 'lookup' ||
+        JSON.stringify(row.inputs) !== JSON.stringify(lookupMapping.inputs.map(item => item.eventField)) ||
+        JSON.stringify(row.outputs) !== JSON.stringify(lookupMapping.outputs.map(item => item.eventField)))) { return undefined; }
     if (row.outputProvenance !== undefined && (!outputProvenance ||
         (outputProvenance.method === 'inline_named_captures' ? row.operation !== 'inline' : row.operation !== 'transform') ||
         outputProvenance.declarations.some(item => !row.outputs.includes(item.field)) || row.outputs.some(name => !outputProvenance.declarations.some(item => item.field === name)) ||
@@ -61,7 +65,32 @@ export function readFieldLineageFacts(value: unknown): FieldLineageFacts | undef
         scope: row.scope ? { field: row.scope.field, value: row.scope.value, exact: row.scope.exact } : null,
         enabled: row.enabled, inputs: row.inputs, outputs: row.outputs, aliases: row.aliases.map(mapping => ({ input: mapping.input, output: mapping.output, mode: mapping.mode })),
         transforms: row.transforms, syntax: row.syntax, sourceLocation: row.sourceLocation, limitations: row.limitations,
-        ...(outputProvenance ? { outputProvenance } : {}) };
+        ...(outputProvenance ? { outputProvenance } : {}), ...(lookupMapping ? { lookupMapping } : {}) };
+}
+
+export function readLookupMapping(value: unknown): LookupMappingFacts | undefined {
+    const row = value as LookupMappingFacts | undefined;
+    const mappings = (items: unknown): items is LookupMappingFacts['inputs'] => Array.isArray(items) && items.length <= FIELD_DECLARATION_ITEMS &&
+        items.every((item, index) => item && identifier(item.lookupField) && identifier(item.eventField) && item.position === index + 1) &&
+        new Set(items.map(item => item.lookupField)).size === items.length && new Set(items.map(item => item.eventField)).size === items.length;
+    if (!row || row.version !== 1 || !['OUTPUT', 'OUTPUTNEW', 'implicit'].includes(row.outputMode) ||
+        !mappings(row.inputs) || !row.inputs.length || !mappings(row.outputs) || (row.outputMode === 'implicit') !== !row.outputs.length) { return undefined; }
+    return { version: 1, outputMode: row.outputMode, inputs: row.inputs.map(item => ({ lookupField: item.lookupField, eventField: item.eventField, position: item.position })),
+        outputs: row.outputs.map(item => ({ lookupField: item.lookupField, eventField: item.eventField, position: item.position })) };
+}
+
+function readContext(value: unknown): FieldContextEvidence | undefined {
+    const row = value as FieldContextEvidence | undefined;
+    if (!row || !identifier(row.declaringApp) || !identifier(row.invokingApp) || row.dependencyApp !== null && !identifier(row.dependencyApp) ||
+        !['local_candidate', 'exported_candidate'].includes(row.declaration) || !['local_candidate', 'exported_candidate', 'unresolved'].includes(row.dependency) ||
+        (row.declaration === 'local_candidate') !== (row.declaringApp === row.invokingApp) ||
+        (row.dependency === 'unresolved') !== (row.dependencyApp === null) ||
+        row.dependencyApp !== null && (row.dependency === 'local_candidate') !== (row.dependencyApp === row.invokingApp) ||
+        row.selector !== null && (!row.selector || !['sourcetype', 'host', 'source'].includes(row.selector.field) ||
+            !identifier(row.selector.value) || !identifier(row.selector.sourceLocation))) { return undefined; }
+    return { declaringApp: row.declaringApp, dependencyApp: row.dependencyApp, invokingApp: row.invokingApp,
+        declaration: row.declaration, dependency: row.dependency, selector: row.selector ? {
+            field: row.selector.field, value: row.selector.value, sourceLocation: row.selector.sourceLocation } : null };
 }
 
 const OUTPUT_METHODS: ExtractionOutputProvenance['method'][] = ['inline_named_captures', 'transform_named_captures', 'transform_format', 'transform_fields'];
@@ -96,7 +125,7 @@ export function readFieldProvenance(value: unknown): FieldDependencyProvenance |
     const identities = (items: unknown): items is string[] => Array.isArray(items) && items.length <= FIELD_DECLARATION_ITEMS && items.every(item =>
         typeof item === 'string' && item.length > 0 && item.length <= 16384 && Array.from(item).every(character => character.charCodeAt(0) >= 32 && character.charCodeAt(0) !== 127));
     const phases = ['extraction', 'alias', 'calculated', 'lookup'];
-    if (!row || row.version !== 1 || !['report_binding', 'field_input', 'event_scope'].includes(row.kind) ||
+    if (!row || row.version !== 1 || !['report_binding', 'lookup_binding', 'field_input', 'event_scope'].includes(row.kind) ||
         !names(row.fields) || !identities(row.viaObjectIds) || !names(row.contextApps) ||
         !phases.includes(row.producerPhase) || row.consumerPhase !== null && !phases.includes(row.consumerPhase) ||
         !['fixed_app', 'invoking_app_unverified'].includes(row.invocation) ||
@@ -104,6 +133,9 @@ export function readFieldProvenance(value: unknown): FieldDependencyProvenance |
         row.transformPositions.some(position => !Number.isSafeInteger(position) || position < 1 || position > FIELD_DECLARATION_ITEMS) ||
         row.scope !== null && (!row.scope || !['sourcetype', 'host', 'source'].includes(row.scope.field) || !identifier(row.scope.value) || typeof row.scope.exact !== 'boolean')) { return undefined; }
     let outputDeclarations: ProducerOutputDeclaration[] | undefined;
+    if (row.contexts !== undefined && (!Array.isArray(row.contexts) || row.contexts.length > FIELD_DECLARATION_ITEMS)) { return undefined; }
+    const contexts = row.contexts?.map(readContext);
+    if (contexts?.some(item => !item || !row.contextApps.includes(item.invokingApp))) { return undefined; }
     if (row.outputDeclarations !== undefined) {
         if (!Array.isArray(row.outputDeclarations) || row.outputDeclarations.length > FIELD_DECLARATION_ITEMS) { return undefined; }
         outputDeclarations = [];
@@ -118,7 +150,7 @@ export function readFieldProvenance(value: unknown): FieldDependencyProvenance |
     return { version: 1, kind: row.kind, fields: row.fields, scope: row.scope ? { field: row.scope.field, value: row.scope.value, exact: row.scope.exact } : null,
         consumerPhase: row.consumerPhase, producerPhase: row.producerPhase, transformPositions: row.transformPositions,
         viaObjectIds: row.viaObjectIds, contextApps: row.contextApps, invocation: row.invocation,
-        ...(outputDeclarations ? { outputDeclarations } : {}) };
+        ...(outputDeclarations ? { outputDeclarations } : {}), ...(contexts ? { contexts: contexts as FieldContextEvidence[] } : {}) };
 }
 const object = (value: unknown): Record<string, unknown> | null => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
 const identifier = (value: unknown): value is string => typeof value === 'string' && value.length > 0 && value.length <= 4096 && value.trim() === value &&
@@ -202,7 +234,8 @@ export function calculatedFieldInputs(text: string): CalculatedInputs {
         lower: [1, 1], upper: [1, 1], len: [1, 1], isnull: [1, 1], isnotnull: [1, 1],
         trim: [1, 2], ltrim: [1, 2], rtrim: [1, 2], tonumber: [1, 2], tostring: [1, 2],
         abs: [1, 1], ceil: [1, 1], floor: [1, 1], round: [1, 2], min: [1, 250], max: [1, 250],
-        json_extract: [2, 250], null: [0, 0], true: [0, 0], false: [0, 0] };
+        json_extract: [2, 250], mvappend: [1, 250], mvcount: [1, 1], mvindex: [2, 3],
+        mvjoin: [2, 2], mvdedup: [1, 1], split: [2, 2], null: [0, 0], true: [0, 0], false: [0, 0] };
     const expression = (minimum: number, depth: number): boolean => {
         if (depth > FIELD_EXPRESSION_DEPTH) { return false; }
         const token = list[cursor]; if (!token) { return false; }

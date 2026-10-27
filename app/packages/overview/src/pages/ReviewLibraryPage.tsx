@@ -27,6 +27,9 @@ import { PageHeader } from '../components/PageHeader';
 import { ReviewEditor } from '../components/ReviewEditor';
 import { ExportMenu } from '../components/ExportMenu';
 import { FieldLineagePanel } from '../components/FieldLineagePanel';
+import { AppPoliciesPanel } from '../components/AppPoliciesPanel';
+import { AppPolicyContext, AppRetentionLabel } from '../components/AppPolicyContext';
+import { PolicyProtection } from '../services/appPolicies';
 import { WorkspaceTabs } from '../components/WorkspaceTabs';
 import { ReviewHistoryPanel } from '../components/ReviewHistoryPanel';
 import { useReviewNavigation } from '../components/ReviewNavigationContext';
@@ -101,7 +104,8 @@ function formatDateTime(value: string): string {
           }).format(date);
 }
 
-function exportReviews(rows: ReviewRecord[], objectById: Map<string, ContentObject>, freshness: Map<string, ReviewFreshness>, inventoryAvailable: boolean): void {
+function exportReviews(rows: ReviewRecord[], objectById: Map<string, ContentObject>, freshness: Map<string, ReviewFreshness>, inventoryAvailable: boolean,
+    protection: ReadonlyMap<string, PolicyProtection>): void {
     const presence = (id: string): string => {
         if (!inventoryAvailable) { return 'unavailable'; }
         return objectById.has(id) ? 'present' : 'not observed';
@@ -140,6 +144,7 @@ function exportReviews(rows: ReviewRecord[], objectById: Map<string, ContentObje
             'Library state', 'Revision', 'Revision ID', 'Persistence warning',
             'Coverage policy', 'Configuration coverage', 'ACL coverage', 'Outbound coverage', 'Inbound coverage',
             'Current declared field facts',
+            'App policy protection (separate from individual decision)',
         ],
         rows.map((review) => [
             review.objectId,
@@ -178,6 +183,7 @@ function exportReviews(rows: ReviewRecord[], objectById: Map<string, ContentObje
             freshness.get(review.objectId)?.current?.coverage?.outbound.status ?? 'unavailable',
             freshness.get(review.objectId)?.current?.coverage?.inbound.status ?? 'unavailable',
             objectById.get(review.objectId)?.fieldLineage ? JSON.stringify(objectById.get(review.objectId)!.fieldLineage) : '',
+            JSON.stringify(protection.get(review.objectId) ?? null),
         ]),
     );
 }
@@ -192,6 +198,7 @@ export function ReviewLibraryPage({
     onDeleteReview,
 }: ReviewLibraryPageProps): React.ReactElement {
     const workflow = useContext(ReviewWorkflowContext);
+    const policies = useContext(AppPolicyContext);
     const { navigate } = useReviewNavigation();
     const [query, setQuery] = useState(readQueryParam('query'));
     const [stageFilter, setStageFilter] = useState(readQueryParam('stage') || 'all');
@@ -285,7 +292,7 @@ export function ReviewLibraryPage({
                         {workflow.refresh ? <StyledButton type="button" disabled={isLoading}
                             onClick={() => workflow.refresh!().catch(() => undefined)}>Refresh library</StyledButton> : null}
                         <ExportMenu label="Export filtered reviews" disabled={!filteredReviews.length} items={[
-                            { label: 'Review library CSV', onClick: () => exportReviews(filteredReviews, objectById, freshness, Boolean(snapshot)) },
+                            { label: 'Review library CSV', onClick: () => exportReviews(filteredReviews, objectById, freshness, Boolean(snapshot), policies.protection) },
                             { label: 'Review library JSON', onClick: () =>
                                 downloadJson('content-hygiene-review-library.json', {
                                     exportedAt: new Date().toISOString(),
@@ -294,6 +301,7 @@ export function ReviewLibraryPage({
                                         ...review,
                                         currentObject: objectById.get(review.objectId) ?? null,
                                         reviewEvidenceStatus: freshness.get(review.objectId),
+                                        appPolicyProtection: policies.protection.get(review.objectId) ?? null,
                                     })),
                                 })
                             },
@@ -311,6 +319,7 @@ export function ReviewLibraryPage({
 
             {loadError ? <InlineNotice role="alert">{loadError}</InlineNotice> : null}
             <div hidden={Boolean(selectedReview)}>
+            {!selectedReview ? <AppPoliciesPanel snapshot={snapshot} /> : null}
             <MetricGrid aria-label="Review workflow summary">
                 <SummaryMetric
                     label="Active library records"
@@ -532,6 +541,7 @@ export function ReviewLibraryPage({
                                                 <td>{review.objectType}</td>
                                                 <td>
                                                     <ReviewStageBadge stage={review.stage} />
+                                                    <div><AppRetentionLabel objectId={review.objectId} /></div>
                                                     {review.removed ? <div>Archived · decision retained</div> : null}
                                                 </td>
                                                 <td><ReviewFreshnessBadge status={freshness.get(review.objectId)!.status} /></td>
@@ -584,8 +594,8 @@ export function ReviewLibraryPage({
                                 <StyledButton disabled={!objectById.has(selectedReview.objectId)}
                                     onClick={() => navigate(() => navigateToView('candidates', { object: selectedReview.objectId }))}>View candidate evidence</StyledButton>
                                 <ExportMenu label="Export this review" items={[
-                                    { label: 'Selected review CSV', onClick: () => exportReviews([selectedReview], objectById, freshness, Boolean(snapshot)) },
-                                    { label: 'Selected review JSON', onClick: () => downloadJson('content-hygiene-review.json', { exportedAt: new Date().toISOString(), review: selectedReview, currentObject: objectById.get(selectedReview.objectId) ?? null, reviewEvidenceStatus: freshness.get(selectedReview.objectId) }) },
+                                    { label: 'Selected review CSV', onClick: () => exportReviews([selectedReview], objectById, freshness, Boolean(snapshot), policies.protection) },
+                                    { label: 'Selected review JSON', onClick: () => downloadJson('content-hygiene-review.json', { exportedAt: new Date().toISOString(), review: selectedReview, currentObject: objectById.get(selectedReview.objectId) ?? null, reviewEvidenceStatus: freshness.get(selectedReview.objectId), appPolicyProtection: policies.protection.get(selectedReview.objectId) ?? null }) },
                                 ]} />
                             </ButtonRow>
                         </WorkspaceHeader>

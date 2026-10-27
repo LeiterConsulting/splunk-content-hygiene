@@ -1843,9 +1843,9 @@ async function runInventoryScan(
         collector_totals: {},
         collector_versions: {
             rest_inventory: '0.2.0',
-            dependency_analysis: '1.4.0',
+            dependency_analysis: '1.5.0',
             knowledge_catalogs: '1.0.0',
-            field_lineage: '1.1.0',
+            field_lineage: '1.2.0',
             classification: '1.0.0',
             review_evidence: '1.0.0',
         },

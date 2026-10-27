@@ -113,6 +113,7 @@ export function RemovalImpactPanel({
                     <InlineNotice>
                         <strong>{analysis.readinessLabel}.</strong> {analysis.summary}
                     </InlineNotice>
+                    {analysis.policyAffectedCount > 0 ? <InlineNotice>{analysis.policyAffectedCount} affected objects have app-policy protection or unverified policy scope. Policy protection blocks cleanup planning independently of the dependency-impact score and individual decisions.</InlineNotice> : null}
                     <MetricGrid>
                         <SummaryMetric
                             label="Impact level"

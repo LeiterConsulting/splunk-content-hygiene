@@ -10,6 +10,7 @@ import {
 import { evidenceWindowFresh, usageSourceForObject, usageValidity } from './usage';
 import { compareReviewEvidence } from './reviewEvidence';
 import { isPotentialRelation, weakestDependencyConfidence } from '../utils/dependencySemantics';
+import { PolicyProtection } from './appPolicies';
 
 export type RemovalImpactLevel = 'critical' | 'high' | 'medium' | 'low' | 'unknown';
 
@@ -38,6 +39,7 @@ export interface ImpactedObject {
     protected: boolean;
     fieldProvenance?: DependencyEdge['fieldProvenance'];
     fieldLineage?: ContentObject['fieldLineage'];
+    policyProtection?: PolicyProtection;
 }
 
 export interface DependencyFollowUp {
@@ -52,6 +54,7 @@ export interface DependencyFollowUp {
     potentialDependentCount: number;
     potentiallyOrphaned: boolean;
     recommendation: string;
+    policyProtection?: PolicyProtection;
 }
 
 export interface RemovalPlanStep {
@@ -77,11 +80,13 @@ export interface RemovalImpactAnalysis {
     affectedObjects: ImpactedObject[];
     affectedAppCount: number;
     protectedAffectedCount: number;
+    policyAffectedCount: number;
     unresolvedAffectedCount: number;
     dependencyFollowUps: DependencyFollowUp[];
     potentialConsequences: string[];
     removalPlan: RemovalPlanStep[];
     caveats: string[];
+    policyProtection?: PolicyProtection;
 }
 
 interface TraversalItem {
@@ -244,6 +249,7 @@ export function analyzeRemovalImpact(
     scan: ScanSummary,
     requestedMaxDepth = 3,
     now = Date.now(),
+    policies: ReadonlyMap<string, PolicyProtection> = new Map(),
 ): RemovalImpactAnalysis {
     const maxDepth = Math.max(1, Math.min(5, Math.round(requestedMaxDepth)));
     const objectById = new Map(
@@ -337,6 +343,7 @@ export function analyzeRemovalImpact(
                     )}`,
                     resolved: Boolean(dependent) && edge.resolved,
                     protected: dependent?.protected ?? false,
+                    ...(policies.has(edge.sourceId) ? { policyProtection: policies.get(edge.sourceId) } : {}),
                     ...(edge.fieldProvenance ? { fieldProvenance: edge.fieldProvenance } : {}),
                     ...(dependent?.fieldLineage ? { fieldLineage: dependent.fieldLineage } : {}),
                 };
@@ -370,12 +377,14 @@ export function analyzeRemovalImpact(
     const potentialIndirectCount = indirectDependents.filter(({ conditional }) => conditional).length;
     const potentialAffectedCount = potentialDirectCount + potentialIndirectCount;
     const protectedAffectedCount = affectedObjects.filter((affected) => affected.protected).length;
+    const policyAffectedCount = affectedObjects.filter(affected => affected.policyProtection?.blocksCleanup).length;
     const unresolvedAffectedCount = affectedObjects.filter(({ resolved }) => !resolved).length;
     const affectedAppCount = new Set(affectedObjects.map(({ app }) => app)).size;
 
     const outboundEdges = edges.filter((edge) => edge.sourceId === selected.objectId);
     const dependencyFollowUps: DependencyFollowUp[] = outboundEdges.map((edge) => {
         const dependency = objectById.get(edge.targetId);
+        const policy = policies.get(edge.targetId);
         const unresolved = unresolvedIdentity(edge.targetId);
         const knownDependentCount = inboundSourceIdsByTarget.get(edge.targetId)?.size ?? 0;
         const known = inboundSourceIdsByTarget.get(edge.targetId);
@@ -385,12 +394,15 @@ export function analyzeRemovalImpact(
             knownDependentCount === 1 &&
             potentialDependentCount === 0 &&
             !isPotentialRelation(edge.relation) &&
+            !policy?.blocksCleanup &&
             !platformResourceTypes.has(dependency!.objectType);
         let recommendation =
             'Retain and validate this dependency independently; removing its consumer does not establish that the dependency is unused.';
         if (!dependency) {
             recommendation =
                 'Resolve this target or document the incomplete inventory before planning removal.';
+        } else if (policy?.blocksCleanup) {
+            recommendation = policy.detail;
         } else if (platformResourceTypes.has(dependency.objectType)) {
             recommendation =
                 'Treat this shared platform resource as a separate administrative decision; do not include it in the same removal change.';
@@ -416,6 +428,7 @@ export function analyzeRemovalImpact(
             potentialDependentCount,
             potentiallyOrphaned,
             recommendation,
+            ...(policy ? { policyProtection: policy } : {}),
         };
     });
 
@@ -444,10 +457,11 @@ export function analyzeRemovalImpact(
         analysisComplete,
     );
     const selectedReview = reviewByObject.get(selected.objectId);
+    const selectedPolicy = policies.get(selected.objectId);
     const reviewEvidenceCurrent = compareReviewEvidence(selectedReview, selected, scan, now).status === 'current';
     const referenceCountMismatch = selected.inboundReferences > directDependents.length;
     const reviewBlocksRemoval =
-        selectedReview?.stage === 'retain' || selectedReview?.stage === 'blocked';
+        selectedReview?.stage === 'retain' || selectedReview?.stage === 'blocked' || selectedPolicy?.blocksCleanup;
     const selectedUsage = selected.usageEvidence;
     const usageMatchesInventory = usageValidity(selected, scan.scanId, now) === 'current';
     const completeUsageWindow = usageMatchesInventory && selectedUsage?.coverage === 'complete';
@@ -468,6 +482,7 @@ export function analyzeRemovalImpact(
     if (
         selected.protected ||
         protectedAffectedCount > 0 ||
+        policyAffectedCount > 0 ||
         reviewBlocksRemoval ||
         !analysisComplete ||
         unresolvedAffectedCount > 0 ||
@@ -476,7 +491,9 @@ export function analyzeRemovalImpact(
     ) {
         readiness = 'blocked';
         readinessLabel = 'Blocked by current evidence';
-        if (selectedReview?.stage === 'retain') {
+        if (selectedPolicy?.blocksCleanup) {
+            summary = selectedPolicy.detail;
+        } else if (selectedReview?.stage === 'retain') {
             summary =
                 'The Review Library marks this object for retention; do not plan removal unless that reviewed decision is explicitly reconsidered.';
         } else if (selectedReview?.stage === 'blocked') {
@@ -522,6 +539,8 @@ export function analyzeRemovalImpact(
     }
 
     const potentialConsequences: string[] = [];
+    if (selectedPolicy?.blocksCleanup) { potentialConsequences.push(selectedPolicy.detail); }
+    if (policyAffectedCount) { potentialConsequences.push(`${policyAffectedCount} affected objects have app-policy protection or unverifiable policy scope. Resolve that separate policy reason before removal planning; it is not usage evidence or an increased dependency-impact score.`); }
     if (directDependents.length > 0) {
         potentialConsequences.push(
             potentialDirectCount > 0 ? `${directDependents.length} captured direct relationships include ${potentialDirectCount} potential implicit matches; verify them before assuming consumption.` : `${directDependents.length} object${
@@ -663,7 +682,7 @@ export function analyzeRemovalImpact(
                     ? `Walk the ${indirectDependents.length} captured indirect impact path${indirectDependents.length === 1 ? '' : 's'} with affected app owners, verify any potential implicit hop, and confirm which complete chains require remediation.`
                     : 'No indirect impact path is captured within the selected depth; record that scope and its parser limitations.',
             objectIds: indirectDependents.map(({ objectId }) => objectId),
-            blocking: protectedAffectedCount > 0,
+            blocking: protectedAffectedCount > 0 || policyAffectedCount > 0,
         },
         {
             sequence: 5,
@@ -692,6 +711,10 @@ export function analyzeRemovalImpact(
             blocking: false,
         },
     ];
+    if (selectedPolicy?.blocksCleanup) {
+        removalPlan.unshift({ sequence: 0, phase: 'confirm', title: 'Resolve app retention policy protection', detail: selectedPolicy.detail,
+            objectIds: [selected.objectId], blocking: true });
+    }
 
     return {
         selectedObjectId: selected.objectId,
@@ -707,10 +730,12 @@ export function analyzeRemovalImpact(
         affectedObjects,
         affectedAppCount,
         protectedAffectedCount,
+        policyAffectedCount,
         unresolvedAffectedCount,
         dependencyFollowUps,
         potentialConsequences,
         removalPlan,
         caveats,
+        ...(selectedPolicy ? { policyProtection: selectedPolicy } : {}),
     };
 }
