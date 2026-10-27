@@ -27,9 +27,70 @@ the minimum is not a recommendation to downgrade or remain on an old patch.
 
 | Runtime | Purpose | Current evidence |
 | --- | --- | --- |
-| 10.2.5 | Exact minimum; classic navigation; coordinator and reported regressions | App 1.7.0 build 89: isolated Linux VM at 1280 × 720; fresh bounded/full scans, shared-props native/cache/schema parity, all seven pages in Light/Dark, context/impact/footprint/scan exports and empty Library checks |
-| 10.2.8 | Representative 10.2 maintenance release and real-estate regression | App 1.7.0 build 89 at 1434 × 940: fresh scans, native/cache/schema parity, all seven pages in Light/Dark, shared-props investigations and preserved Library evidence/exports |
-| 10.4.4 | Modern navigation, current theme host, and newer bundled runtime | App 1.7.0 build 89 at 1434 × 940: fresh scans, native/cache/schema parity, all seven pages in Light/Dark, shared-props investigations and empty Library checks; original decisions unchanged |
+| 10.2.5 | Exact minimum; classic navigation; coordinator and reported regressions | App 1.8.0 build 93: isolated Linux VM at 1280 × 720; fresh bounded/full scans, props/cross-stanza native/cache/schema parity, all seven pages in Light/Dark, keyboard caller/context checks, actual exports and empty Library checks |
+| 10.2.8 | Representative 10.2 maintenance release and real-estate regression | App 1.8.0 build 93 at 1434 × 940: fresh scans, native/cache/schema parity, all seven pages in Light/Dark, props/cross-stanza investigations, keyboard caller/context checks and preserved Library evidence/exports |
+| 10.4.4 | Modern navigation, current theme host, and newer bundled runtime | App 1.8.0 build 93 at 1434 × 940: fresh scans, native/cache/schema parity, all seven pages in Light/Dark, props/cross-stanza investigations, keyboard caller/context checks and empty Library checks; original decisions unchanged |
+
+### 1.8.0 conditional cross-stanza qualification
+
+The same checksum-identified build 93 archive was installed on all three runtimes
+without restarting the shared installations. Fresh bounded scans preserve the
+previous full baseline. Complete scans, independent GET-only native replay and
+cache comparisons agree on supported field identities, native shared bindings,
+numeric priority projections, strict caller scopes, cross-stanza observations
+and diagnostic counters. Real objects, relationships and scan records pass the
+published schemas. No extra native requests are added by cross-stanza comparison.
+
+There are 101 accepted native captures, covering all seven pages in both themes
+plus object/context filtering, pagination, open status menus, graph relationships,
+keyboard caller drill-through and impact. Both ordinary dialog close and rapid
+Escape during the opening animation remove the modal and restore focus. At the
+viewports above, measured surfaces have no document/detail horizontal overflow,
+graph-label overlap or dialog-control overflow. Sampled active text, including
+the new caller links in object details and portals, has contrast of at least
+5.78:1. Props drill-through uses native themed, underlined Link controls rather
+than inheriting classic host anchor colors. These bounded desktop checks are not
+comprehensive accessibility or production-scale certification.
+
+Actual downloads include 29 JSON reports and 27 paired CSV files. Independent
+comparisons retain the captured facts/provenance, partial scope and blocked
+removal readiness through investigation, impact, required-content, scan and
+Library reports. Original decisions, captured baselines, review journals and
+app-policy history are unchanged. All native appearance choices are restored.
+No new reviews, policies, accounts or customer objects were saved for this slice.
+
+The native catalogs have no exact host/source props rules and no positive
+cross-category or same-category priority/ASCII collision witness. They verify real
+caller scopes and explicit unknowns, not a fabricated highest-binding example.
+Positive collision ordering, shadowing and props-specific Library cases have
+adversarial automated coverage. The existing native Library contains a non-props
+decision on one runtime and is empty on the other two. Full-catalog limitations
+and work ceilings remain unverified and never become absence assertions.
+
+The emulated minimum-runtime host needed a readiness reload after its initial
+cold native-dashboard load. Two combined Light caller-navigation waits later
+expired although the correct object subsequently rendered without a browser
+error. Recorded keyboard activation/focus/contrast and a separate fresh ready-
+state, exact-selection and capture check passed; no assertion was removed and
+no production timeout was increased. Emulated cold-load timing is not a
+production performance claim. Earlier candidates and their findings are retained
+privately and are not substituted for final-candidate qualification.
+
+The exact candidate passes 968 automated checks: 921 overview, 16 native-host,
+22 backend and nine archive-policy checks, with no skipped/failing cases. Lint,
+style, types, branding, production build and metadata-free portable packaging
+pass. Pre-cert AppInspect 4.3.1 has zero errors, failures or future failures, with
+the same three reviewed advisories and one manifest-related skip. Existing bundle-
+size advisories remain; this is not Cloud certification. Earlier native backend
+permission/concurrency and policy-lifecycle qualification remains separate below.
+
+This is conditional ordering among compared captured shared exact stanzas for
+one declared initial-search conjunction, not full effective props or proof of
+event matching. Patterns/defaults, private/system/file layers, sourcetype rewrites,
+field availability, runtime activation/execution and dynamic/external/ad-hoc
+closure remain unverified. Lower and shadowed possible paths remain in the
+graph as removal fallbacks. Coverage policy v7 preserves v1–v6 baselines and
+requires explicit re-review, never a silent reaffirmation. Follow-up #8 stays open.
 
 ### 1.7.0 shared props qualification
 

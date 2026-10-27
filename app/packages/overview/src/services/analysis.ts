@@ -1,4 +1,4 @@
-import { ContentFinding, ContentObject, DependencyEdge, FieldLineageFacts, FindingType } from '../types';
+import { ContentFinding, ContentObject, DependencyEdge, FieldLineageFacts, FindingType, PropsEventScope } from '../types';
 import {
     ParsedReference,
     ReferenceTarget,
@@ -54,6 +54,8 @@ export interface InventoryAnalysis {
     parserCounts: Record<string, number>;
     parserWarnings: string[];
     coverageGaps: SourceCoverageGap[];
+    /** Transient, bounded selector metadata for scan-time cross-stanza checks. */
+    propsEventScopes: Array<PropsEventScope & { callerObjectId: string; app: string }>;
 }
 export interface AnalysisVisibility {
     privateObjects: PrivateObjectCount[];
@@ -362,6 +364,7 @@ export function analyzeInventory(
         dashboard: 0,
         unresolved: 0,
     };
+    const propsEventScopes: InventoryAnalysis['propsEventScopes'] = [];
 
     sources.forEach((source) => {
         const sourceObject = objectById.get(source.objectId);
@@ -369,6 +372,10 @@ export function analyzeInventory(
             return;
         }
         const original = sourceParses.get(source)!;
+        if (['Saved Search', 'Report', 'Alert', 'Dashboard'].includes(sourceObject.objectType) && propsEventScopes.length < 50000) {
+            propsEventScopes.push(...(original.propsEventScopes ?? []).slice(0, Math.min(250, 50000 - propsEventScopes.length))
+                .map(scope => ({ ...scope, callerObjectId: source.objectId, app: sourceObject.app })));
+        }
         const parsed = fieldReferences(sourceObject, knowledgeReferences(sourceObject, source.kind === 'automatic_lookup'
             ? automatic.bindings(sourceObject, original) : automatic.callers(sourceObject, original)));
         if (parsed.automaticLookup) {
@@ -716,6 +723,7 @@ export function analyzeInventory(
         parserCounts,
         parserWarnings,
         coverageGaps,
+        propsEventScopes,
     };
 }
 

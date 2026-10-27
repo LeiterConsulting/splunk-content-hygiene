@@ -310,8 +310,13 @@ export function SettingsPage({
                                         <dt>Local / inherited</dt><dd>{displayedScan.parserCounts?.props_context_local ?? 0} / {displayedScan.parserCounts?.props_context_inherited ?? 0}</dd>
                                         <dt>Shadowed / unverified</dt><dd>{displayedScan.parserCounts?.props_context_shadowed ?? 0} / {displayedScan.parserCounts?.props_context_unverified ?? 0}</dd>
                                         <dt>Truncated edges / objects</dt><dd>{displayedScan.parserCounts?.props_context_truncated_edges ?? 0} / {displayedScan.parserCounts?.props_context_truncated_objects ?? 0}</dd>
+                                        <dt>Cross-stanza groups</dt><dd>{displayedScan.parserCounts?.props_cross_stanza_groups ?? 0}</dd>
+                                        <dt>Conditional highest / lower</dt><dd>{displayedScan.parserCounts?.props_cross_stanza_highest ?? 0} / {displayedScan.parserCounts?.props_cross_stanza_lower ?? 0}</dd>
+                                        <dt>Unverified comparisons</dt><dd>{displayedScan.parserCounts?.props_cross_stanza_unverified ?? 0}</dd>
+                                        <dt>Cross-stanza truncated edges / objects</dt><dd>{displayedScan.parserCounts?.props_cross_stanza_truncated_edges ?? 0} / {displayedScan.parserCounts?.props_cross_stanza_truncated_objects ?? 0}</dd>
                                     </DefinitionList>
                                     <SmallText>Complete-scan ceiling: 256 native attribute/app pairs, two reads per pair, four workers, 90 seconds; 128 KiB per response and eight seconds per read. Bounded scans use 32 pairs and 15 seconds. Fixed callers are prioritized. Additional candidate/task/row ceilings remain explicit in context details and JSON diagnostics.</SmallText>
+                                    <SmallText>Cross-stanza comparisons reuse these reads. They inspect at most 100,000 indexed work items, 10,000 groups and 16 members per group in five seconds, with 32 rows/32 KiB per object or relationship. Only identical attributes in a supported literal conjunction are compared; partial or budget-limited evidence stays unverified.</SmallText>
                                 </CollapsiblePanel>
                             </section> : null}
                             {displayedScan && displayedScan.warnings.length > 0 ? (

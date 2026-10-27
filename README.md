@@ -17,6 +17,43 @@ The app keeps customer content read-only:
   app-local KV Store collections.
 - Every finding carries reasons, evidence, and a suggested investigation step.
 
+## Version 1.8.0 — conditional cross-stanza props order
+
+[Release 1.8.0, build 93](https://github.com/LeiterConsulting/splunk-content-hygiene/releases/tag/v1.8.0)
+compares the same exact props attribute across captured shared literal stanzas
+for one supported initial-search conjunction. It distinguishes conditional
+highest/lower precedence from unverified context, explains source → host →
+sourcetype ordering and same-category numeric priority/ASCII ties, and retains
+every possible dependency path, including lower bindings as removal fallbacks.
+
+Explorer, relationship context and Review Library reuse accessible, wrapping,
+searchable, filtered and paginated details. The compact evidence travels through
+freshness, impact, required-content reports and CSV/JSON. Checks run only during
+explicit scans, reuse existing native reads and never execute customer searches
+or regexes. Existing decisions, history and v1–v6 evidence baselines remain intact
+under `shared-static-v7`; a scan never silently reaffirms a decision.
+
+This is **not full effective-props evaluation**. Separate query branches are never
+combined; patterns, defaults, private/system/file layers, runtime activation and
+execution remain unverified. No ordering result establishes safe removal. See
+the [cross-stanza investigation guide](docs/USER_GUIDE.md#conditional-cross-stanza-props-order-18)
+and [coverage matrix](docs/DEPENDENCY_COVERAGE.md). Follow-up #8 remains open.
+
+Build 93 passes 968 automated checks and pre-cert AppInspect with no
+errors/failures. Fresh native/cache/schema comparisons, all seven pages in
+Light/Dark, keyboard drill-through and 29 JSON / 27 paired CSV downloads cover
+Enterprise 10.2.5, 10.2.8 and 10.4.4. Existing decisions and appearance choices
+are preserved. Native catalogs contain no cross-stanza host/source collisions;
+positive category/priority/ASCII ordering and props-specific Library cases have
+automated contracts, not manufactured native witnesses. See the
+[qualification and limits](docs/COMPATIBILITY.md#180-conditional-cross-stanza-qualification).
+
+![Cross-stanza investigation in native Dark mode](docs/images/cross-stanza-context-dark.jpg)
+
+This built-in-metadata capture deliberately shows an unverified comparison:
+incomplete coverage does not become a highest-binding or safe-removal claim.
+[Light-mode example](docs/images/cross-stanza-context-light.jpg).
+
 ## Version 1.7.0 — shared props precedence and inheritance
 
 [Release 1.7.0, build 89](https://github.com/LeiterConsulting/splunk-content-hygiene/releases/tag/v1.7.0) cross-checks native rule-level ownership/export scope

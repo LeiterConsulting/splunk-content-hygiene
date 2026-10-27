@@ -54,7 +54,7 @@
       "type": "object",
       "required": ["policy", "configuration", "access", "outbound", "inbound"],
       "properties": {
-        "policy": { "enum": ["shared-static-v1", "shared-static-v2", "shared-static-v3", "shared-static-v4", "shared-static-v5", "shared-static-v6"] },
+        "policy": { "enum": ["shared-static-v1", "shared-static-v2", "shared-static-v3", "shared-static-v4", "shared-static-v5", "shared-static-v6", "shared-static-v7"] },
         "configuration": { "$ref": "#/$defs/coverageDimension" },
         "access": { "$ref": "#/$defs/coverageDimension" },
         "outbound": { "$ref": "#/$defs/coverageDimension" },

@@ -9,6 +9,7 @@ import { PrivateObjectCount } from './dependencyCoverage';
 import { CatalogIssue, decodeEventType, decodeTagBindings, decodeSharedKnowledgeIdentity, MAX_TAG_BINDINGS_PER_STANZA } from './knowledgeCatalog';
 import { decodeFieldLineage, FieldCatalog, fieldLineageFacts, readFieldLineageFacts, readFieldProvenance } from './fieldLineage';
 import { checkPropsPrecedence, PROPS_READ_BYTES, PropsReadRequest, propsReadPlan } from './propsPrecedence';
+import { compareCrossStanzaProps } from './crossStanzaProps';
 import {
     CollectedUsageSource,
     DASHBOARD_ACCESS_SOURCE_ID,
@@ -1894,11 +1895,12 @@ async function runInventoryScan(
         collector_totals: {},
         collector_versions: {
             rest_inventory: '0.2.0',
-            dependency_analysis: '1.7.0',
+            dependency_analysis: '1.8.0',
             interaction_dependencies: '1.0.1',
             knowledge_catalogs: '1.0.0',
             field_lineage: '1.2.0',
             props_precedence: '1.0.0',
+            props_cross_stanza: '1.0.0',
             classification: '1.0.0',
             review_evidence: '1.0.0',
         },
@@ -2088,10 +2090,19 @@ async function runInventoryScan(
                     return { status: 200, data };
                 } catch (error) { return { status: error instanceof RestRequestError ? error.status : 0, data: null }; }
             }, { ...(mode === 'bounded' ? { maxContexts: 32, maxMilliseconds: 15000 } : {}), signal: activeScanController?.signal });
-            analysis.objects = contexts.objects; analysis.edges = contexts.edges;
+            onProgress?.({ completedCollectors, totalCollectors, stage: 'Comparing captured exact-stanza props order (conditional, bounded)' });
+            const crossStanza = await compareCrossStanzaProps(contexts.objects, contexts.edges, analysis.propsEventScopes, {
+                catalogsComplete: [completeness.field_extractions, completeness.field_aliases, completeness.calculated_fields, completeness.automatic_lookups].every(value => value === true),
+                signal: activeScanController?.signal,
+            });
+            analysis.objects = crossStanza.objects; analysis.edges = crossStanza.edges;
             Object.assign(analysis.parserCounts, contexts.counts);
+            Object.assign(analysis.parserCounts, crossStanza.counts);
             if (contexts.counts.props_context_unverified) {
-                warnings.push(`Shared props context: ${contexts.counts.props_context_unverified} observation(s) remain unverified. Inspect context reasons; runtime/file/cross-stanza precedence is not inferred.`);
+                warnings.push(`Shared props context: ${contexts.counts.props_context_unverified} observation(s) remain unverified. Inspect context reasons; runtime/file/full cross-stanza precedence is not inferred.`);
+            }
+            if (crossStanza.counts.props_cross_stanza_unverified || crossStanza.counts.props_cross_stanza_truncated_edges || crossStanza.counts.props_cross_stanza_truncated_objects) {
+                warnings.push(`Cross-stanza props: ${crossStanza.counts.props_cross_stanza_unverified} comparison(s) remain unverified. Inspect the captured conjunctive context and limits; no effective winner or removal safety is inferred.`);
             }
             if (analysis.parserWarnings.length) {
                 const affectedCount = analysis.objects.filter(

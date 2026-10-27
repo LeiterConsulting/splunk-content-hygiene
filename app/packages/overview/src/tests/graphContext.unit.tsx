@@ -3,6 +3,7 @@ import React from 'react';
 import { render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SplunkThemeProvider } from '@splunk/themes';
+import { AnimationToggleProvider } from '@splunk/react-ui/AnimationToggle';
 import { DependencyGraph } from '../components/DependencyGraph';
 import { buildDependencyIndex } from '../services/dependencyGraph';
 import { ContentObject, DependencyEdge } from '../types';
@@ -32,9 +33,14 @@ function frame(
     onInspect: (id: string) => void,
     objects: ContentObject[] = [center, caller],
     references: DependencyEdge[] = edges,
+    animate = false,
 ) {
     return (
         <SplunkThemeProvider family="enterprise" colorScheme={scheme}>
+            {/* Keep presentation/focus tests deterministic with the documented
+                SUI control, not a longer timeout or a mocked Modal. Native
+                default-motion behavior is a separate runtime qualification. */}
+            <AnimationToggleProvider enabled={animate}>
             <DependencyGraph
                 center={center}
                 index={buildDependencyIndex(objects, references)}
@@ -43,6 +49,7 @@ function frame(
                 onInspect={onInspect}
                 allows={() => true}
             />
+            </AnimationToggleProvider>
         </SplunkThemeProvider>
     );
 }
@@ -73,6 +80,17 @@ test.each(['light', 'dark'] as const)(
         await waitFor(() => expect(trigger).toHaveFocus());
     },
 );
+
+test.each(['light', 'dark'] as const)('default animated context settles, dismisses and restores focus in %s', async scheme => {
+    const user = userEvent.setup(); render(frame(scheme, jest.fn(), [center, caller], edges, true));
+    const trigger = screen.getByRole('button', { name: `Full context for ${longName}` });
+    await user.click(trigger); const dialog = await visibleContextDialog('Object context');
+    await waitFor(() => expect(dialog).toHaveStyle({ opacity: '1' }));
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(dialog).not.toBeVisible());
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(trigger).toHaveFocus());
+});
 
 test.each(['light', 'dark'] as const)(
     'relationship hover, focus, keyboard dialog and evidence retain full context in %s',

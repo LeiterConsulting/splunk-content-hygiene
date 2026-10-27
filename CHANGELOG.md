@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.8.0 — 2026-10-27 (build 93)
+
+- Add bounded, conditional cross-stanza props ordering for identical attributes
+  in one supported original-event selector conjunction. Compare captured shared
+  exact stanzas by source/host/sourcetype category, then same-category native
+  numeric priority and ASCII ties. Never merge independent query scopes.
+- Reuse existing scan-time native reads, projecting numeric priority without
+  additional calls. Keep missing, inaccessible, ambiguous, case-sensitive,
+  incomplete and budget-limited contexts explicitly unverified.
+- Retain lower and shadowed paths as potential removal fallbacks. No edge is
+  pruned, confidence upgraded or removal blocker cleared by ordering evidence.
+- Add accessible, wrapping, searchable, filtered and paginated context details
+  in Explorer, Library and relationship dialogs. Carry compact facts/provenance
+  through freshness, impact, required-content and CSV/JSON.
+- Use native themed, underlined Link controls for props drill-through, including
+  dialog portals, rather than inheriting Splunk Web's light-theme anchor color.
+- Introduce `shared-static-v7`, preserving existing decisions, history and v1–v6
+  baselines. Customer content remains read-only; patterns, full effective props,
+  private/system/file inheritance and runtime execution are not claimed.
+- Pass 968 automated checks and lint/style/types/build/portable-package gates;
+  pre-cert AppInspect has zero errors/failures, three reviewed advisories and one
+  manifest skip. Fresh native/cache/schema parity, all seven pages in Light/Dark,
+  keyboard caller drill-through, 101 captures and 29 JSON / 27 paired CSV downloads
+  cover Enterprise 10.2.5, 10.2.8 and 10.4.4.
+- Preserve original decisions, captured baselines, review/policy journals and
+  native appearance choices. Document automated-only collision/props-Library
+  positives and remaining #8 limits; public screenshots use built-in metadata.
+
 ## 1.7.0 — 2026-10-27 (build 89)
 
 - Add bounded scan-time shared props observations: cross-check native rule-level

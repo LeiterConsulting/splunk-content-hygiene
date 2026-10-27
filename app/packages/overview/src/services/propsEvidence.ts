@@ -26,13 +26,15 @@ export function readPropsContexts(value: unknown): PropsContextEvidence[] | unde
         if (!row || row.version !== 1 || !name(row.objectId) || !name(row.app, 4096) ||
             !Object.prototype.hasOwnProperty.call(propsStatusLabels, row.status) || !Object.prototype.hasOwnProperty.call(propsReasonLabels, row.reason) ||
             row.selectedObjectId !== null && !name(row.selectedObjectId) || row.valueDigest !== null && !/^[a-f0-9]{64}$/.test(row.valueDigest) ||
+            row.stanzaPriority !== undefined && row.stanzaPriority !== null && (!Number.isFinite(row.stanzaPriority) || typeof row.stanzaPriority !== 'number' || Math.abs(row.stanzaPriority) > 1000000000 || row.status === 'unverified') ||
             (row.status === 'unverified' ? row.selectedObjectId !== null || row.valueDigest !== null || ['matched', 'different_binding'].includes(row.reason) :
                 row.selectedObjectId === null || row.valueDigest === null || row.reason !== (row.status === 'shadowed' ? 'different_binding' : 'matched') ||
                 (row.status === 'shadowed') === (row.objectId === row.selectedObjectId))) { return undefined; }
         const key = `${row.objectId}\0${row.app}`;
         if (seen.has(key)) { return undefined; } seen.add(key);
         result.push({ version: 1, objectId: row.objectId, app: row.app, status: row.status,
-            selectedObjectId: row.selectedObjectId, valueDigest: row.valueDigest, reason: row.reason });
+            selectedObjectId: row.selectedObjectId, valueDigest: row.valueDigest, reason: row.reason,
+            ...(row.stanzaPriority !== undefined ? { stanzaPriority: row.stanzaPriority } : {}) });
     }
     return result;
 }

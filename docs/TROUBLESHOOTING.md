@@ -132,8 +132,9 @@ link to the different returned shared binding; it is not a deletion suggestion.
 - **Snapshot changed / handlers disagree:** repeat a complete scan after the
   configuration settles. Rule ownership, namespace, exact attribute text and
   captured value/access evidence must agree; a stanza ACL is not attribute origin.
-- **Unsupported scope:** patterns, defaults, encoded scopes and cross-stanza
-  source/host/sourcetype priority are not evaluated.
+- **Unsupported scope:** patterns, defaults and encoded scopes are not evaluated.
+  Version 1.8 has a separate conditional exact-stanza comparison, not full
+  source/host/sourcetype applicability or effective precedence.
 - **Budget reached / truncated:** inspect the scan's `props_context_*` counters.
   Fixed-caller checks are prioritized within explicit pair/read/byte/time and
   candidate ceilings. More unverified contexts do not imply fewer dependencies.
@@ -145,6 +146,39 @@ REST exposure, restart or broader permission is needed for this transport.
 No shell, `btool`, customer expression, regex or workflow is run. Even a local or
 inherited merged match is not per-file origin, runtime activation or proof of use.
 See the [scope and status definitions](USER_GUIDE.md#shared-props-precedence-and-inheritance).
+
+## Cross-stanza props ordering is unverified (1.8)
+
+Verify the snapshot contains `props_cross_stanza` 1.0.0, then expand **Inspect
+cross-stanza order** in object or relationship details. A missing older snapshot
+needs a new complete scan, not a new review decision.
+
+Only identical attributes in one supported initial-search conjunction can be
+compared. Independent positive selectors do not establish co-occurrence. OR/NOT,
+IN, grouping, macros, escaped/dynamic values, post-process searches, separate
+dashboard queries and parser ceilings can leave no retained conjunction. One
+captured stanza is not enough to infer an effective winner or absence of others.
+
+Check the exact caller/app, query location and scope spelling. Host comparisons
+use supported ASCII case-insensitive matching; source/sourcetype spelling must
+agree exactly. A failed or changed native shared binding, incomplete catalog,
+known caller-matching ceiling, unsupported priority or truncated evidence keeps
+the affected comparison unknown. Priority is relevant within a category only.
+
+Inspect `props_cross_stanza_*` counters and the specific reason. Narrow the
+investigation when a work/row/byte ceiling is reached; do not broaden source
+permissions, execute customer searches or change source configuration to clear
+a warning. Lower paths are retained as possible fallbacks, not recommendations
+to remove them. See the [comparison guide](USER_GUIDE.md#conditional-cross-stanza-props-order-18).
+
+## Props drill-through links are hard to read
+
+Version 1.8 uses Splunk UI's themed, underlined Link controls for callers,
+comparison members and returned bindings, including relationship dialogs. If an
+upgraded page still shows low-contrast legacy anchor colors, first save or
+explicitly discard any unsaved draft, then reload that app page. Confirm the
+installed version and test both native appearance choices. Do not override
+server-wide styles or change source permissions to correct a cached frontend.
 
 ## Workflow or navigation targets are missing
 

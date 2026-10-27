@@ -424,6 +424,12 @@ export const SmallText = styled.p`
     line-height: 1.45;
 `;
 
+export const WrappingEvidenceSection = styled.section`
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+`;
+
 export const Breadcrumbs = styled.nav`
     display: flex;
     align-items: center;

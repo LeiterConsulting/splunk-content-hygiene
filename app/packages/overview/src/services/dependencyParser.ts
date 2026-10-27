@@ -1,4 +1,4 @@
-import { ConfidenceLevel, FieldDependencyProvenance, FieldLineageFacts, LookupMappingFacts } from '../types';
+import { ConfidenceLevel, FieldDependencyProvenance, FieldLineageFacts, LookupMappingFacts, PropsEventScope } from '../types';
 import { hasUnboundedIndexScope } from './indexScope';
 
 export type ReferenceTarget =
@@ -49,6 +49,8 @@ export interface ParsedSource {
     gaps?: ParserCoverageGap[];
     eventSelectors?: EventSelector[];
     hasEventSearch?: boolean;
+    /** Separate positive conjunctions, never the union of unrelated query branches. */
+    propsEventScopes?: PropsEventScope[];
     automaticLookup?: AutomaticLookupRule;
     fieldLineage?: FieldLineageFacts;
 }
@@ -189,6 +191,44 @@ function argumentCount(args: string): number {
         }
     });
     return count;
+}
+
+/** Deliberately narrow initial-search grammar. Existing possible selectors are
+ * broader; they must not silently become simultaneous event-domain evidence.
+ * No PCRE/SPL evaluation, OR/NOT/IN, macros, subsearches or grouping. */
+function propsEventScope(tokens: Token[], sourceLocation: string, malformed: boolean, sourceText: string): PropsEventScope[] {
+    if (malformed || sourceLocation.length > 4096) { return []; }
+    const end = tokens.findIndex(token => token.value === '|' && !token.quoted);
+    const clause = tokens.slice(0, end < 0 ? tokens.length : end);
+    if (!clause.length || clause.length > 512 || sourceText.slice(0, end < 0 ? sourceText.length : tokens[end].offset).includes('\\')) { return []; }
+    let start = 0;
+    if (!clause[0].quoted && clause[0].value.toLowerCase() === 'search') { start = 1; }
+    const selectors: PropsEventScope['selectors'] = [];
+    const values = new Map<string, string>(); let terms = 0; let and = false;
+    for (let index = start; index < clause.length; index += 1) {
+        const token = clause[index];
+        if (token.macro || token.quoted || /[[\](),]/.test(token.value) && !token.valueQuoted) { return []; }
+        if (token.value.toUpperCase() === 'AND') {
+            if (!terms || and || index === clause.length - 1) { return []; } and = true;
+            // eslint-disable-next-line no-continue -- A validated conjunction token carries no selector.
+            continue;
+        }
+        const assignment = token.value.match(/^([A-Za-z_][\w.:-]*)=(.*)$/);
+        let field = assignment?.[1]; let value = assignment?.[2]; let location = token.offset;
+        if (!assignment && /^[A-Za-z_][\w.:-]*$/.test(token.value) && clause[index + 1]?.value === '=') {
+            field = token.value; value = clause[index + 2]?.value; location = clause[index + 2]?.offset ?? token.offset; index += 2;
+        } else if (assignment && !value) { index += 1; value = clause[index]?.value; location = clause[index]?.offset ?? token.offset; }
+        if (!field || !value || value.length > 4096 || value.trim() !== value || /[$`{}]/.test(value) ||
+            Array.from(value).some(character => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127) ||
+            !assignment?.[2] && !clause[index]?.quoted && /^(AND|OR|NOT|IN|CASE|TERM)$|^[|[\](),]$/i.test(value)) { return []; }
+        terms += 1; and = false;
+        if (['sourcetype', 'host', 'source'].includes(field)) {
+            if (/[*?+()[\]{}|^\\]/.test(value) || value.includes('...')) { return []; }
+            if (values.has(field) && values.get(field) !== value) { return []; }
+            if (!values.has(field)) { selectors.push({ field: field as EventSelector['field'], value, sourceLocation: `${sourceLocation}:${location}` }); values.set(field, value); }
+        }
+    }
+    return selectors.length ? [{ sourceLocation, selectors }] : [];
 }
 
 const commandOptions: Record<string, Set<string>> = {
@@ -550,7 +590,8 @@ export function parseSpl(sourceText: string, sourceLocation = 'search', assessIn
         !gaps.some((gap) => gap.targets === 'all' || gap.targets.includes('index'))) {
         warn(`Implicit/default index scope is not established for every query branch at ${sourceLocation}`, ['index']);
     }
-    return { references, warnings: [...new Set(warnings)], gaps, eventSelectors, hasEventSearch };
+    return { references, warnings: [...new Set(warnings)], gaps, eventSelectors, hasEventSearch,
+        propsEventScopes: propsEventScope(tokens, sourceLocation, malformedTokens, sourceText) };
 }
 
 /** Event types are base-search definitions, not arbitrary executable pipelines. */
@@ -576,6 +617,7 @@ export function parseDashboard(text: string, sourceLocation = 'dashboard'): Pars
     const warnings: string[] = [];
     const gaps: ParserCoverageGap[] = [];
     const eventSelectors: EventSelector[] = [];
+    const propsEventScopes: PropsEventScope[] = [];
     let hasEventSearch = false;
     const warn = (message: string, path = sourceLocation, targets: ReferenceTarget[] | 'all' = 'all'): void => {
         warnings.push(message); gaps.push({ message, targets, sourceLocation: path });
@@ -587,6 +629,7 @@ export function parseDashboard(text: string, sourceLocation = 'dashboard'): Pars
         gaps.push(...(parsed.gaps ?? []));
         if (eventSource) {
             eventSelectors.push(...(parsed.eventSelectors ?? []));
+            if (propsEventScopes.length < 250) { propsEventScopes.push(...(parsed.propsEventScopes ?? []).slice(0, 250 - propsEventScopes.length)); }
             hasEventSearch ||= parsed.hasEventSearch === true;
         }
     };
@@ -664,6 +707,7 @@ export function parseDashboard(text: string, sourceLocation = 'dashboard'): Pars
                     warnings.push(...studio.warnings);
                     gaps.push(...(studio.gaps ?? []));
                     eventSelectors.push(...(studio.eventSelectors ?? []));
+                    if (propsEventScopes.length < 250) { propsEventScopes.push(...(studio.propsEventScopes ?? []).slice(0, 250 - propsEventScopes.length)); }
                     hasEventSearch ||= studio.hasEventSearch === true;
                 }
             }
@@ -683,7 +727,7 @@ export function parseDashboard(text: string, sourceLocation = 'dashboard'): Pars
     } else {
         warn('XML parser unavailable; dashboard dependencies are incomplete');
     }
-    return { references, warnings: [...new Set(warnings)], gaps, eventSelectors, hasEventSearch };
+    return { references, warnings: [...new Set(warnings)], gaps, eventSelectors, hasEventSearch, propsEventScopes };
 }
 
 /** Parse authoritative model constraints/calculations, not regenerated preview searches. */

@@ -157,6 +157,8 @@ export interface FieldLineageFacts {
     lookupMapping?: LookupMappingFacts;
     propsContexts?: PropsContextEvidence[];
     propsContextsTruncated?: boolean;
+    crossStanzaProps?: CrossStanzaPropsEvidence[];
+    crossStanzaPropsTruncated?: boolean;
 }
 /** Native shared, exact-stanza observation, never file provenance or execution proof. */
 export interface PropsContextEvidence {
@@ -168,6 +170,27 @@ export interface PropsContextEvidence {
     valueDigest: string | null;
     reason: 'matched' | 'different_binding' | 'not_returned' | 'access_denied' | 'snapshot_changed' |
         'metadata_mismatch' | 'unsupported_scope' | 'budget' | 'request_failed';
+    /** Numeric stanza priority from the merged metadata; null means unsupported. */
+    stanzaPriority?: number | null;
+}
+export interface PropsEventScope {
+    sourceLocation: string;
+    selectors: Array<{ field: FieldScope['field']; value: string; sourceLocation: string }>;
+}
+/** Conditional order among captured exact stanzas, never an effective winner. */
+export interface CrossStanzaPropsEvidence extends PropsEventScope {
+    version: 1;
+    objectId: string;
+    callerObjectId: string;
+    app: string;
+    attribute: string;
+    status: 'highest' | 'lower' | 'unverified';
+    reason: 'category' | 'priority' | 'ascii' | 'single_stanza' | 'no_conjunction' | 'binding_unverified' |
+        'case_ambiguous' | 'budget' | 'incomplete_catalog' | 'same_stanza_shadow';
+    selectedObjectId: string | null;
+    competingObjectIds: string[];
+    stanzaPriority: number | null;
+    selectedPriority: number | null;
 }
 export interface FieldDependencyProvenance {
     version: 1;
@@ -185,6 +208,8 @@ export interface FieldDependencyProvenance {
     contexts?: FieldContextEvidence[];
     propsContexts?: PropsContextEvidence[];
     propsContextsTruncated?: boolean;
+    crossStanzaProps?: CrossStanzaPropsEvidence[];
+    crossStanzaPropsTruncated?: boolean;
 }
 
 export interface ConfigurationFingerprint {
@@ -203,7 +228,7 @@ export interface EvidenceCoverageDimension {
     digest: string;
 }
 export interface ReviewCoverage {
-    policy: 'shared-static-v1' | 'shared-static-v2' | 'shared-static-v3' | 'shared-static-v4' | 'shared-static-v5' | 'shared-static-v6';
+    policy: 'shared-static-v1' | 'shared-static-v2' | 'shared-static-v3' | 'shared-static-v4' | 'shared-static-v5' | 'shared-static-v6' | 'shared-static-v7';
     configuration: EvidenceCoverageDimension;
     access: EvidenceCoverageDimension;
     outbound: EvidenceCoverageDimension;

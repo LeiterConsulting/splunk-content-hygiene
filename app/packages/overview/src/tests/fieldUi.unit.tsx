@@ -120,7 +120,7 @@ test.each(['light', 'dark'] as const)('Library exposes current field facts and r
     await user.click(screen.getByRole('button', { name: 'Export filtered reviews' }));
     await user.click(screen.getByRole('menuitem', { name: 'Review library CSV' }));
     const [, columns, rows] = jest.mocked(downloadCsv).mock.calls[0];
-    expect(rows[0][columns.indexOf('Coverage policy')]).toBe('shared-static-v6');
+    expect(rows[0][columns.indexOf('Coverage policy')]).toBe('shared-static-v7');
     expect(rows[0][columns.indexOf('Stage')]).toBe('retain');
     expect(rows[0][columns.indexOf('Review evidence status')]).toBe('needs_review');
     expect(JSON.parse(String(rows[0][columns.indexOf('Current declared field facts')]))).toEqual(calculated.fieldLineage);

@@ -321,6 +321,58 @@ remove shadowed dependencies or grant removal readiness. New scans use
 `shared-static-v6`; v1–v5 decisions, notes, assignees, baselines and journals remain
 unchanged. Changed context evidence can require explicit re-review.
 
+### Conditional cross-stanza props order (1.8)
+
+Run a new complete scan, then expand **Inspect cross-stanza order** in a
+props-backed object's details or an original-event relationship. The same
+disclosure is available in Review Library without saving or changing a decision.
+Search by caller, app, attribute or selector; filter status, page through four
+contexts at a time, and follow the caller or a higher captured binding.
+
+The comparison is deliberately narrow: the same exact native attribute, a
+qualified shared app context, and one supported initial-search conjunction of
+literal original-event selectors. It never joins independent OR branches,
+subsearches, dashboard queries, post-process searches or runtime macro expansions.
+Patterns, escaped literals, grouping, IN/NOT, conflicting selectors and
+non-ASCII/case-ambiguous matches remain unverified. Separate source queries retain
+separate locations. The broader **may apply** graph is not reduced to this subset.
+
+| Status | Interpretation |
+| --- | --- |
+| Highest captured precedence (conditional) | Highest in this compared literal subset, if the recorded scopes match the same event. Not a full effective-props winner. |
+| Lower captured precedence (possible fallback) | Another compared binding takes precedence under the same condition. The original path remains because removing an override can expose it. |
+| Unverified | No supported comparison, only one distinct stanza, incomplete/changed/denied metadata, case ambiguity or a safety ceiling prevents ordering. Never proof of absence. |
+
+For a shared attribute, source-category settings precede host, then sourcetype.
+Within a category, numeric stanza priority is considered before ASCII name
+ordering; priority cannot reverse different categories. The app uses native merged
+priority metadata, or the documented literal default of 100 when that setting is
+absent. Unsupported priority values remain unknown. Numeric evidence is shown
+when a within-category comparison uses it. See the
+[props specification](https://help.splunk.com/en/splunk-enterprise/administer/admin-manual/10.2/configuration-file-reference/10.2.0-configuration-file-reference/props.conf)
+and [precedence rules](https://help.splunk.com/en/splunk-enterprise/administer/admin-manual/10.2/administer-splunk-enterprise-with-configuration-files/attribute-precedence-within-a-single-props.conf-file).
+
+Different attribute names—even ones declaring the same output field—are not
+treated as competing settings. Same-stanza app shadowing remains a separate
+observation. No relationship, confidence, removal blocker or usage root is removed
+or upgraded by an ordering result. This is not event matching, field availability,
+runtime activation, source-file origin, private/system inheritance, pattern/default
+precedence, sourcetype rewriting or execution evidence.
+
+Checks reuse the existing native reads and remain scan-only. The comparison
+ceiling is 100,000 indexed work items, 10,000 groups, 16 members per group and
+five seconds. Compact projections are capped at 32 rows/32 KiB per object or
+relationship and 50,000 stored projections overall. Strict parsing considers at
+most 512 initial-clause tokens, 250 dashboard query contexts and 50,000 retained
+scan scopes. Unsupported or omitted contexts remain unknown; navigation and
+filtering do not launch new native reads. Check `props_cross_stanza_*` diagnostics
+in the scan report. CSV/JSON retain the same identities, selectors, priorities,
+source locations, compared members and qualifications.
+
+New complete scans use `shared-static-v7`. Earlier v1–v6 baselines, stages, notes,
+assignees and journals stay unchanged. New evidence can request explicit re-review;
+no scan reaffirms a decision or approves removal.
+
 ### Declared field lineage
 
 Run a complete scan after upgrading to 1.4 to collect output

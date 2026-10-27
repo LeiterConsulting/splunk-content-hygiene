@@ -20,15 +20,43 @@
         "status": { "enum": ["local", "inherited", "shadowed", "unverified"] },
         "selectedObjectId": { "type": ["string", "null"], "minLength": 1, "maxLength": 16384 },
         "valueDigest": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
-        "reason": { "enum": ["matched", "different_binding", "not_returned", "access_denied", "snapshot_changed", "metadata_mismatch", "unsupported_scope", "budget", "request_failed"] }
+        "reason": { "enum": ["matched", "different_binding", "not_returned", "access_denied", "snapshot_changed", "metadata_mismatch", "unsupported_scope", "budget", "request_failed"] },
+        "stanzaPriority": { "type": ["number", "null"], "minimum": -1000000000, "maximum": 1000000000 }
       },
       "allOf": [
         { "if": { "properties": { "status": { "const": "unverified" } } },
-          "then": { "properties": { "selectedObjectId": { "type": "null" }, "valueDigest": { "type": "null" }, "reason": { "not": { "enum": ["matched", "different_binding"] } } } },
+          "then": { "properties": { "selectedObjectId": { "type": "null" }, "valueDigest": { "type": "null" }, "stanzaPriority": { "type": "null" }, "reason": { "not": { "enum": ["matched", "different_binding"] } } } },
           "else": { "properties": { "selectedObjectId": { "type": "string" }, "valueDigest": { "type": "string" } } } },
         { "if": { "properties": { "status": { "enum": ["local", "inherited"] } } }, "then": { "properties": { "reason": { "const": "matched" } } } },
         { "if": { "properties": { "status": { "const": "shadowed" } } }, "then": { "properties": { "reason": { "const": "different_binding" } } } }
       ]
+    },
+    "crossStanzaProps": { "type": "array", "maxItems": 32, "items": { "$ref": "#/$defs/crossStanzaProp" } },
+    "crossStanzaProp": {
+      "type": "object", "additionalProperties": false,
+      "required": ["version", "objectId", "callerObjectId", "app", "attribute", "sourceLocation", "selectors", "status", "reason", "selectedObjectId", "competingObjectIds", "stanzaPriority", "selectedPriority"],
+      "properties": {
+        "version": { "const": 1 }, "objectId": { "type": "string", "minLength": 1, "maxLength": 16384 },
+        "callerObjectId": { "type": "string", "minLength": 1, "maxLength": 16384 },
+        "app": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "attribute": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "sourceLocation": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "selectors": { "type": "array", "maxItems": 3, "items": {
+          "type": "object", "additionalProperties": false, "required": ["field", "value", "sourceLocation"],
+          "properties": { "field": { "enum": ["sourcetype", "host", "source"] },
+            "value": { "type": "string", "minLength": 1, "maxLength": 4096 },
+            "sourceLocation": { "type": "string", "minLength": 1, "maxLength": 4096 } }
+        } },
+        "status": { "enum": ["highest", "lower", "unverified"] },
+        "reason": { "enum": ["category", "priority", "ascii", "single_stanza", "no_conjunction", "binding_unverified", "case_ambiguous", "budget", "incomplete_catalog", "same_stanza_shadow"] },
+        "selectedObjectId": { "type": ["string", "null"], "minLength": 1, "maxLength": 16384 },
+        "stanzaPriority": { "type": ["number", "null"], "minimum": -1000000000, "maximum": 1000000000 },
+        "selectedPriority": { "type": ["number", "null"], "minimum": -1000000000, "maximum": 1000000000 },
+        "competingObjectIds": { "type": "array", "maxItems": 16, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 16384 } }
+      },
+      "allOf": [{ "if": { "properties": { "status": { "const": "unverified" } } },
+        "then": { "properties": { "selectedObjectId": { "type": "null" }, "selectedPriority": { "type": "null" }, "reason": { "not": { "enum": ["category", "priority", "ascii"] } } } },
+        "else": { "properties": { "selectedObjectId": { "type": "string" }, "selectors": { "minItems": 1 }, "competingObjectIds": { "minItems": 2 }, "reason": { "enum": ["category", "priority", "ascii"] } } } }]
     },
     "lookupMapping": {
       "type": "object", "additionalProperties": false, "required": ["version", "inputs", "outputs", "outputMode"],
@@ -105,7 +133,8 @@
         "limitations": { "type": "array", "maxItems": 250, "items": { "type": "string" } },
         "outputProvenance": { "$ref": "#/$defs/outputProvenance" },
         "lookupMapping": { "$ref": "#/$defs/lookupMapping" },
-        "propsContexts": { "$ref": "#/$defs/propsContexts" }, "propsContextsTruncated": { "type": "boolean" }
+        "propsContexts": { "$ref": "#/$defs/propsContexts" }, "propsContextsTruncated": { "type": "boolean" },
+        "crossStanzaProps": { "$ref": "#/$defs/crossStanzaProps" }, "crossStanzaPropsTruncated": { "type": "boolean" }
       }
     },
     "provenance": {
@@ -120,7 +149,8 @@
         "invocation": { "enum": ["fixed_app", "invoking_app_unverified"] },
         "outputDeclarations": { "type": "array", "maxItems": 250, "items": { "$ref": "#/$defs/producerDeclaration" } },
         "contexts": { "type": "array", "maxItems": 250, "items": { "$ref": "#/$defs/context" } },
-        "propsContexts": { "$ref": "#/$defs/propsContexts" }, "propsContextsTruncated": { "type": "boolean" }
+        "propsContexts": { "$ref": "#/$defs/propsContexts" }, "propsContextsTruncated": { "type": "boolean" },
+        "crossStanzaProps": { "$ref": "#/$defs/crossStanzaProps" }, "crossStanzaPropsTruncated": { "type": "boolean" }
       }
     }
   }

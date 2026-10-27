@@ -24,12 +24,12 @@ export function propsReadPlan(request: PropsReadRequest): { path: string; query:
         query.set('search', `stanza=${quote(request.stanza)} AND attribute=${quote(request.attribute)}`);
     }
     const fields = request.kind === 'rule' ? ['stanza', 'attribute', 'value', 'type', 'transform', 'disabled', 'eai:acl', 'eai:appName', 'eai:userName']
-        : [request.attribute, 'eai:appName', 'eai:userName'];
+        : [request.attribute, 'priority', 'eai:appName', 'eai:userName'];
     fields.forEach(field => query.append('f', field));
     return { path, query };
 }
 interface Task { object: ContentObject; app: string; key: string; rank: number; endpoint: string }
-interface Observation { reason: PropsContextEvidence['reason']; selected?: ContentObject; digest?: string }
+interface Observation { reason: PropsContextEvidence['reason']; selected?: ContentObject; digest?: string; priority?: number | null }
 const endpoints: Record<string, string> = { 'Field Extraction': 'data/props/extractions', 'Field Alias': 'data/props/fieldaliases',
     'Calculated Field': 'data/props/calcfields', 'Automatic Lookup': 'data/props/lookups' };
 const record = (value: unknown): Record<string, unknown> | undefined => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
@@ -133,7 +133,13 @@ export async function checkPropsPrecedence(objects: ContentObject[], edges: Depe
             // Preserve the exact native text comparison. A normalizing fingerprint
             // alone cannot make two differently encoded declarations equivalent.
             if (attrs![request.attribute] !== content.value) { return { reason: 'metadata_mismatch' }; }
-            return { reason: 'matched', selected, digest };
+            const rawPriority = attrs?.priority;
+            let priority: number | null = 100;
+            if (rawPriority !== undefined && rawPriority !== '') {
+                priority = (typeof rawPriority === 'string' && /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(rawPriority) || typeof rawPriority === 'number') &&
+                    Number.isFinite(Number(rawPriority)) && Math.abs(Number(rawPriority)) <= 1000000000 ? Number(rawPriority) : null;
+            }
+            return { reason: 'matched', selected, digest, priority };
         } catch { return { reason: controller.signal.aborted ? 'budget' : 'request_failed' }; }
     };
     try {
@@ -155,7 +161,7 @@ export async function checkPropsPrecedence(objects: ContentObject[], edges: Depe
             if (observed.selected.objectId !== task.object.objectId) { status = 'shadowed'; }
         }
         results.set(key, { version: 1, objectId: task.object.objectId, app: task.app, status, selectedObjectId: observed.selected?.objectId ?? null,
-            valueDigest: observed.digest ?? null, reason: status === 'shadowed' ? 'different_binding' : observed.reason });
+            valueDigest: observed.digest ?? null, reason: status === 'shadowed' ? 'different_binding' : observed.reason, stanzaPriority: observed.priority ?? null });
         counts.props_context_checks += 1; counts[`props_context_${status}`] += 1;
     });
     counts.props_context_visits = visits;

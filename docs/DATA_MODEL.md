@@ -88,12 +88,36 @@ Shared props observations (1.7) are optional `propsContexts` arrays in field fac
 and relationship provenance. Each fixed-key row contains version, object ID,
 qualified app, status, selected shared object ID or null, value digest or null,
 and a fixed reason code. `propsContextsTruncated` is explicit. No raw native
-attribute, expression, regex, file path or private identity is stored. The
+attribute value, expression, regex, source-file provenance path or private
+identity is stored. Configured literal event selectors can contain a path-like
+name; retaining that declaration does not read the filesystem or sample events. The
 `props_precedence` collector version is 1.0.0; scan parser counters distinguish
 checked contexts, native reads, local/inherited/shadowed/unverified rows and
 truncation. Coverage policy `shared-static-v6` hashes context evidence, including
 for an otherwise unconnected props object. Earlier v1–v5 baselines stay readable
 and immutable; a scan does not reaffirm a review.
+
+Conditional cross-stanza observations (1.8) add optional `crossStanzaProps`
+arrays and explicit `crossStanzaPropsTruncated` flags to field facts and
+relationship provenance. A versioned row contains the props object and caller
+IDs, invoking app, exact attribute, original query location, a supported literal
+selector conjunction, status (`highest`, `lower`, `unverified`), fixed reason,
+selected captured object ID or null, comparison member IDs and numeric priorities
+or null. `stanzaPriority` is also an optional native shared-context projection;
+omitted/empty native priority uses the documented literal default of 100.
+Unsupported priority remains null. No raw SPL or native props value is cached.
+
+The scan-only comparison has ceilings of 100,000 indexed visits, 10,000 groups,
+16 members per group, five seconds and 50,000 stored projections. Each object or
+edge retains at most 32 rows / 32 KiB of cross-stanza evidence. Unknown syntax,
+incomplete catalogs, uncertain bindings/case and work ceilings remain explicit;
+unrelated selectors or query branches are never combined. Native props read
+counts and customer permissions are unchanged. The collector marker is
+`props_cross_stanza: 1.0.0`; parser counters distinguish groups, visits, statuses
+and truncation. Coverage policy `shared-static-v7` includes this evidence in
+object-scoped freshness. Saved v1–v6 baselines remain readable and immutable.
+Conditional order never removes an edge, increases confidence, proves execution
+or clears a removal blocker; a lower binding remains a possible fallback.
 
 ## Edges
 

@@ -3,7 +3,7 @@ import { ParserCoverageGap, ReferenceTarget } from './dependencyParser';
 import { evidenceDigest } from './evidenceDigest';
 import { tagBindingIdentity } from './knowledgeReferences';
 
-export const SHARED_STATIC_POLICY = 'shared-static-v6' as const;
+export const SHARED_STATIC_POLICY = 'shared-static-v7' as const;
 
 export interface SourceCoverageGap extends ParserCoverageGap {
     sourceId: string;
@@ -178,7 +178,8 @@ export function buildCoverageResolver(context: CoverageContext): (
             access: dimension(config?.accessComplete === true ? [] : ['The returned ACL does not establish owner, sharing and explicit read/write permissions.'], 0, [], null, !config?.accessComplete),
             outbound: dimension(outboundReasons, own?.sources.size ?? 0, own ? [object.objectId] : [],
                 [own?.digest ?? null, unresolved.map((edge) => edge.edgeId).sort(), parentKnown,
-                    object.fieldLineage?.propsContexts ?? null, object.fieldLineage?.propsContextsTruncated ?? false]),
+                    object.fieldLineage?.propsContexts ?? null, object.fieldLineage?.propsContextsTruncated ?? false,
+                    object.fieldLineage?.crossStanzaProps ?? null, object.fieldLineage?.crossStanzaPropsTruncated ?? false]),
             inbound,
         };
     };

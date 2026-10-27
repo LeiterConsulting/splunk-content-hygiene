@@ -3,6 +3,7 @@ import { CatalogIssue, CatalogResult, decodeSharedKnowledgeIdentity, NativeKnowl
 import { ExtractionOutputProvenance, FieldAliasMapping, FieldContextEvidence, FieldDependencyProvenance, FieldLineageFacts, FieldOutputDeclaration, FieldScope, LookupMappingFacts, ProducerOutputDeclaration } from '../types';
 import { inlineExtractionDeclarations, namedCaptureDeclarations } from './extractionDeclarations';
 import { readPropsContexts } from './propsEvidence';
+import { readCrossStanzaProps } from './crossStanzaEvidence';
 
 export type { FieldAliasMapping, FieldScope } from '../types';
 
@@ -56,6 +57,8 @@ export function readFieldLineageFacts(value: unknown): FieldLineageFacts | undef
     const outputProvenance = row.outputProvenance === undefined ? undefined : readOutputProvenance(row.outputProvenance);
     const lookupMapping = row.lookupMapping === undefined ? undefined : readLookupMapping(row.lookupMapping);
     const propsContexts = row.propsContexts === undefined ? undefined : readPropsContexts(row.propsContexts);
+    const crossStanzaProps = row.crossStanzaProps === undefined ? undefined : readCrossStanzaProps(row.crossStanzaProps);
+    if (row.crossStanzaProps !== undefined && !crossStanzaProps || row.crossStanzaPropsTruncated !== undefined && typeof row.crossStanzaPropsTruncated !== 'boolean') { return undefined; }
     if (row.propsContexts !== undefined && !propsContexts || row.propsContextsTruncated !== undefined && typeof row.propsContextsTruncated !== 'boolean') { return undefined; }
     if (row.lookupMapping !== undefined && (!lookupMapping || row.operation !== 'lookup' ||
         JSON.stringify(row.inputs) !== JSON.stringify(lookupMapping.inputs.map(item => item.eventField)) ||
@@ -69,7 +72,8 @@ export function readFieldLineageFacts(value: unknown): FieldLineageFacts | undef
         enabled: row.enabled, inputs: row.inputs, outputs: row.outputs, aliases: row.aliases.map(mapping => ({ input: mapping.input, output: mapping.output, mode: mapping.mode })),
         transforms: row.transforms, syntax: row.syntax, sourceLocation: row.sourceLocation, limitations: row.limitations,
         ...(outputProvenance ? { outputProvenance } : {}), ...(lookupMapping ? { lookupMapping } : {}),
-        ...(propsContexts ? { propsContexts } : {}), ...(row.propsContextsTruncated !== undefined ? { propsContextsTruncated: row.propsContextsTruncated } : {}) };
+        ...(propsContexts ? { propsContexts } : {}), ...(row.propsContextsTruncated !== undefined ? { propsContextsTruncated: row.propsContextsTruncated } : {}),
+        ...(crossStanzaProps ? { crossStanzaProps } : {}), ...(row.crossStanzaPropsTruncated !== undefined ? { crossStanzaPropsTruncated: row.crossStanzaPropsTruncated } : {}) };
 }
 
 export function readLookupMapping(value: unknown): LookupMappingFacts | undefined {
@@ -141,6 +145,9 @@ export function readFieldProvenance(value: unknown): FieldDependencyProvenance |
     const contexts = row.contexts?.map(readContext);
     if (contexts?.some(item => !item || !row.contextApps.includes(item.invokingApp))) { return undefined; }
     const propsContexts = row.propsContexts === undefined ? undefined : readPropsContexts(row.propsContexts);
+    const crossStanzaProps = row.crossStanzaProps === undefined ? undefined : readCrossStanzaProps(row.crossStanzaProps);
+    if (row.crossStanzaProps !== undefined && (!crossStanzaProps || crossStanzaProps.some(item => !row.contextApps.includes(item.app))) ||
+        row.crossStanzaPropsTruncated !== undefined && typeof row.crossStanzaPropsTruncated !== 'boolean') { return undefined; }
     if (row.propsContexts !== undefined && (!propsContexts || propsContexts.some(item => !row.contextApps.includes(item.app))) ||
         row.propsContextsTruncated !== undefined && typeof row.propsContextsTruncated !== 'boolean') { return undefined; }
     if (row.outputDeclarations !== undefined) {
@@ -158,7 +165,8 @@ export function readFieldProvenance(value: unknown): FieldDependencyProvenance |
         consumerPhase: row.consumerPhase, producerPhase: row.producerPhase, transformPositions: row.transformPositions,
         viaObjectIds: row.viaObjectIds, contextApps: row.contextApps, invocation: row.invocation,
         ...(outputDeclarations ? { outputDeclarations } : {}), ...(contexts ? { contexts: contexts as FieldContextEvidence[] } : {}),
-        ...(propsContexts ? { propsContexts } : {}), ...(row.propsContextsTruncated !== undefined ? { propsContextsTruncated: row.propsContextsTruncated } : {}) };
+        ...(propsContexts ? { propsContexts } : {}), ...(row.propsContextsTruncated !== undefined ? { propsContextsTruncated: row.propsContextsTruncated } : {}),
+        ...(crossStanzaProps ? { crossStanzaProps } : {}), ...(row.crossStanzaPropsTruncated !== undefined ? { crossStanzaPropsTruncated: row.crossStanzaPropsTruncated } : {}) };
 }
 const object = (value: unknown): Record<string, unknown> | null => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
 const identifier = (value: unknown): value is string => typeof value === 'string' && value.length > 0 && value.length <= 4096 && value.trim() === value &&

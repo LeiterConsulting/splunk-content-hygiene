@@ -19,6 +19,7 @@ remains separately documented. Neither increment establishes runtime execution.
 | Event types and tag assignments | Supported literal inclusion/exclusion filters and distinct shared field/value/tag assignments | Implicit event classification, wildcard/encoded-value reinterpretation, system inheritance or actual matching |
 | Extraction, alias, calculated-field and transform definitions | Bounded declared field names, supported output attribution, ordered REPORT positions and potential compatible input paths | PCRE validity/matching, expression execution, full field-phase availability, dynamic outputs or cross-scope effective configuration |
 | Shared exact-stanza props contexts (1.7) | Native rule-level ownership/export and merged-attribute cross-check against captured value/access digests; local, inherited, shadowed or unverified observations | File-layer origin, atomic configuration, private/system or cross-stanza precedence, runtime activation or execution; shadowed fallback paths stay in the graph |
+| Conditional cross-stanza props order (1.8) | Same-attribute ordering among captured shared literal stanzas in one supported initial-search conjunction; category before within-category numeric priority/ASCII | Full effective winners, patterns/defaults, separate Boolean/query branches, source-file origin, private/system layers, sourcetype rewrites or runtime execution; possible fallback edges remain |
 | Workflow actions | Literal internal app/view destinations and supported static search references with explicit namespace qualifications | Field-token substitution, invoking-app defaults, event-menu applicability, clicks or execution; external/POST actions are never followed |
 | Navigation menus | Literal named views/reports, explicit rendering/search views and supported root-relative internal app/view routes | Dynamic lists/matches, custom XML, inherited built-ins, query/fragment bodies, embedded/external callers or clicks |
 | App containment | Native metadata places a shared object in an app | Runtime use, ownership approval or deployment/removal completeness |
@@ -74,14 +75,16 @@ any customer-content change through a separate approved administration process.
 
 ## Existing decisions and later scans
 
-Version 1.7 scans use `shared-static-v6`. Policies v1–v5 remain readable, with
+Version 1.8 scans use `shared-static-v7`. Policies v1–v6 remain readable, with
 stages, notes, assignees, captured baselines and revision history unchanged.
 Expanded evidence can request **Needs re-review**; only an explicit review action
 can reaffirm a decision. Inventory scans never migrate or rewrite saved choices.
 
 The [shared props cross-check](USER_GUIDE.md#shared-props-precedence-and-inheritance)
 adds bounded native context observations without relabeling the whole graph as
-effective configuration. Full effective props evaluation, private/system runtime inheritance, dynamic or
+effective configuration. The [cross-stanza comparison](USER_GUIDE.md#conditional-cross-stanza-props-order-18)
+orders a strictly qualified literal subset; it does not establish event matching
+or complete effective precedence. Full effective props evaluation, private/system runtime inheritance, dynamic or
 external consumers and comprehensive scheduled/manual/ad-hoc usage attribution
 remain outside this bounded coverage. These limits are not silently relabeled as
 complete. See [troubleshooting](TROUBLESHOOTING.md) before relying on an apparent

@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { SplunkThemeProvider } from '@splunk/themes';
+import { getTheme, SplunkThemeProvider } from '@splunk/themes';
 import { PropsContextPanel } from '../components/PropsContextPanel';
 import { FieldLineagePanel, FieldProvenanceDetails } from '../components/FieldLineagePanel';
 import { InventoryClient, PropsContextEvidence } from '../types';
@@ -31,6 +31,10 @@ test.each(['light', 'dark'] as const)('cache-only context disclosure has wrappin
     const list = screen.getByRole('list', { name: 'Shared props context observations' });
     expect(within(list).getAllByRole('listitem')).toHaveLength(8);
     expect(screen.getByRole('link', { name: 'returned-override' })).toHaveAttribute('href', expect.stringContaining('object=returned-override'));
+    const returned = screen.getByRole('link', { name: 'returned-override' }); const expected = document.createElement('span');
+    expected.style.color = getTheme({ family: 'enterprise', colorScheme: scheme }).contentColorLink;
+    expect(returned).toHaveAttribute('data-test', 'link'); expect(getComputedStyle(returned).color).toBe(expected.style.color);
+    expect(getComputedStyle(returned).textDecoration).toContain('underline');
     expect(screen.getByText(/possible fallback, not the currently returned binding/)).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Next contexts' }));
     expect(screen.getByText('9–16 of 17 matching contexts')).toBeVisible();
@@ -56,7 +60,7 @@ test.each(['light', 'dark'] as const)('object and relationship details preserve 
     rerender(frame(scheme, <FieldProvenanceDetails provenance={proof} />));
     expect(screen.getByText(/1 inherited merged match/)).toBeVisible();
     rerender(frame(scheme, <FieldLineagePanel object={alias} />));
-    expect(screen.getByText(/Not recorded by this snapshot. Run a new complete scan; saved decisions are unchanged/)).toBeVisible();
+    expect(within(screen.getByRole('region', { name: 'Shared props precedence' })).getByText(/Not recorded by this snapshot. Run a new complete scan; saved decisions are unchanged/)).toBeVisible();
     expect(readFieldProvenance({ ...proof, contextApps: ['different'] })).toBeUndefined();
 });
 test.each(['light', 'dark'] as const)('scan diagnostics and actual export actions retain bounded read and uncertainty counters in %s', async scheme => {

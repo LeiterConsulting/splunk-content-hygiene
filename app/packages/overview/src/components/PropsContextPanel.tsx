@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import CollapsiblePanel from '@splunk/react-ui/CollapsiblePanel';
-import { ButtonRow, CompositionPagination, EvidenceList, FilterField, Input, Select, SmallText, StyledButton } from '../AppStyles';
+import Link from '@splunk/react-ui/Link';
+import { ButtonRow, CompositionPagination, EvidenceList, FilterField, Input, Select, SmallText, StyledButton, WrappingEvidenceSection } from '../AppStyles';
 import { PropsContextEvidence } from '../types';
 import { PROPS_CONTEXT_LIMITATION, propsReasonLabels, propsStatusLabels } from '../services/propsEvidence';
 import { readQueryParam, viewPath } from '../utils/navigation';
@@ -16,7 +17,7 @@ export function PropsContextPanel({ rows, truncated = false }: { rows?: PropsCon
     const last = Math.max(0, Math.ceil(matches.length / PAGE_SIZE) - 1); const current = Math.min(page, last);
     const displayed = matches.slice(current * PAGE_SIZE, (current + 1) * PAGE_SIZE);
     const summary = Object.entries(propsStatusLabels).map(([key, label]) => `${(rows ?? []).filter(row => row.status === key).length} ${label.toLowerCase()}`).join(' · ');
-    return <section aria-label="Shared props precedence">
+    return <WrappingEvidenceSection aria-label="Shared props precedence">
         <strong>Shared props precedence &amp; inheritance</strong>
         <SmallText>{rows === undefined ? 'Not recorded by this snapshot. Run a new complete scan; saved decisions are unchanged.' : summary}</SmallText>
         {truncated ? <SmallText role="status">Context evidence was truncated by a safety budget. Additional contexts remain unverified.</SmallText> : null}
@@ -33,7 +34,8 @@ export function PropsContextPanel({ rows, truncated = false }: { rows?: PropsCon
                     <strong>{row.app} · {propsStatusLabels[row.status]}</strong>
                     <SmallText>{row.objectId}</SmallText>
                     <SmallText>{propsReasonLabels[row.reason]}</SmallText>
-                    {row.selectedObjectId && row.selectedObjectId !== row.objectId ? <SmallText>Returned binding: <a href={viewPath('dependencies', { object: row.selectedObjectId, scan: readQueryParam('scan'), tab: 'object' })}>{row.selectedObjectId}</a></SmallText> : null}
+                    {row.stanzaPriority !== undefined ? <SmallText>Literal stanza priority: {row.stanzaPriority ?? 'unverified'}. Used only within the same category, not across source/host/sourcetype.</SmallText> : null}
+                    {row.selectedObjectId && row.selectedObjectId !== row.objectId ? <SmallText>Returned binding: <Link to={viewPath('dependencies', { object: row.selectedObjectId, scan: readQueryParam('scan'), tab: 'object' })}>{row.selectedObjectId}</Link></SmallText> : null}
                 </li>)}</EvidenceList>
                 {!matches.length ? <SmallText role="status">No contexts match these filters.</SmallText> : null}
                 <CompositionPagination aria-label="Props context pages">
@@ -43,5 +45,5 @@ export function PropsContextPanel({ rows, truncated = false }: { rows?: PropsCon
                 </CompositionPagination>
             </> : <SmallText>No verified context rows are available. This is not proof of absence.</SmallText>}
         </CollapsiblePanel>
-    </section>;
+    </WrappingEvidenceSection>;
 }
