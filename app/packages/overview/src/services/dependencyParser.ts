@@ -3,7 +3,7 @@ import { hasUnboundedIndexScope } from './indexScope';
 
 export type ReferenceTarget =
     'macro' | 'lookup' | 'lookup_file' | 'saved_search' | 'data_model' | 'index' | 'sourcetype' | 'automatic_lookup' |
-    'event_type' | 'tag_binding' | 'field_extraction' | 'field_alias' | 'calculated_field' | 'field_transform';
+    'event_type' | 'tag_binding' | 'field_extraction' | 'field_alias' | 'calculated_field' | 'field_transform' | 'app' | 'dashboard';
 export interface EventSelector {
     field: 'sourcetype' | 'host' | 'source';
     value: string;
@@ -31,6 +31,10 @@ export interface ParsedReference {
     macroArity?: number;
     /** Invocation namespace for a potential exported automatic-lookup binding. */
     contextApp?: string;
+    /** A literal internal route names this exact app, not an exported fallback. */
+    exactNamespace?: boolean;
+    /** Native built-in/inherited views can be outside the shared catalog. */
+    absenceUnverified?: boolean;
     /** A literal tag::<field> qualifier. A tag name alone is not a binding ID. */
     tagField?: string;
     /** Exact shared target selected by a bounded catalog matcher. */
@@ -53,6 +57,8 @@ export interface ParserCoverageGap {
     message: string;
     sourceLocation: string;
     targetName?: string;
+    contextApp?: string;
+    invocationNamespaceUnverified?: boolean;
 }
 interface Token {
     value: string;

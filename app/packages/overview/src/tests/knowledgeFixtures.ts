@@ -5,7 +5,7 @@ import { ContentObject, InventorySnapshot, ReviewRecord } from '../types';
 import { now, review, snapshot } from './milestoneFixtures';
 
 const collectors = Object.fromEntries(['apps', 'saved_searches', 'dashboards', 'macros', 'lookup_definitions',
-    'lookup_files', 'automatic_lookups', 'event_types', 'tag_bindings', 'data_models', 'indexes', 'sourcetypes'].map(name => [name, true]));
+    'lookup_files', 'automatic_lookups', 'event_types', 'tag_bindings', 'data_models', 'indexes', 'sourcetypes', 'workflow_actions', 'navigation'].map(name => [name, true]));
 const complete: AnalysisCompleteness = { macros: true, lookup_definitions: true, lookup_files: true,
     automatic_lookups: true, saved_searches: true, data_models: true, indexes: true, sourcetypes: false,
     event_types: true, tag_bindings: true };

@@ -27,9 +27,67 @@ the minimum is not a recommendation to downgrade or remain on an old patch.
 
 | Runtime | Purpose | Current evidence |
 | --- | --- | --- |
-| 10.2.5 | Exact minimum; classic navigation; coordinator and reported regressions | App 1.5.0 build 82: isolated Linux VM; bounded/full scans, native catalog/cache and schema parity, seven-page light/dark checks, context/mapping investigations, policy API/UI lifecycle and CSV/JSON; earlier broader accessibility checks remain distinct below |
-| 10.2.8 | Representative 10.2 maintenance release and real-estate regression | App 1.5.0 build 82: real-data scans, catalog/cache and schema parity, seven-page light/dark checks, context/mapping investigations, policy API/UI lifecycle and exports; original decisions unchanged |
-| 10.4.4 | Modern navigation, current theme host, and newer bundled runtime | App 1.5.0 build 82: real-data scans, catalog/cache and schema parity, seven-page light/dark checks, context/mapping investigations, policy API/UI lifecycle and exports; original decisions unchanged |
+| 10.2.5 | Exact minimum; classic navigation; coordinator and reported regressions | App 1.6.0 build 85: isolated Linux VM; fresh bounded/full scans, native interaction catalog/cache and schema parity, targeted light/dark graphs/context, impact/footprint/scan exports and empty Library checks; broader earlier qualification remains distinct below |
+| 10.2.8 | Representative 10.2 maintenance release and real-estate regression | App 1.6.0 build 85: fresh scans, native catalog/cache/schema parity, targeted light/dark workflow/report-menu investigations, grouped context, impact/footprint/scan and preserved Library exports |
+| 10.4.4 | Modern navigation, current theme host, and newer bundled runtime | App 1.6.0 build 85: fresh scans, native catalog/cache/schema parity, targeted light/dark navigation graphs/context, impact/footprint/scan exports and empty Library checks; original decisions unchanged |
+
+### 1.6.0 interaction qualification
+
+The same checksum-identified build 85 archive was installed on all three runtimes
+without restarting the shared installations. Bounded scans preserve the prior
+full baseline. Complete scans, fresh GET-only native catalogs, source-hashed
+offline replay and cache comparisons verify the supported interaction identities,
+exact namespaces, configured relationships and source locations. Real cached
+objects, edges and scan records pass local-only Draft 2020-12 schema checks.
+Original review rows, revision journals, captured baselines and app-policy history
+remain unchanged. No customer workflow, link or search body was executed.
+
+All three runtimes have targeted Light/Dark checks for navigation graphs,
+keyboard-opened relationship context, required-content reporting, removal impact,
+Settings and the existing/empty Review Library. The real-content runtime also
+exercises grouped report links, group expansion, preserved selected-review
+evidence and runtime-inherited/tokenized workflows. A view-removal simulation
+identifies its real menu dependent and retains blocked readiness. At the tested
+1434×940 desktop viewport, accepted captures have no horizontal document/detail
+overflow, label/card overlap or out-of-card graph controls; sampled graph/context
+text exceeds 4.5:1 contrast. Native appearance preferences are restored. The owned
+minimum-runtime VM is shut down with its disk/authentication preserved.
+
+Actual downloaded JSON payload comparisons, with paired CSV checks where
+available, verify native/cache relationship provenance, complete supported
+explicit-root footprints, menu-removal consequences, scan count units and
+unchanged existing decisions. Configured interactions do not manufacture activity
+roots. Historical telemetry stays distinct from current usage evidence.
+
+Shared workflow examples are absent on two runtimes because their native entries
+are system-scoped; this is not a failed catalog. Captured search workflows use
+tokens or runtime-inherited namespaces. Positive literal static-search namespace
+bindings and adversarial syntax/visibility/budget cases have synthetic contracts,
+not fabricated native witnesses. One thousand same-name view namespaces are an
+indexed unit contract, not an estate-scale benchmark.
+
+The full automated pipeline passes 862 checks (815 overview, 16 host, 22 server,
+9 archive), lint/stylelint, types, branding, production build and portable package
+checks. AppInspect 4.3.1 pre-cert reports zero errors/failures/future failures,
+three existing advisories and one manifest skip; trusted-library updates were
+explicitly skipped. Bundle-size advisories remain. Browser ready-state and
+native-host loading failures are retained separately from accepted captures.
+A pre-publication candidate exposed oversized evidence-heavy snapshot reads
+under emulation. Build 85 uses 100-object detail pages while keeping 1,000-record
+summary/edge pages and complete identity/relationship checks. No application
+timeout was increased; earlier candidates do not qualify this build.
+
+These are targeted interaction checks, not a repeat of backend permission/
+concurrency, full accessibility, smaller-viewport or seven-page qualification.
+Earlier evidence is described separately below. This does not establish Cloud,
+cluster, every workflow syntax or production-scale support.
+
+The supported subset and intentional limits are documented in the
+[interaction guide](USER_GUIDE.md#workflow-actions-and-navigation-menus). Neither
+literal links nor static workflow bodies prove applicability or execution.
+Full effective props, private/system inheritance and dynamic/external runtime
+closure remain unverified; #8 stays open. The support minimum is unchanged.
+No customer-content write capability or external-network access is introduced.
 
 ### 1.5.0 context and policy qualification
 

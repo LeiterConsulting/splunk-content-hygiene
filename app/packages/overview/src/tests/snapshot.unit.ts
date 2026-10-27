@@ -22,9 +22,13 @@ let failKnowledge = false;
 let fieldEntries: Record<string, Row[]> = {};
 let failFields = false;
 let fieldPaging: 'normal' | 'repeat' | 'missing_total' | 'shrinking_total' = 'normal';
+let interactionEntries: Record<string, Row[]> = {};
+let interactionViews: Row[] = [];
+let failInteractions = false;
+let interactionPaging: 'normal' | 'repeat' | 'missing_total' | 'shrinking_total' = 'normal';
 let tagPaging: 'normal' | 'repeat' | 'missing_total' | 'shrinking_total' = 'normal';
 let sourceSearch = '| makeresults';
-let requests: Array<{ path: string; method: string; query?: string | null; fields?: string | null; offset?: string | null }> = [];
+let requests: Array<{ path: string; method: string; query?: string | null; fields?: string | null; offset?: string | null; limit?: string | null; skip?: string | null }> = [];
 const reply = (data: unknown, status = 200): Response =>
     ({ status, text: async () => JSON.stringify(data), json: async () => data }) as Response;
 function matches(row: Row, query: Row): boolean {
@@ -47,6 +51,7 @@ beforeEach(() => {
     fieldEntries = {};
     failFields = false;
     fieldPaging = 'normal';
+    interactionEntries = {}; interactionViews = []; failInteractions = false; interactionPaging = 'normal';
     tagPaging = 'normal';
     sourceSearch = '| makeresults';
     requests = [];
@@ -58,7 +63,7 @@ beforeEach(() => {
         }
         const url = new URL(String(input), 'https://lab.test');
         const method = init.method ?? 'GET';
-        requests.push({ path: url.pathname, method, query: url.searchParams.get('query'), fields: url.searchParams.get('fields'), offset: url.searchParams.get('offset') });
+        requests.push({ path: url.pathname, method, query: url.searchParams.get('query'), fields: url.searchParams.get('fields'), offset: url.searchParams.get('offset'), limit: url.searchParams.get('limit'), skip: url.searchParams.get('skip') });
         const kv = url.pathname.match(/\/storage\/collections\/data\/([^/]+)(.*)$/);
         if (kv) {
             const [, collection, suffix] = kv;
@@ -130,6 +135,15 @@ beforeEach(() => {
         };
         let entries: Row[] = [];
         const fieldEndpoint = ['data/props/extractions', 'data/props/fieldaliases', 'data/props/calcfields', 'data/transforms/extractions'].find(endpoint => url.pathname.endsWith(`/${endpoint}`));
+        const interactionEndpoint = ['data/ui/nav', 'data/ui/workflow-actions'].find(endpoint => url.pathname.endsWith(`/${endpoint}`));
+        if (interactionEndpoint) {
+            if (failInteractions) { return reply({}, 403); }
+            const rows = interactionEntries[interactionEndpoint] ?? [];
+            const offset = interactionPaging === 'repeat' ? 0 : Number(url.searchParams.get('offset') ?? 0);
+            const count = Number(url.searchParams.get('count') ?? 200);
+            return reply({ entry: rows.slice(offset, offset + count), ...(interactionPaging === 'missing_total' ? {} : {
+                paging: { total: interactionPaging === 'shrinking_total' && offset > 0 ? rows.length - 1 : rows.length } }) });
+        }
         if (fieldEndpoint) {
             if (failFields) { return reply({}, 403); }
             const rows = fieldEntries[fieldEndpoint] ?? [];
@@ -155,6 +169,7 @@ beforeEach(() => {
         if (url.pathname.endsWith('/apps/local')) {
             entries = [app];
         }
+        if (url.pathname.endsWith('/data/ui/views')) { entries = interactionViews; }
         if (url.pathname.endsWith('/saved/searches')) {
             entries = [
                 {
@@ -175,6 +190,86 @@ beforeEach(() => {
         }
         return reply({ entry: entries, paging: { total: entries.length } });
     }) as jest.Mock;
+});
+
+test('native interaction catalogs persist exact identities and source locations without raw sources or review/policy writes', async () => {
+    const acl = { app: 'example', owner: 'reviewer', sharing: 'app', perms: { read: ['user'], write: ['admin'] } };
+    interactionEntries = {
+        'data/ui/nav': [{ name: 'default', acl, content: { disabled: 'False', 'eai:data': '<nav><view name="Overview"/><saved name="Daily"/><a href="/app/example/Overview?secret=private-query-marker">Go</a></nav>' } },
+            { name: 'hidden-private-navigation', acl: { ...acl, sharing: 'user' }, content: { 'eai:data': '<nav/>' } }],
+        'data/ui/workflow-actions': [{ name: 'Investigate', acl, content: { type: 'search', label: 'Investigate', disabled: 'false', 'search.app': 'example', 'search.view': 'Overview', 'search.search_string': '| savedsearch Daily | eval marker="private-search-marker"' } }],
+    };
+    interactionViews = [{ name: 'Overview', acl, content: { disabled: false, 'eai:data': '<dashboard/>' } }];
+    const original = { _key: 'original', object_id: 'original', stage: 'retain', note: 'Original decision' };
+    const policy = { _key: 'original-policy', state: 'archived', note: 'Original policy history' };
+    collections.set('ch_reviews', new Map([['original', original]]));
+    collections.set('ch_app_policy_revisions', new Map([['original-policy', policy]]));
+    const result = await splunkInventoryClient.runFullScan();
+    expect(result.scan.collectorCounts).toMatchObject({ workflow_actions: 1, navigation: 1 });
+    expect(result.scan.collectorNativeCounts).toMatchObject({ workflow_actions: 1, navigation: 2 });
+    const nav = result.objects.find(row => row.objectType === 'Navigation Menu')!;
+    expect(nav).toMatchObject({ canonicalName: 'default', app: 'example', enabled: true });
+    expect(result.edges).toEqual(expect.arrayContaining([
+        expect.objectContaining({ sourceId: nav.objectId, relation: 'navigates_to', resolved: true, sourceLocation: expect.stringContaining('@name') }),
+        expect.objectContaining({ sourceId: nav.objectId, relation: 'links_to_report', resolved: true }),
+        expect.objectContaining({ relation: 'invokes', resolved: true, sourceLocation: expect.stringContaining('search.search_string') }),
+    ]));
+    const publicCache = JSON.stringify([...collections.get('ch_objects')!.values(), ...collections.get('ch_edges')!.values()]);
+    expect(publicCache).not.toMatch(/private-query-marker|private-search-marker|hidden-private-navigation|<nav>|savedsearch Daily/);
+    const cached = await splunkInventoryClient.getLatestSnapshot();
+    expect(cached?.edges).toEqual(result.edges); expect(cached?.objects.find(row => row.objectId === nav.objectId)?.reviewEvidence?.coverage?.policy).toBe('shared-static-v5');
+    expect([...collections.get('ch_reviews')!.values()]).toEqual([original]);
+    expect([...collections.get('ch_app_policy_revisions')!.values()]).toEqual([policy]);
+    expect(requests.filter(row => row.method !== 'GET').every(row => row.path.includes('/storage/collections/data/') && !/\/ch_(?:review|app_policy)/.test(row.path))).toBe(true);
+});
+
+test.each(['repeat', 'missing_total', 'shrinking_total'] as const)('interaction %s paging cannot publish a false complete baseline', async paging => {
+    const baseline = await splunkInventoryClient.runFullScan();
+    interactionEntries = { 'data/ui/nav': Array.from({ length: 201 }, (_, index) => ({ name: `menu-${index}`, acl: { app: 'example', owner: 'nobody', sharing: 'app' }, content: { disabled: false, 'eai:data': '<nav/>' } })) };
+    interactionPaging = paging;
+    const failed = await splunkInventoryClient.runFullScan();
+    expect(failed.scan.retainedBaseline).toBe(true); expect(failed.scan.scanId).toBe(baseline.scan.scanId);
+    expect((await splunkInventoryClient.getLatestSnapshot())?.scan.scanId).toBe(baseline.scan.scanId);
+});
+
+test('interaction catalog pagination retains all exact shared identities', async () => {
+    interactionEntries = { 'data/ui/nav': Array.from({ length: 201 }, (_, index) => ({ name: `menu-${index}`,
+        acl: { app: 'example', owner: 'nobody', sharing: 'app' }, content: { disabled: false, 'eai:data': '<nav/>' } })) };
+    const result = await splunkInventoryClient.runFullScan();
+    expect(result.scan.collectorCounts.navigation).toBe(201);
+    expect(result.scan.collectorNativeCounts?.navigation).toBe(201);
+    expect(result.objects.filter(row => row.objectType === 'Navigation Menu')).toHaveLength(201);
+    expect(requests.filter(row => row.path.endsWith('/data/ui/nav')).map(row => row.offset)).toEqual(['0', '200']);
+    expect((await splunkInventoryClient.getLatestSnapshot())?.objects.filter(row => row.objectType === 'Navigation Menu')).toHaveLength(201);
+});
+
+test('detail pages bound evidence-heavy KV reads without changing snapshot identities or summary paging', async () => {
+    interactionEntries = { 'data/ui/nav': Array.from({ length: 201 }, (_, index) => ({
+        name: `menu-${index}`, acl: { app: 'example', owner: 'nobody', sharing: 'app' },
+        content: { disabled: false, 'eai:data': '<nav/>' },
+    })) };
+    const original = await splunkInventoryClient.runFullScan();
+    requests = [];
+    const snapshot = await splunkInventoryClient.getLatestSnapshot('dependency-explorer');
+    expect(snapshot?.objects).toEqual(original.objects);
+    expect(snapshot?.edges).toEqual(original.edges);
+    const detailReads = requests.filter(row => row.method === 'GET' && row.path.endsWith('/ch_objects'));
+    expect(detailReads.length).toBeGreaterThan(2);
+    expect(detailReads.every(row => Number(row.limit) <= 100)).toBe(true);
+    expect(detailReads.map(row => Number(row.skip))).toEqual([0, 100, 200]);
+    expect(detailReads.every(row => !row.fields?.includes('review_evidence:0'))).toBe(true);
+    requests = [];
+    await splunkInventoryClient.getLatestSnapshot('overview');
+    const summaryReads = requests.filter(row => row.method === 'GET' && row.path.endsWith('/ch_objects'));
+    expect(summaryReads).toHaveLength(1);
+    expect(summaryReads[0]).toMatchObject({ limit: '1000', fields: 'source:0,configuration_fingerprint:0,review_evidence:0' });
+});
+
+test('denied interaction catalogs retain the prior baseline and original decisions', async () => {
+    const baseline = await splunkInventoryClient.runFullScan(); failInteractions = true;
+    const result = await splunkInventoryClient.runFullScan();
+    expect(result.scan.retainedBaseline).toBe(true); expect(result.scan.scanId).toBe(baseline.scan.scanId);
+    expect(result.latestCheck?.warnings.join(' ')).toMatch(/Workflow actions|Navigation menus/);
 });
 
 test('native field catalogs persist compact facts and exact edge provenance with GET-only customer requests', async () => {
@@ -198,7 +293,7 @@ test('native field catalogs persist compact facts and exact edge provenance with
     expect(stored).not.toContain('private_literal_must_not_be_cached');
     expect(stored).not.toContain('coalesce(');
     expect(stored).not.toContain('actor::$1');
-    expect(result.objects.find(row => row.objectType === 'Calculated Field')?.reviewEvidence?.coverage?.policy).toBe('shared-static-v4');
+    expect(result.objects.find(row => row.objectType === 'Calculated Field')?.reviewEvidence?.coverage?.policy).toBe('shared-static-v5');
     expect([...collections.get('ch_reviews')!.values()]).toEqual([original]);
     expect(requests.filter(row => row.method !== 'GET').every(row => row.path.includes('/storage/collections/data/') && !/\/ch_review/.test(row.path))).toBe(true);
 });
@@ -223,7 +318,7 @@ test.each(['inline', 'transform'] as const)('%s output provenance survives colle
     const edge = result.edges.find(row => row.relation === 'may_read_extracted_field')!;
     expect(edge.fieldProvenance?.outputDeclarations).toMatchObject([{ field: 'actor', objectId: nativeOrigin.objectId, capture: 2, offset: 8 }]);
     expect([...collections.get('ch_edges')!.values()].find(row => row.relation === edge.relation)).toMatchObject({ field_provenance: edge.fieldProvenance });
-    expect(result.scan.collectorVersions).toMatchObject({ field_lineage: '1.2.0', dependency_analysis: '1.5.0' });
+    expect(result.scan.collectorVersions).toMatchObject({ field_lineage: '1.2.0', dependency_analysis: '1.6.1', interaction_dependencies: '1.0.1' });
     const cached = await splunkInventoryClient.getLatestSnapshot();
     expect(cached?.objects.find(row => row.objectId === nativeOrigin.objectId)?.fieldLineage).toEqual(nativeOrigin.fieldLineage);
     expect(cached?.edges.find(row => row.edgeId === edge.edgeId)?.fieldProvenance).toEqual(edge.fieldProvenance);

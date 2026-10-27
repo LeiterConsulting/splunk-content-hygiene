@@ -86,6 +86,11 @@ export function ScanStatusBanner({
                         </div>
                     ) : null}
                     {fieldNotice ? <div>{fieldNotice}</div> : null}
+                    {!['workflow_actions', 'navigation'].every(collector => Object.prototype.hasOwnProperty.call(scan.collectorCounts, collector)) || scan.collectorVersions?.interaction_dependencies !== '1.0.1' ? (
+                        <div>
+                            This snapshot predates current workflow/navigation coverage. Run a new complete scan from Settings; individual decisions, policy history and captured baselines are unchanged.
+                        </div>
+                    ) : null}
                     <ScanMeta>
                         <span>
                             {numberFormatter.format(scan.objectCount)} cached inventory objects

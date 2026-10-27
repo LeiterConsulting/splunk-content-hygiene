@@ -3,6 +3,7 @@ import {
     ParsedReference,
     ReferenceTarget,
     ParsedSource,
+    ParserCoverageGap,
     parseDashboard,
     parseSpl,
     parseDataModel,
@@ -13,18 +14,20 @@ import { buildAutomaticLookupMatcher, fieldContext, parseAutomaticLookup } from 
 import { isPotentialRelation, weakestDependencyConfidence } from '../utils/dependencySemantics';
 import { buildKnowledgeReferenceMatcher, parseTagBinding } from './knowledgeReferences';
 import { buildFieldDependencyMatcher, FIELD_TARGETS } from './fieldDependencies';
+import { createInteractionParser } from './interactiveSources';
 
 export { extractSplReferences, extractDashboardReferences } from './dependencyParser';
 export type { ParsedReference } from './dependencyParser';
 
 export interface RawAnalysisSource {
     objectId: string;
-    kind: 'spl' | 'dashboard' | 'lookup' | 'data_model' | 'automatic_lookup' | 'event_type' | 'tag_binding' | 'field_lineage';
+    kind: 'spl' | 'dashboard' | 'lookup' | 'data_model' | 'automatic_lookup' | 'event_type' | 'tag_binding' | 'field_lineage' | 'workflow_action' | 'navigation';
     text: string;
     sourceLocation: string;
     failure?: string;
     failureTargets?: ReferenceTarget[] | 'all';
     fieldLineage?: FieldLineageFacts;
+    contextApp?: string;
 }
 export interface AnalysisCompleteness {
     macros: boolean;
@@ -41,6 +44,8 @@ export interface AnalysisCompleteness {
     field_aliases?: boolean;
     calculated_fields?: boolean;
     field_transforms?: boolean;
+    apps?: boolean;
+    dashboards?: boolean;
 }
 export interface InventoryAnalysis {
     objects: ContentObject[];
@@ -59,7 +64,12 @@ interface Resolution {
     object: ContentObject | null;
     ambiguous: boolean;
 }
-interface ReferenceIndex { names: Map<string, ContentObject[]>; objects: Map<string, ContentObject> }
+interface ReferenceIndex {
+    names: Map<string, ContentObject[]>;
+    scoped: Map<string, ContentObject[]>;
+    exported: Map<string, ContentObject[]>;
+    objects: Map<string, ContentObject>;
+}
 
 function objectGroup(objectType: string): ReferenceTarget | null {
     if (objectType === 'Macro') {
@@ -90,6 +100,8 @@ function objectGroup(objectType: string): ReferenceTarget | null {
     if (objectType === 'Field Alias') { return 'field_alias'; }
     if (objectType === 'Calculated Field') { return 'calculated_field'; }
     if (objectType === 'Field Transform') { return 'field_transform'; }
+    if (objectType === 'App') { return 'app'; }
+    if (objectType === 'Dashboard') { return 'dashboard'; }
     return null;
 }
 
@@ -101,6 +113,8 @@ function referenceKey(type: ReferenceTarget, name: string, arity = 0): string {
 
 function buildReferenceIndex(objects: ContentObject[], byId: Map<string, ContentObject>): ReferenceIndex {
     const index = new Map<string, ContentObject[]>();
+    const scoped = new Map<string, ContentObject[]>();
+    const exported = new Map<string, ContentObject[]>();
     objects.forEach((contentObject) => {
         const group = objectGroup(contentObject.objectType);
         if (!group) {
@@ -111,8 +125,13 @@ function buildReferenceIndex(objects: ContentObject[], byId: Map<string, Content
         const matches = index.get(key) ?? [];
         matches.push(contentObject);
         index.set(key, matches);
+        const namespaceKey = JSON.stringify([key, contentObject.app]);
+        const local = scoped.get(namespaceKey) ?? []; local.push(contentObject); scoped.set(namespaceKey, local);
+        if (contentObject.sharing === 'global' || (['index', 'sourcetype'].includes(group) && contentObject.sharing !== 'user')) {
+            const shared = exported.get(key) ?? []; shared.push(contentObject); exported.set(key, shared);
+        }
     });
-    return { names: index, objects: byId };
+    return { names: index, scoped, exported, objects: byId };
 }
 
 function resolveReference(
@@ -137,42 +156,35 @@ function resolveReference(
             ['app', 'global'].includes(target.sharing ?? '') && (target.app === app || target.sharing === 'global');
         return { object: visible ? target : null, ambiguous: !visible };
     }
-    const primary =
-        index.names.get(referenceKey(reference.targetType, reference.targetName, reference.macroArity)) ??
-        [];
+    const primaryKey = referenceKey(reference.targetType, reference.targetName, reference.macroArity);
     // SPL accepts a CSV file or a same-named definition. Do not guess if both apply.
-    const alternatives =
+    const alternateKey =
         reference.targetType === 'lookup_file' && reference.relation !== 'uses_file'
-            ? (index.names.get(referenceKey('lookup', reference.targetName)) ?? [])
-            : [];
-    const candidates = [...primary, ...alternatives];
-    const sameApp = candidates.filter((item) => item.app === app);
+            ? referenceKey('lookup', reference.targetName) : null;
+    const keys = [primaryKey, ...(alternateKey ? [alternateKey] : [])];
+    const sameApp = keys.flatMap(key => index.scoped.get(JSON.stringify([key, app])) ?? []);
+    if (reference.exactNamespace) {
+        const shared = sameApp.filter(item => ['app', 'global', ...(reference.targetType === 'app' ? ['system'] : [])].includes(item.sharing ?? ''));
+        return { object: shared.length === 1 ? shared[0] : null, ambiguous: shared.length !== 1 };
+    }
     const privateMatches = source.owner
         ? sameApp.filter((item) => item.sharing === 'user' && item.owner === source.owner)
         : [];
     const shared = sameApp.filter((item) => item.sharing === 'app' || item.sharing === 'global');
-    const exported = candidates.filter(
-        (item) =>
-            item.sharing === 'global' ||
-            (['index', 'sourcetype'].includes(reference.targetType) && item.sharing !== 'user'),
-    );
-    let applicable = exported;
-    if (shared.length) {
-        applicable = shared;
-    }
-    if (privateMatches.length) {
-        applicable = privateMatches;
-    }
+    let applicable = privateMatches;
+    if (!applicable.length) { applicable = shared; }
+    if (!applicable.length) { applicable = keys.flatMap(key => index.exported.get(key) ?? []); }
     return {
         object: applicable.length === 1 ? applicable[0] : null,
-        ambiguous: applicable.length > 1 || (applicable.length === 0 && candidates.length > 0),
+        ambiguous: applicable.length > 1 || (applicable.length === 0 && keys.some(key => index.names.has(key))),
     };
 }
 
-function parseSource(source: RawAnalysisSource): ParsedSource {
+function parseSource(source: RawAnalysisSource, interactionParser: ReturnType<typeof createInteractionParser>): ParsedSource {
     if (source.failure) {
         return { references: [], warnings: [source.failure],
-            gaps: [{ targets: source.failureTargets ?? 'all', message: source.failure, sourceLocation: source.sourceLocation }] };
+            gaps: [{ targets: source.failureTargets ?? 'all', message: source.failure, sourceLocation: source.sourceLocation,
+                ...(['navigation', 'workflow_action'].includes(source.kind) ? { invocationNamespaceUnverified: true } : {}) }] };
     }
     if (source.kind === 'field_lineage') {
         return source.fieldLineage ? { references: [], warnings: [], gaps: [], fieldLineage: source.fieldLineage }
@@ -180,6 +192,9 @@ function parseSource(source: RawAnalysisSource): ParsedSource {
                 gaps: [{ targets: FIELD_TARGETS, message: 'Compact field metadata is unavailable.', sourceLocation: source.sourceLocation }] };
     }
     if (source.kind === 'automatic_lookup') { return parseAutomaticLookup(source.text, source.sourceLocation); }
+    if (source.kind === 'workflow_action' || source.kind === 'navigation') {
+        return interactionParser(source.kind, source.text, source.contextApp, source.sourceLocation);
+    }
     if (source.kind === 'event_type') { return parseEventType(source.text, source.sourceLocation); }
     if (source.kind === 'tag_binding') { return parseTagBinding(source.text, source.sourceLocation); }
     if (source.kind === 'data_model') { return parseDataModel(source.text, source.sourceLocation); }
@@ -227,6 +242,7 @@ function targetCoverageComplete(
         tag_binding: 'tag_bindings',
         field_extraction: 'field_extractions', field_alias: 'field_aliases',
         calculated_field: 'calculated_fields', field_transform: 'field_transforms',
+        app: 'apps', dashboard: 'dashboards',
     };
     return completeness[collectorByTarget[targetType]] === true;
 }
@@ -312,9 +328,11 @@ export function analyzeInventory(
         event_type: 'event_types', tag_binding: 'tag_bindings',
         field_extraction: 'field_extractions', field_alias: 'field_aliases',
         calculated_field: 'calculated_fields', field_transform: 'field_transforms',
+        app: 'apps', dashboard: 'dashboards',
     };
     const sourceParses = parsedSources ?? new Map<RawAnalysisSource, ParsedSource>();
-    sources.forEach((source) => { if (!sourceParses.has(source)) { sourceParses.set(source, parseSource(source)); } });
+    const interactionParser = createInteractionParser();
+    sources.forEach((source) => { if (!sourceParses.has(source)) { sourceParses.set(source, parseSource(source, interactionParser)); } });
     const automaticRules = sources.flatMap((source) => {
         const object = objectById.get(source.objectId); const rule = sourceParses.get(source)?.automaticLookup;
         if (object && rule) {
@@ -360,10 +378,10 @@ export function analyzeInventory(
                     'This props scope uses a pattern not evaluated by the exact-selector matcher; caller coverage remains unverified.');
         }
         const { references } = parsed;
-        const gaps = parsed.gaps ?? parsed.warnings.map((message) => ({ targets: 'all' as const, message, sourceLocation: source.sourceLocation }));
-        const invocationNamespaceUnverified = ['Macro', 'Data Model', 'Event Type', 'Tag Binding', 'Field Extraction', 'Field Alias', 'Calculated Field', 'Field Transform', 'Automatic Lookup'].includes(sourceObject.objectType) && sourceObject.sharing === 'global';
-        coverageGaps.push(...gaps.map((gap) => ({ ...gap, sourceId: source.objectId, app: sourceObject.app,
-            ...(invocationNamespaceUnverified ? { invocationNamespaceUnverified: true } : {}) })));
+        const gaps: ParserCoverageGap[] = parsed.gaps ?? parsed.warnings.map((message) => ({ targets: 'all' as const, message, sourceLocation: source.sourceLocation }));
+        const invocationNamespaceUnverified = ['Macro', 'Data Model', 'Event Type', 'Tag Binding', 'Field Extraction', 'Field Alias', 'Calculated Field', 'Field Transform', 'Automatic Lookup', 'Workflow Action'].includes(sourceObject.objectType) && sourceObject.sharing === 'global';
+        coverageGaps.push(...gaps.map((gap) => ({ ...gap, sourceId: source.objectId, app: gap.contextApp ?? sourceObject.app,
+            ...(invocationNamespaceUnverified && !gap.contextApp ? { invocationNamespaceUnverified: true } : {}) })));
         if (parsed.warnings.length) {
             dynamicSources.add(source.objectId);
             sourceObject.analysisWarnings = uniqueEvidence([
@@ -407,9 +425,9 @@ export function analyzeInventory(
                 (reference.targetType !== 'lookup_file' ||
                     reference.relation === 'uses_file' ||
                     completeness.lookup_definitions);
-            const canAssertMissing = !resolved && !resolution.ambiguous && coverageComplete && !isPotentialRelation(reference.relation);
+            const canAssertMissing = !resolved && !resolution.ambiguous && coverageComplete && !isPotentialRelation(reference.relation) && !reference.absenceUnverified;
             if (resolution.ambiguous) {
-                coverageGaps.push({ sourceId: source.objectId, app: sourceObject.app,
+                coverageGaps.push({ sourceId: source.objectId, app: contextApp,
                     targets: reference.targetType === 'lookup_file' && reference.relation !== 'uses_file'
                         ? ['lookup_file', 'lookup'] : [reference.targetType],
                     targetName: reference.targetName, sourceLocation: reference.sourceLocation,
@@ -417,7 +435,7 @@ export function analyzeInventory(
                     ...(invocationNamespaceUnverified ? { invocationNamespaceUnverified: true } : {}) });
             }
             let { confidence } = reference;
-            if (resolution.ambiguous || (!resolved && (!coverageComplete || isPotentialRelation(reference.relation)))) {
+            if (resolution.ambiguous || (!resolved && (!coverageComplete || isPotentialRelation(reference.relation) || reference.absenceUnverified))) {
                 confidence = 'unknown';
             } else if (
                 resolved &&
@@ -709,10 +727,11 @@ export async function analyzeInventoryAsync(
     visibility?: AnalysisVisibility,
 ): Promise<InventoryAnalysis> {
     const parsed = new Map<RawAnalysisSource, ParsedSource>();
+    const interactionParser = createInteractionParser();
     for (let start = 0; start < sources.length; start += 40) {
         sources
             .slice(start, start + 40)
-            .forEach((source) => parsed.set(source, parseSource(source)));
+            .forEach((source) => parsed.set(source, parseSource(source, interactionParser)));
         // Yield between bounded parser batches so progress and navigation remain responsive.
         // eslint-disable-next-line no-await-in-loop
         await new Promise<void>((resolve) => {

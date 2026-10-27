@@ -434,6 +434,8 @@ export function SettingsPage({
                                 <dd>10,000 records per collector</dd>
                                 <dt>Execution model</dt>
                                 <dd>Explicit, browser-session scan</dd>
+                                <dt>Interaction coverage</dt>
+                                <dd>Declared navigation/workflow targets only. No link, field token or workflow search is executed.</dd>
                             </DefinitionList>
                         </CardBody>
                     </Card>

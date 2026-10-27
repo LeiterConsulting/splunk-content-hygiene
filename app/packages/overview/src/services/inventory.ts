@@ -6,7 +6,7 @@ import { splunkRequest, SplunkRequestError as RestRequestError } from './rest';
 import { AnalysisCompleteness, RawAnalysisSource, analyzeInventoryAsync } from './analysis';
 import { attachReviewEvidence, configurationFingerprint } from './reviewEvidence';
 import { PrivateObjectCount } from './dependencyCoverage';
-import { CatalogIssue, decodeEventType, decodeTagBindings, MAX_TAG_BINDINGS_PER_STANZA } from './knowledgeCatalog';
+import { CatalogIssue, decodeEventType, decodeTagBindings, decodeSharedKnowledgeIdentity, MAX_TAG_BINDINGS_PER_STANZA } from './knowledgeCatalog';
 import { decodeFieldLineage, FieldCatalog, fieldLineageFacts, readFieldLineageFacts, readFieldProvenance } from './fieldLineage';
 import {
     CollectedUsageSource,
@@ -48,6 +48,9 @@ const LOCK_TTL_MS = 30 * 60 * 1000;
 const BATCH_SIZE = 100;
 const BATCH_CONCURRENCY = 4;
 const SNAPSHOT_PAGE_SIZE = 1000;
+// Captured review evidence can be much larger than summary records. Keep each
+// detailed read bounded without weakening integrity checks or extending timeouts.
+const DETAIL_SNAPSHOT_PAGE_SIZE = 100;
 const MANIFEST_KEY = 'inventory_manifest_v2';
 const SNAPSHOT_VERSION = 2;
 
@@ -257,6 +260,10 @@ const objectCollectors: ObjectCollectorDefinition[] = [
         namespace: { owner: '-', app: '-' },
         objectType: 'Macro',
     },
+    { id: 'workflow_actions', label: 'Workflow actions', endpoint: 'data/ui/workflow-actions',
+        namespace: { owner: '-', app: '-' }, objectType: 'Workflow Action' },
+    { id: 'navigation', label: 'Navigation menus', endpoint: 'data/ui/nav',
+        namespace: { owner: '-', app: '-' }, objectType: 'Navigation Menu' },
     {
         id: 'lookup_definitions',
         label: 'Lookup definitions',
@@ -612,6 +619,43 @@ export interface NormalizedKnowledgeCatalog {
 export const KNOWLEDGE_OBJECT_LIMIT = 10000;
 export const FIELD_CATALOGS: FieldCatalog[] = ['field_extractions', 'field_aliases', 'calculated_fields', 'field_transforms'];
 
+/** Strict shared identities, bounded transient sources and no raw source cache. */
+export function normalizeInteractionEntries(
+    entries: SplunkRestEntry[], collector: ObjectCollectorDefinition, scanId: string, collectedAt: string,
+): NormalizedKnowledgeCatalog {
+    if (!['workflow_actions', 'navigation'].includes(collector.id)) { throw new Error('Unsupported interaction catalog.'); }
+    const expected = collector.id === 'navigation' ? 'Navigation Menu' : 'Workflow Action';
+    if (collector.objectType !== expected) { throw new Error('Interaction catalog type mismatch.'); }
+    const records = new Map<string, KvObjectRecord>(); const sourceById = new Map<string, RawAnalysisSource>();
+    const duplicates = new Set<string>(); const warnings = new Set<string>(); let complete = true; let inventoryComplete = true;
+    entries.slice(0, KNOWLEDGE_OBJECT_LIMIT).forEach(entry => {
+        const decoded = decodeSharedKnowledgeIdentity(entry, collector.endpoint);
+        decoded.issues.forEach(issue => { warnings.add(issue.message); if (issue.code !== 'private_excluded') { complete = false; }
+            if (issue.code === 'identity_unavailable') { inventoryComplete = false; } });
+        if (!decoded.records.length) { return; }
+        const content = asRecord(entry.content);
+        const record = normalizeObjectEntry(entry, collector, scanId, collectedAt);
+        const state = typeof content.disabled === 'string' ? content.disabled.toLowerCase() : content.disabled;
+        record.enabled = booleanValue(state) === null ? null : !booleanValue(state);
+        if (record.enabled === null) { complete = false; warnings.add('Interaction enabled state is unavailable; current applicability is not inferred.'); }
+        if (records.has(record.object_id) || duplicates.has(record.object_id)) {
+            records.delete(record.object_id); sourceById.delete(record.object_id); duplicates.add(record.object_id);
+            complete = false; inventoryComplete = false; warnings.add('Duplicate shared interaction identities were omitted instead of choosing a namespace winner.'); return;
+        }
+        const kind = collector.id === 'navigation' ? 'navigation' as const : 'workflow_action' as const;
+        const sourceLocation = kind === 'navigation' ? 'eai:data' : 'workflow_actions.conf';
+        const text = kind === 'navigation' ? stringValue(content['eai:data']) : JSON.stringify(Object.fromEntries(
+            ['type', 'label', 'disabled', 'search.app', 'search.view', 'search.search_string', 'link.method', 'link.uri']
+                .filter(key => content[key] !== undefined).map(key => [key, content[key]])));
+        record.evidence.push('Configured interaction only. No menu item, link, workflow search, field token or remote destination is executed.');
+        records.set(record.object_id, record);
+        sourceById.set(record.object_id, { objectId: record.object_id, kind, text, sourceLocation, contextApp: record.app,
+            ...(!text.trim() ? { failure: 'Native navigation source is unavailable; no menu dependencies are guessed.' } : {}) });
+    });
+    if (entries.length > KNOWLEDGE_OBJECT_LIMIT) { complete = false; inventoryComplete = false; warnings.add('Interaction normalization budget exhausted; additional definitions remain unverified.'); }
+    return { records: [...records.values()], sources: [...sourceById.values()], complete, inventoryComplete, warnings: [...warnings] };
+}
+
 /** Native field definitions are fingerprinted transiently. Only compact facts
  * with fixed document keys are stored; customer SPL/PCRE is never cached. */
 export function normalizeFieldEntries(
@@ -944,7 +988,7 @@ async function collectEntries(
     const maximum = mode === 'bounded' ? BOUNDED_SCAN_LIMIT : FULL_SCAN_MAX_PER_COLLECTOR;
     const pageSize = mode === 'bounded' ? BOUNDED_SCAN_LIMIT : FULL_SCAN_PAGE_SIZE;
     const entries: SplunkRestEntry[] = [];
-    const strictNative = ['event_types', 'tag_bindings'].includes(collector.id) || FIELD_CATALOGS.includes(collector.id as FieldCatalog);
+    const strictNative = ['event_types', 'tag_bindings', 'workflow_actions', 'navigation'].includes(collector.id) || FIELD_CATALOGS.includes(collector.id as FieldCatalog);
     const pages = new Set<string>();
     let expectedTotal: number | null = null;
     let total = 0;
@@ -1433,6 +1477,7 @@ async function getCollectionRecords<T>(
     collection: string,
     scanId: string,
     fields?: string,
+    pageSize = SNAPSHOT_PAGE_SIZE,
 ): Promise<T[]> {
     const records: T[] = [];
     let skip = 0;
@@ -1441,14 +1486,14 @@ async function getCollectionRecords<T>(
     while (true) {
         const url = withQuery(collectionUrl(collection), {
             query: JSON.stringify({ scan_id: scanId }),
-            limit: SNAPSHOT_PAGE_SIZE,
+            limit: pageSize,
             sort: '_key:1',
             skip,
             ...(fields ? { fields } : {}),
         });
         const page = await requestJson<T[]>(url);
         records.push(...page);
-        if (page.length < SNAPSHOT_PAGE_SIZE) {
+        if (page.length < pageSize) {
             break;
         }
         skip += page.length;
@@ -1684,7 +1729,8 @@ async function loadSnapshot(
             // The manifest already contains its configuration fingerprint. Do
             // not duplicate those hashes, or send review detail to summary pages.
             getCollectionRecords<KvObjectRecord>('ch_objects', record.scan_id,
-                `source:0,configuration_fingerprint:0${includeReviewEvidence ? '' : ',review_evidence:0'}`),
+                `source:0,configuration_fingerprint:0${includeReviewEvidence ? '' : ',review_evidence:0'}`,
+                includeReviewEvidence ? DETAIL_SNAPSHOT_PAGE_SIZE : SNAPSHOT_PAGE_SIZE),
             includeEdges
                 ? getCollectionRecords<KvEdgeRecord>('ch_edges', record.scan_id)
                 : Promise.resolve([]),
@@ -1788,6 +1834,8 @@ async function runInventoryScan(
     const collectorTotals: Record<string, number> = {};
     const collectorNativeCounts: Record<string, number> = {};
     const completeness: AnalysisCompleteness = {
+        apps: false,
+        dashboards: false,
         macros: false,
         lookup_definitions: false,
         lookup_files: false,
@@ -1843,7 +1891,8 @@ async function runInventoryScan(
         collector_totals: {},
         collector_versions: {
             rest_inventory: '0.2.0',
-            dependency_analysis: '1.5.0',
+            dependency_analysis: '1.6.1',
+            interaction_dependencies: '1.0.1',
             knowledge_catalogs: '1.0.0',
             field_lineage: '1.2.0',
             classification: '1.0.0',
@@ -1917,6 +1966,8 @@ async function runInventoryScan(
                     knowledge = normalizeFieldEntries(eligibleEntries, collector, scanId, collectedAt);
                 } else if (['event_types', 'tag_bindings'].includes(collector.id)) {
                     knowledge = normalizeKnowledgeEntries(eligibleEntries, collector, scanId, collectedAt);
+                } else if (['workflow_actions', 'navigation'].includes(collector.id)) {
+                    knowledge = normalizeInteractionEntries(eligibleEntries, collector, scanId, collectedAt);
                 }
                 const records = knowledge?.records ?? eligibleEntries.map((entry) => normalizeObjectEntry(entry, collector, scanId, collectedAt));
                 if (knowledge) {

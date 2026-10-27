@@ -24,6 +24,12 @@
     "relation": {
       "enum": [
         "references",
+        "navigates_to",
+        "links_to_report",
+        "uses_search_view",
+        "opens_view",
+        "opens_app",
+        "runs_in_app",
         "uses",
         "uses_file",
         "uses_lookup",

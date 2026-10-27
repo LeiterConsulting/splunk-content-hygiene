@@ -170,6 +170,15 @@ function likelyOutcome(
         case 'references':
         case 'invokes':
             return `${dependentLabel} may fail to load or execute when its ${dependencyType} reference is no longer available.`;
+        case 'navigates_to':
+        case 'uses_search_view':
+        case 'opens_view':
+            return `${dependentLabel} declares an internal view destination. Removing this view can leave an unavailable menu/workflow destination or rendering view. Confirm its exact app, inherited built-in alternatives, active state and runtime parameters; the configured link is not observed activity.`;
+        case 'links_to_report':
+            return `${dependentLabel} declares a report navigation entry. Removing the saved search can leave an unavailable report destination; verify the exact app/report name and rendering view before a separate approved change.`;
+        case 'opens_app':
+        case 'runs_in_app':
+            return `${dependentLabel} declares this app as an interaction destination or workflow execution namespace. Removing it can invalidate that route or namespace. Runtime tokens and effective search dependencies require separate confirmation; no action was executed to establish this link.`;
         case 'uses':
             return `${dependentLabel} search logic may fail or change because it uses this ${dependencyType}.`;
         case 'reads':
@@ -194,6 +203,10 @@ function typeSpecificPreparation(selected: ContentObject): string {
             return 'Inspect declared inputs, consumers and exact props scope. EVAL definitions run in parallel, not as a chain, and cannot depend on fields added later by lookups. Validate equivalent values with read-only searches before retiring the declaration through supported Splunk controls.';
         case 'Dashboard':
             return 'Confirm navigation links, embedded references, scheduled delivery, and owner communications before retiring the dashboard through supported Splunk controls.';
+        case 'Workflow Action':
+            return 'Review the declared action type, explicit search app/view or internal link, static search dependencies and unresolved runtime field tokens. Confirm event-menu applicability and owners without executing the workflow or following external destinations; perform any change through separate approved Splunk administration.';
+        case 'Navigation Menu':
+            return 'Review exact named views/reports, internal app routes and dynamic menu gaps. Preserve an accessible app landing path, owner approval and rollback XML before any separate approved navigation change; this app never edits or activates menu definitions.';
         case 'Saved Search':
             return 'Address dashboard and savedsearch consumers, schedules, alerts, and downstream outputs before retiring the saved search through supported Splunk controls.';
         case 'Macro':
@@ -597,7 +610,7 @@ export function analyzeRemovalImpact(
 
     const caveats = [
         'This is a read-only simulation from the latest persisted live scan; it does not remove or modify Splunk content.',
-        'Supported explicit relationships, literal event-type/tag filters and labeled potential field/props bindings are included. Implicit classification, opaque PCRE, unsupported expressions, effective field availability, props precedence, dynamic SPL, tokens, navigation links, external integrations and unobserved usage can add impact.',
+        'Supported explicit relationships, literal navigation/workflow targets, event-type/tag filters and labeled potential field/props bindings are included. Dynamic menu lists, runtime namespaces/views, external/embedded links, implicit classification, opaque PCRE, unsupported expressions, effective field availability, props precedence, dynamic SPL, tokens and unobserved usage can add impact.',
     ];
     if (potentialAffectedCount > 0 || outboundEdges.some((edge) => isPotentialRelation(edge.relation))) {
         caveats.push('Potential implicit paths are possibilities, not confirmed consumers or observed execution. Verify props precedence, renames, field availability and invoking-app bindings before remediation decisions.');

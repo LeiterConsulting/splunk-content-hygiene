@@ -6,7 +6,7 @@ import { analyzeRemovalImpact } from '../services/removalImpact';
 import { ContentObject, ReviewRecord, ScanSummary } from '../types';
 
 const collectors = Object.fromEntries(['apps', 'macros', 'dashboards', 'lookup_definitions', 'lookup_files',
-    'saved_searches', 'data_models', 'indexes', 'sourcetypes', 'event_types', 'tag_bindings'].map((name) => [name, true]));
+    'saved_searches', 'data_models', 'indexes', 'sourcetypes', 'event_types', 'tag_bindings', 'workflow_actions', 'navigation'].map((name) => [name, true]));
 const completeness = { macros: true, lookup_definitions: true, lookup_files: true, saved_searches: true,
     data_models: true, indexes: true, sourcetypes: false };
 const context: CoverageContext = { collectors, gaps: [], privateObjects: [], identityKnown: true };

@@ -180,9 +180,9 @@ compact parent/root IDs; export coverage CSV alongside it. A filtered CSV is
 explicitly labeled and is not the full dependency footprint.
 
 This is always a **partial shared static footprint**, not a complete migration
-manifest. Release 1.3 adds bounded shared event-type/tag and declared field-lineage
-coverage described below. Workflow actions, navigation menus and complete
-effective props behavior remain outside inventory/analysis coverage. Automatic
+manifest. Shared event-type/tag, declared field-lineage and 1.6
+workflow/navigation coverage are bounded as described below. Complete
+effective props behavior remains unverified. Automatic
 lookups and declared field paths have bounded potential coverage, not runtime closure. Private,
 dynamic, external and ad-hoc consumers may require more content. Missing activity
 or absence from this list never establishes inactivity or removal eligibility.
@@ -226,6 +226,52 @@ Saved Library stages, notes, assignments, revisions and evidence baselines are
 unchanged by scans. Moving from the earlier coverage policy to the expanded
 policy can require **Needs re-review**; inspect the changes and explicitly reaffirm
 only after investigation. Do not edit review KV rows to force a Current badge.
+
+### Workflow actions and navigation menus
+
+Version 1.6 adds two shared catalogs. Run a **complete scan** after upgrading;
+older cached scans remain readable but do not contain this coverage. Settings
+reports native entries separately from retained shared objects. Private/system
+definitions and uncertain identities are not silently treated as shared content.
+
+Select a **Navigation Menu** in Explorer. Literal `<view name>` and `<saved name>`
+references identify configured views/reports in the exact app namespace. Explicit
+`search_view` and saved-report rendering views are retained. Root-relative
+`/app/<app>/<view>` links, optionally locale-prefixed, identify literal app/view
+destinations; app-only links do not invent a landing view. Same-name views in
+other apps are not substituted. Built-in/system inheritance or a missing shared
+target stays unverified rather than being called a proven broken link.
+
+Select a **Workflow Action** to inspect declared search/view/app targets.
+Static search bodies use the existing lexical parser. A literal `search.app`
+provides a search namespace; when absent or dynamic, the runtime invoking app is
+unknown and owning-app references are not guessed. A field-token search template
+is not partially interpreted as runnable SPL. Workflow field availability,
+event-menu applicability and actual execution remain unverified.
+
+Use **Relationships**, **Removal impact**, **Required content** and CSV/JSON to
+follow the supported paths. Relationship evidence and source locations identify
+the exact declaring attribute/menu position. These are configured interactions,
+not observed clicks or executions, and do not manufacture activity roots.
+External URLs, POST actions, query/fragment bodies, dynamic menu lists (`source`,
+`match`), unknown/custom XML and runtime field tokens are not evaluated or fetched.
+Raw XML, URLs/query values and workflow search bodies are not stored in the
+inventory cache; only compact identities, fingerprints and relationship evidence
+are retained.
+
+Parsing is bounded to 1,048,576 source characters, 250 references per source, 1,000 menu
+nodes and two nested collection levels. The whole scan permits 8,388,608 UTF-16 source
+characters and 50,000 inspected interaction references; duplicates/unresolved
+references still spend that budget. A ceiling produces an explicit gap, never
+a claim of no dependencies. See [troubleshooting](TROUBLESHOOTING.md#workflow-or-navigation-targets-are-missing).
+
+New scans use `shared-static-v5`. Existing decisions, notes, assignees, history
+and v1–v4 baselines remain unchanged. Inspect expanded evidence before explicitly
+reaffirming a review. Missing links or activity never establish removal eligibility.
+
+The supported syntax follows Splunk's [navigation XML reference](https://dev.splunk.com/enterprise/reference/dashboardnav/)
+and [workflow configuration reference](https://help.splunk.com/en/splunk-enterprise/administer/admin-manual/10.2/configuration-file-reference/10.2.0-configuration-file-reference/workflow_actions.conf),
+with the deliberately narrower uncertainty and privacy limits above.
 
 ### Declared field lineage
 

@@ -17,6 +17,42 @@ The app keeps customer content read-only:
   app-local KV Store collections.
 - Every finding carries reasons, evidence, and a suggested investigation step.
 
+## Version 1.6.0 — workflow and navigation dependencies
+
+[Release 1.6.0, build 85](https://github.com/LeiterConsulting/splunk-content-hygiene/releases/tag/v1.6.0) adds shared **Workflow Action** and **Navigation Menu**
+inventory, exact named view/report links and literal internal app/view routes.
+Static workflow searches distinguish explicit namespaces from inherited runtime
+contexts; app-scoped bindings are never guessed from the declaration app.
+Field-token templates and dynamic menus remain unverified. Configured links are
+not clicks or execution evidence.
+External/POST links are never followed, and raw definitions are not cached.
+
+Expanded coverage policy `shared-static-v5` preserves existing stages, notes,
+assignees, history and v1–v4 evidence baselines. It can request explicit re-review;
+a scan does not reaffirm a decision. A new complete scan is required to collect
+the two catalogs. See the [interaction guide](docs/USER_GUIDE.md#workflow-actions-and-navigation-menus)
+and [qualification and limits](docs/COMPATIBILITY.md#160-interaction-qualification).
+The [coverage matrix](docs/DEPENDENCY_COVERAGE.md) separates collection, parsing,
+resolution, configuration and execution evidence.
+
+Evidence-heavy investigation reads use smaller pages without increasing request
+timeouts or truncating the verified inventory.
+
+Build 85 passes 862 automated checks, portable packaging and pre-cert AppInspect
+with no errors/failures. Fresh native catalog/cache/schema checks and targeted
+light/dark investigations cover Enterprise 10.2.5, 10.2.8 and 10.4.4, including
+real menu-to-view removal impact, grouped report links and downloaded CSV/JSON.
+Original decisions, policy history and appearance preferences are preserved.
+Static workflow-search namespace positives also have synthetic contracts; native
+examples do not cover every supported syntax. Full effective-props and dynamic
+runtime closure remain unverified, so #8 remains open.
+
+![Declared navigation relationship in native Dark mode](docs/images/navigation-context-dark.jpg)
+
+The app's own menu is shown—not a demonstration dataset. Source locations,
+exact destinations and configuration-versus-execution qualifications are retained.
+[Light-mode example](docs/images/navigation-context-light.jpg).
+
 ## Version 1.5.0 — context accuracy and app retention
 
 [Release 1.5.0, build 82](https://github.com/LeiterConsulting/splunk-content-hygiene/releases/tag/v1.5.0) adds explicit possible configuration contexts,
@@ -33,8 +69,9 @@ saves, role denials, concurrent-edit conflicts, reversible lifecycle and history
 exports also pass on all three runtimes. Existing individual decisions and user
 appearance preferences are preserved. See the [qualification and limits](docs/COMPATIBILITY.md#150-context-and-policy-qualification).
 
-Workflow actions, navigation menus and full effective-props evaluation remain outside coverage;
-follow-up #8 remains open. See [policy behavior](docs/USER_GUIDE.md#app-wide-retention-policies).
+Workflow actions and navigation menus remain outside the published 1.5.0 coverage;
+version 1.6 adds a bounded subset. Full effective-props evaluation remains
+unverified and follow-up #8 remains open. See [policy behavior](docs/USER_GUIDE.md#app-wide-retention-policies).
 
 ![Exact-app retention scope preview for Content Hygiene's own shared content](docs/images/app-policy-scope-light.jpg)
 
@@ -104,6 +141,8 @@ and [field-lineage investigation guide](docs/USER_GUIDE.md#declared-field-lineag
   chains, and explicitly potential caller links from exact event selectors
 - Shared event-type/tag inventory and bounded declared extraction, alias,
   calculated-field and transform lineage, with exact identities and provenance
+- Shared workflow/navigation inventory and bounded declared internal targets,
+  with source locations, exact app resolution and explicit runtime uncertainty
 - A persistent Review Library with triage, investigation, owner-confirmation,
   eligibility, retain, and blocked stages, with independent review-evidence
   validity, scoped coverage, change explanations, explicit reaffirmation,
@@ -124,7 +163,7 @@ and [field-lineage investigation guide](docs/USER_GUIDE.md#declared-field-lineag
   partial, and unavailable source coverage
 
 The complete scan inventories installed apps, saved searches, dashboards, macros,
-event types, tag bindings, field extractions, aliases, calculated fields,
+event types, tag bindings, workflow actions, navigation menus, field extractions, aliases, calculated fields,
 field transforms, automatic lookup rules, lookup definitions and files,
 data models, indexes, sourcetypes, and users visible to the initiating Splunk user.
 Private objects are excluded from
@@ -142,14 +181,14 @@ the shared cache; access is restricted to explicit hygiene roles.
    connectivity check succeeds.
 
 The support baseline is Splunk Enterprise **10.2.5 or later** on a standalone
-Linux x86-64 search head with KV Store. Release 1.5.0 **build 82** has
+Linux x86-64 search head with KV Store. Release 1.6.0 **build 85** has
 real-data qualification on **10.2.5, 10.2.8 and 10.4.4**: fresh bounded/full scans,
-native catalog/cache and schema comparisons, seven-page light/dark smoke checks,
-field/dependency investigations, required-content and removal-impact exports,
-and the existing Review Library. Native policy saves, permission denials,
-concurrent edits and reversible lifecycle also pass. Saved decisions and evidence
-baselines are preserved. This is bounded static coverage, not execution telemetry
-or a large-estate benchmark.
+native catalog/cache and schema comparisons, targeted light/dark interaction
+investigations, required-content and removal-impact exports, and the existing
+Review Library. Saved decisions, policy journals and evidence baselines are
+preserved. Broader seven-page, backend permission/concurrency and native policy
+lifecycle evidence from 1.5.0 remains separately documented. This is bounded static
+coverage, not execution telemetry or a large-estate benchmark.
 
 Release 1.2.0 (build 72) adds wrapped labels, opaque
 relationship surfaces, hover/focus previews and full-context dialogs. Targeted
@@ -270,7 +309,7 @@ yarn validate
 ```
 
 The verified installable archive is written to
-`app/dist/content_hygiene-<VERSION>.tar.gz` (currently 1.5.0, build 82).
+`app/dist/content_hygiene-<VERSION>.tar.gz` (currently 1.6.0, build 85).
 Run `yarn release:prepare` to
 perform the complete validation and update `SHA256SUMS`.
 

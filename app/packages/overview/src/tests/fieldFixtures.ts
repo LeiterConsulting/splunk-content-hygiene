@@ -34,7 +34,7 @@ export async function fieldInvestigationFixture(mode: 'format' | 'named_transfor
     const parent = { ...object('example', 'App'), configurationFingerprint: configurationFingerprint({}, { app: 'example', sharing: 'app', owner: 'reviewer', perms: { read: ['user'], write: ['admin'] } }) };
     const analysis = analyzeInventory([...definitions.map(row => row.item), parent], definitions.map(row => row.source), fieldCompleteness);
     const collectors = Object.fromEntries(['apps', 'saved_searches', 'dashboards', 'macros', 'lookup_definitions', 'lookup_files', 'automatic_lookups',
-        'event_types', 'tag_bindings', 'data_models', 'indexes', 'sourcetypes', 'field_extractions', 'field_aliases', 'calculated_fields', 'field_transforms'].map(name => [name, true]));
+        'event_types', 'tag_bindings', 'data_models', 'indexes', 'sourcetypes', 'field_extractions', 'field_aliases', 'calculated_fields', 'field_transforms', 'workflow_actions', 'navigation'].map(name => [name, true]));
     const objects = await attachReviewEvidence(analysis.objects, analysis.edges, { scanId: 'scan-fixture', observedAt: new Date(now).toISOString(),
         principal: 'operator', roles: ['operator'], mode: 'full', collectionComplete: true, analysisComplete: false, collectors,
         coverageContext: { gaps: analysis.coverageGaps, privateObjects: [], identityKnown: true, collectors } });

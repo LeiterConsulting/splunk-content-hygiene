@@ -748,10 +748,11 @@ export function DependencyPage({
                             </ButtonRow>
                         </WorkspaceHeader>
                         <AppRetentionNotice object={selected} />
-                        {selected.fieldLineage || ['Automatic Lookup', 'Event Type', 'Tag Binding'].includes(selected.objectType) || relatedRows.some((row) => isPotentialRelation(row.edge.relation)) ? (
+                        {selected.fieldLineage || ['Automatic Lookup', 'Event Type', 'Tag Binding', 'Workflow Action', 'Navigation Menu'].includes(selected.objectType) || relatedRows.some((row) => isPotentialRelation(row.edge.relation)) ? (
                             <InlineNotice>
                                 <strong>Configuration is not execution evidence</strong>
                                 <p>Automatic lookups, event types, tag assignments and declared field processing are configured search-time knowledge. “Matches” and “excludes” preserve declared filter semantics; they do not establish observed use. “May” links are potential event-scope, field-input, inactive-state or invoking-app bindings. Confirm effective permissions, namespace overrides, props precedence and field availability before treating a path as a runtime dependency.</p>
+                                {['Workflow Action', 'Navigation Menu'].includes(selected.objectType) ? <p>Interaction links retain exact declared destinations, not clicks or execution. Dynamic menu lists, workflow field tokens, inherited app/view context, built-in views and query/fragment bodies can add dependencies. External and POST destinations are never followed.</p> : null}
                             </InlineNotice>
                         ) : null}
                     </Card>

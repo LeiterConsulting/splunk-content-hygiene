@@ -73,7 +73,7 @@ type. Shared definitions can resolve differently in an invoking app; private or
 duplicate definitions can prevent deterministic resolution. Inspect parser gaps,
 exact identities, source locations and potential-path flags in the full JSON.
 Do not rename source objects, rewrite tags or edit review collections to clear
-these warnings. See the [event-type/tag guide](USER_GUIDE.md#event-types-and-tag-bindings-unreleased-13).
+these warnings. See the [event-type/tag guide](USER_GUIDE.md#event-types-and-tag-bindings-13).
 
 The expanded coverage policy can request re-review without changing a saved
 stage or baseline. An older installed candidate may predate field collection;
@@ -118,6 +118,31 @@ outputs. EVAL definitions run in parallel; lookup outputs are later and cannot
 feed them. Alias chaining and cross-transform input availability are not inferred.
 Narrow an investigation if a producer/index/candidate ceiling is reached; omitted
 edges remain unverified. See the [field guide](USER_GUIDE.md#declared-field-lineage).
+
+## Workflow or navigation targets are missing
+
+Confirm the installed candidate includes the two collectors, then run a complete
+scan. Check **Workflow actions** and **Navigation menus** in Settings, including
+native-versus-normalized counts and parser warnings. A denied, capped or unstable
+catalog cannot establish absence; an incomplete check retains the previous full
+baseline. Do not grant customer-content write permission or weaken ACLs.
+
+No shared workflows can be a valid result when all native entries use unsupported
+system/private visibility. A literal menu name resolves only in its exact app;
+a same-name exported view elsewhere is not a replacement. Built-in views and
+private/system inheritance remain unknown rather than falsely broken. Workflow
+`search.app` defaults to runtime context, not necessarily its declaration app.
+
+Dynamic menu lists, unknown/custom XML, field-token search templates, POST or
+external links, query/fragment bodies and inherited app/view context deliberately
+produce gaps. Inspect source locations and full relationship evidence. Do not
+click a workflow or external destination just to clear a coverage warning. Budget
+warnings are limits, not proof that remaining entries have no dependencies.
+Raw definitions/query values are not cached or exported as evidence.
+
+Older v1–v4 review baselines remain readable. The v5 expansion can request
+**Needs re-review** without modifying the saved decision; investigate first,
+then reaffirm only deliberately. See the [interaction guide](USER_GUIDE.md#workflow-actions-and-navigation-menus).
 
 ## A dependency link cannot show its requested object
 
@@ -189,6 +214,19 @@ records; a cap or failed page is disclosed, not interpreted as object absence.
 An established baseline can remain visible after an incomplete check; the banner
 identifies retained evidence. An abandoned app-local scan lock expires after
 30 minutes. Do not clear a lock while its browser is still collecting.
+
+## A scan finishes but the investigation page times out
+
+A request timeout while loading a snapshot does not by itself mean the scan
+failed or its baseline was lost. Reload once, then check **Settings & Scan
+Status** for the scan ID, type, completion and collector warnings before starting
+another scan. Do not clear the app-local collections or rewrite review history.
+
+Version 1.6 uses 100-object pages for evidence-heavy investigation reads, while
+summary pages omit review detail and retain larger pages. The request safety cap
+and full snapshot identity/count/relationship checks are unchanged. If a read
+continues to fail, retain the error and non-secret request timing for support;
+do not broaden permissions or infer that missing displayed objects were deleted.
 
 ## Cannot verify or Needs re-review
 

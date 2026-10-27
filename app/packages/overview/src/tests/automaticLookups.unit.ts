@@ -252,7 +252,7 @@ test('new catalog/relationships change evidence assessment, never the existing d
 test('automatic lookup and other implicit props coverage stays separate from unrelated macro coverage', () => {
     const rule = automatic(); const lookup = item('owners', 'Lookup Definition'); const macro = item('unrelated', 'Macro');
     const resolver = buildCoverageResolver({ gaps: [], privateObjects: [], identityKnown: true,
-        collectors: { apps: true, macros: true, saved_searches: true, dashboards: true, data_models: true, automatic_lookups: false, event_types: true, tag_bindings: true } });
+        collectors: { apps: true, macros: true, saved_searches: true, dashboards: true, data_models: true, automatic_lookups: false, event_types: true, tag_bindings: true, workflow_actions: true, navigation: true } });
     expect(resolver(rule.value, [], true).inbound.status).toBe('partial');
     expect(resolver(lookup, [], true).inbound.reasons.join(' ')).toContain('automatic_lookups');
     expect(resolver(macro, [], true).inbound.status).toBe('complete');

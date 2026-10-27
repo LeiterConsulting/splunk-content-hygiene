@@ -10,7 +10,7 @@ import { fieldInvestigationFixture } from './fieldFixtures';
 test('published evidence schema and baseline parser agree on current and preserved policy versions', async () => {
     const schema = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../../../../schemas/review-evidence.schema.json'), 'utf8'));
     const { policy } = schema.$defs.coverage.properties;
-    expect(policy).toEqual({ enum: ['shared-static-v1', 'shared-static-v2', 'shared-static-v3', 'shared-static-v4'] });
+    expect(policy).toEqual({ enum: ['shared-static-v1', 'shared-static-v2', 'shared-static-v3', 'shared-static-v4', 'shared-static-v5'] });
     const { saved, macro } = await knowledgeFixture();
     const baseline = { ...saved.evidenceBaseline, evidence: macro.reviewEvidence };
     policy.enum.forEach((version: string) => {

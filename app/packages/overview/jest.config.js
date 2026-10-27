@@ -3,7 +3,7 @@ module.exports = {
     testEnvironment: 'jsdom',
     // Native UI suites are CPU-heavy. Bound workers instead of relaxing their
     // assertions/timeouts on shared developer machines with many logical CPUs.
-    maxWorkers: 2,
+    maxWorkers: 1,
     transformIgnorePatterns: ['/node_modules/(?!@noble/hashes/)'],
     transform: {
         '^.+\\.[jt]sx?$': ['babel-jest', {

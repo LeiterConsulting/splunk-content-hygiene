@@ -37,12 +37,12 @@ test('removal analysis propagates potential field impact without field-availabil
     expect(JSON.stringify(report)).toContain('not proof');
 });
 
-test.each(['shared-static-v1', 'shared-static-v2', 'shared-static-v3'] as const)('field coverage expansion reads %s without rewriting a saved decision', async policy => {
+test.each(['shared-static-v1', 'shared-static-v2', 'shared-static-v3', 'shared-static-v4'] as const)('field coverage expansion reads %s without rewriting a saved decision', async policy => {
     const { data, calculated, saved } = await fieldInvestigationFixture();
     saved.evidenceBaseline!.evidence.coverage!.policy = policy;
     const original = JSON.stringify(saved);
     expect(parseReviewBaseline(saved.evidenceBaseline)).not.toBeNull();
-    expect(calculated.reviewEvidence?.coverage?.policy).toBe('shared-static-v4');
+    expect(calculated.reviewEvidence?.coverage?.policy).toBe('shared-static-v5');
     expect(compareReviewEvidence(saved, calculated, data.scan, now)).toMatchObject({ status: 'needs_review',
         reasons: expect.arrayContaining([expect.stringContaining('coverage policy expanded')]) });
     expect(JSON.stringify(saved)).toBe(original);

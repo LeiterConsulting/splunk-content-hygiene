@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.6.0 — 2026-10-27 (build 85)
+
+- Add GET-only shared workflow-action and navigation-menu inventory with strict
+  native pagination, exact shared identities and compact configuration fingerprints.
+- Map literal named views/reports, exact internal app/view routes and supported
+  static workflow searches. Preserve exact namespace/case and source locations;
+  no owning-app fallback for runtime-inherited workflow contexts.
+- Carry configured-interaction qualifications through Explorer, removal impact,
+  required-content reports, review freshness and CSV/JSON. Dynamic lists, field
+  tokens, built-in/private inheritance, query bodies and external/POST destinations
+  remain explicit unknowns, not broken-reference or execution claims.
+- Introduce `shared-static-v5` while retaining v1–v4 review baselines unchanged.
+  Add per-source/whole-scan parser budgets and indexed exact-app resolution.
+- Keep unparsed query/fragment uncertainty cross-app; a literal route path does
+  not establish the namespace of an unknown redirect or parameter consumer.
+- Bound evidence-heavy snapshot reads to 100 objects per page; retain efficient
+  summary/edge paging, complete integrity verification and the request safety cap.
+- Pass 862 automated checks, lint/style/types/build/package gates and pre-cert
+  AppInspect with zero errors/failures (three reviewed warnings, one manifest skip).
+  Fresh native catalog/cache/schema parity, targeted Light/Dark checks and actual
+  report downloads cover Enterprise 10.2.5, 10.2.8 and 10.4.4. Existing decisions,
+  policy journals and user appearance preferences remain unchanged.
+- Document supported versus unverified coverage and add native, own-app Light/Dark
+  context screenshots. Full effective-props/runtime closure, broad accessibility,
+  production-scale and repeated backend-concurrency qualification are not claimed.
+
 ## 1.5.0 — 2026-10-27 (build 82)
 
 - Withhold REPORT and declared field-input bindings when local/private source

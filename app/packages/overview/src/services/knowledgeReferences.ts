@@ -152,6 +152,12 @@ export function buildKnowledgeReferenceMatcher(objects: ContentObject[], visibil
         };
         for (const reference of parsed.references) {
             if (!['event_type', 'tag_binding'].includes(reference.targetType)) { result.references.push(reference); continue; }
+            if (reference.resolutionUncertain) {
+                // A workflow with runtime-inherited context is not made certain
+                // merely because its declaring app has a same-named definition.
+                gap(reference, 'The invocation context for this named knowledge reference is unverified.');
+                add(reference); continue;
+            }
             if (count >= KNOWLEDGE_MATCH_LIMIT || remaining <= 0) {
                 gap(reference, `Event-type/tag matching reached its safety limit (${KNOWLEDGE_MATCH_LIMIT} per source / ${KNOWLEDGE_SCAN_EDGE_LIMIT} per scan); additional bindings remain unverified.`);
                 continue;

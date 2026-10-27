@@ -65,7 +65,8 @@ export interface InUseReport {
 const implicitGaps = [
     'This is a supported shared static dependency footprint, not a complete migration manifest or proof that excluded objects are unused.',
     'Shared event types and distinct tag assignments have bounded literal-reference coverage. Implicit classification, wildcard names, encoded tag values, system inheritance and invoking-app contexts are not exhaustively resolved.',
-    'Field extractions, aliases, calculated fields and transforms have bounded declared-metadata coverage. Potential field paths respect extraction → alias → parallel calculated fields → lookup. Supported capture declarations do not prove regex validity, matches or field availability; dynamic outputs, cross-scope precedence and chaining remain unverified. Workflow actions and navigation menus are outside inventory.',
+    'Field extractions, aliases, calculated fields and transforms have bounded declared-metadata coverage. Potential field paths respect extraction → alias → parallel calculated fields → lookup. Supported capture declarations do not prove regex validity, matches or field availability; dynamic outputs, cross-scope precedence and chaining remain unverified.',
+    'Navigation menus and workflow actions have bounded literal internal-target and static search coverage. Dynamic menu lists, field tokens, runtime-inherited namespaces/views, built-in inheritance, external links and query/fragment bodies remain unverified; configured interactions are not observed activity.',
     'Automatic props lookup rules and exact-selector caller matches cover only part of search-time props. Patterns, precedence, renames, field availability and inherited invocation contexts remain unverified; potential paths do not establish execution.',
     'Ad-hoc searches, private content, dynamic SPL/tokens and external consumers may require additional objects.',
     'App-containment and ownership links are metadata, not dependency closure. Retaining an app is not an app-wide retain rule.',
@@ -93,6 +94,9 @@ export function buildInUseReport(
     }
     if (!['field_extractions', 'field_aliases', 'calculated_fields', 'field_transforms'].every(collector => Object.prototype.hasOwnProperty.call(snapshot.scan.collectorCounts, collector))) {
         gaps.add('This snapshot predates field-lineage collection. Run a new complete scan; absence of these paths does not establish that a field definition is unused.');
+    }
+    if (!['workflow_actions', 'navigation'].every(collector => Object.prototype.hasOwnProperty.call(snapshot.scan.collectorCounts, collector))) {
+        gaps.add('This snapshot predates workflow/navigation collection. Run a new complete scan; existing decisions and policy history remain unchanged.');
     }
     const maxObjects = Math.max(1, options.maxObjects ?? 50000);
     const maxEdges = Math.max(1, options.maxEdges ?? 250000);

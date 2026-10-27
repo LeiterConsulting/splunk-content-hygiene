@@ -3,7 +3,7 @@ import { ParserCoverageGap, ReferenceTarget } from './dependencyParser';
 import { evidenceDigest } from './evidenceDigest';
 import { tagBindingIdentity } from './knowledgeReferences';
 
-export const SHARED_STATIC_POLICY = 'shared-static-v4' as const;
+export const SHARED_STATIC_POLICY = 'shared-static-v5' as const;
 
 export interface SourceCoverageGap extends ParserCoverageGap {
     sourceId: string;
@@ -19,9 +19,9 @@ export interface CoverageContext {
 }
 const fieldSources = ['field_extractions', 'field_aliases', 'calculated_fields', 'field_transforms'];
 const targets: ReferenceTarget[] = ['macro', 'lookup', 'lookup_file', 'saved_search', 'data_model', 'index', 'sourcetype', 'automatic_lookup', 'event_type', 'tag_binding',
-    'field_extraction', 'field_alias', 'calculated_field', 'field_transform'];
-const searchableSources = ['saved_searches', 'macros', 'dashboards', 'data_models', 'event_types'];
-const contentCollectors = [...searchableSources, ...fieldSources, 'lookup_definitions', 'lookup_files', 'indexes', 'sourcetypes', 'automatic_lookups', 'tag_bindings'];
+    'field_extraction', 'field_alias', 'calculated_field', 'field_transform', 'app', 'dashboard'];
+const searchableSources = ['saved_searches', 'macros', 'dashboards', 'data_models', 'event_types', 'workflow_actions'];
+const contentCollectors = [...searchableSources, ...fieldSources, 'lookup_definitions', 'lookup_files', 'indexes', 'sourcetypes', 'automatic_lookups', 'tag_bindings', 'navigation'];
 
 export function referenceTarget(object: ContentObject): ReferenceTarget | null {
     const values: Record<string, ReferenceTarget> = {
@@ -32,6 +32,7 @@ export function referenceTarget(object: ContentObject): ReferenceTarget | null {
         'Event Type': 'event_type', 'Tag Binding': 'tag_binding',
         'Field Extraction': 'field_extraction', 'Field Alias': 'field_alias',
         'Calculated Field': 'calculated_field', 'Field Transform': 'field_transform',
+        App: 'app', Dashboard: 'dashboard',
     };
     return values[object.objectType] ?? null;
 }
@@ -134,16 +135,22 @@ export function buildCoverageResolver(context: CoverageContext): (
             const examples = [...generic.examples, ...(named?.examples ?? []), ...(invokingNamed?.examples ?? [])];
             let required: string[] = [];
             if (object.objectType === 'App') { required = contentCollectors; }
+            else if (type === 'dashboard') { required = ['navigation', 'workflow_actions']; }
             else if (type) { required = [...searchableSources.filter(collector => type !== 'tag_binding' || collector !== 'event_types'),
                 ...(type === 'lookup_file' ? ['lookup_definitions'] : []),
+                ...(type === 'saved_search' ? ['navigation'] : []),
                 ...(type === 'lookup' ? ['automatic_lookups', 'calculated_fields'] : []),
                 ...(['field_extraction', 'field_alias', 'calculated_field', 'field_transform'].includes(type) ? [...fieldSources, 'automatic_lookups'] : []),
                 ...(type === 'event_type' ? ['tag_bindings'] : [])]; }
             const missing = required.filter((collector) => context.collectors[collector] !== true);
             const reasons: string[] = [];
             if (!type && object.objectType !== 'App') {
-                reasons.push('Incoming navigation links and external callers are outside the supported static target model.');
+                reasons.push(object.objectType === 'Workflow Action'
+                    ? 'Event-menu applicability, field availability and custom/external workflow invocation are not established by configuration.'
+                    : 'Custom interaction links and external callers are outside the supported static target model.');
             }
+            if (type === 'dashboard') { reasons.push('Only supported literal navigation/workflow targets are mapped. Built-in/inherited views, dynamic routes and external/embedded links can add callers.'); }
+            if (type === 'app') { reasons.push('Only supported literal app destinations are mapped. Runtime-inherited namespaces, custom launchers and external interactions can add callers.'); }
             if (type === 'automatic_lookup') {
                 reasons.push('Automatic lookup callers are conditional. Implicit/wildcard event domains, props precedence, renames and inherited invocation namespaces are not exhaustively mapped.');
             }
