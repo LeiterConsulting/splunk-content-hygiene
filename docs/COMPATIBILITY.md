@@ -27,9 +27,72 @@ the minimum is not a recommendation to downgrade or remain on an old patch.
 
 | Runtime | Purpose | Current evidence |
 | --- | --- | --- |
-| 10.2.5 | Exact minimum; classic navigation; coordinator and reported regressions | App 1.8.0 build 93: isolated Linux VM at 1280 × 720; fresh bounded/full scans, props/cross-stanza native/cache/schema parity, all seven pages in Light/Dark, keyboard caller/context checks, actual exports and empty Library checks |
-| 10.2.8 | Representative 10.2 maintenance release and real-estate regression | App 1.8.0 build 93 at 1434 × 940: fresh scans, native/cache/schema parity, all seven pages in Light/Dark, props/cross-stanza investigations, keyboard caller/context checks and preserved Library evidence/exports |
-| 10.4.4 | Modern navigation, current theme host, and newer bundled runtime | App 1.8.0 build 93 at 1434 × 940: fresh scans, native/cache/schema parity, all seven pages in Light/Dark, props/cross-stanza investigations, keyboard caller/context checks and empty Library checks; original decisions unchanged |
+| 10.2.5 | Exact minimum; classic navigation; coordinator and reported regressions | App 1.9.0 build 94: isolated Linux VM at 1280 × 720; fresh bounded/full scans, native/cache/schema and caller-edge replay, all seven pages in Light/Dark, keyboard/context checks, actual exports and empty Library checks; emulated readiness recoveries documented below |
+| 10.2.8 | Representative 10.2 maintenance release and real-estate regression | App 1.9.0 build 94 at 1434 × 940: fresh scans and replay, all seven pages in Light/Dark, real pattern-declaration details, keyboard/context checks and preserved Library evidence/exports |
+| 10.4.4 | Modern navigation, current theme host, and newer bundled runtime | App 1.9.0 build 94 at 1434 × 940: fresh scans and replay, all seven pages in Light/Dark, keyboard/context checks, actual exports and empty Library checks; original decisions unchanged |
+
+### 1.9.0 bounded pattern/default qualification
+
+The exact build 94 archive was installed on all three runtimes without shared
+restarts. Bounded scans retain the previous full baseline. Fresh complete scans,
+GET-only native rule/merged reads, source-hashed offline caller-edge replay and
+cache comparisons agree on supported identities, field facts, actual selector
+locations, context/conditional-order evidence and counters. Real object, edge
+and scan records pass all 11 published schemas; no customer searches or PCRE are
+executed to manufacture a matching witness.
+
+There are 103 accepted native captures across all seven pages in Light/Dark,
+including object/relationship details, filters, pagination, real pattern labels,
+status menus, keyboard caller navigation, focus restoration and rapid Escape
+during opening animation. At the viewports above, measured surfaces have no
+document/detail horizontal overflow, graph-label overlap or dialog-control
+overflow. Sampled active text/links have contrast of at least 5.78:1. Props links
+remain native, underlined Splunk UI controls. The new scope labels and budget
+qualifications wrap, remain selectable and do not require a new native read on
+navigation. These are bounded desktop checks, not comprehensive accessibility
+or production-scale certification.
+
+All 29 JSON and 27 paired CSV downloads were independently compared against the
+fresh cache, including original review stages, notes, assignees and captured
+baselines, compact facts/provenance, partial scope and removal blockers. Original
+review/revision and policy-journal hashes are unchanged. Native appearance
+choices are restored. No customer content was changed; no new reviews/policies/
+accounts or shared restarts were used for qualification. Existing coordinator readiness is
+confirmed; earlier permission/concurrency qualification remains separate below.
+
+The catalogs include 24 supported pattern declarations on the representative
+maintenance runtime, with zero compatible captured callers and budget-limited
+native contexts shown explicitly unverified. None of the three shared catalogs
+exposes a default declaration. Positive pattern/default caller ordering,
+priority/ASCII collisions, shadowing and props-specific Library cases have
+adversarial automated contracts, not synthetic native content. No captured
+pattern caller or default is not proof that runtime consumers/defaults are absent.
+
+The emulated minimum-runtime startup wrapper expired while waiting for Web after
+the daemon started; a fresh native readiness check then passed on the same
+disk/authentication without restarting/resetting the guest. Three Dark initial-
+navigation readiness waits also expired. Fresh exact page/root checks and the
+complete assertions subsequently passed; navigation and verification were
+separated, with no production timeout, code or assertion changed. No app browser
+errors were recorded. Those retained recoveries are not a claim of production
+timing performance or a zero-timeout emulated run.
+
+The frozen archive passes 1,024 checks: 977 overview, 16 native-host, 22 backend
+and nine archive-policy checks, with no failing/skipped cases. Lint, style,
+types, branding, build and the metadata-free portable 70-entry package pass.
+Pre-cert AppInspect 4.3.1 has zero errors/failures/future failures, three reviewed
+advisories and one missing-manifest skip. Trusted-library checking uses the
+existing cache; existing bundle-size advisories remain. This is not Cloud
+certification. Public screenshots contain only reviewed built-in metadata, with
+private host chrome excluded; raw validation reports remain private.
+
+This is a bounded shared static scope extension, not full effective props.
+Arbitrary PCRE/modifiers, Windows/encoded/non-ASCII scopes, private/system/file
+layers, cross-pattern producer joins, sourcetype rewrites, runtime field
+availability/activation/execution and dynamic/external/ad-hoc consumers remain
+unverified. Every lower/default/shadowed possible path stays in the graph.
+`shared-static-v8` preserves v1–v7 baselines and requires explicit re-review,
+never a silent reaffirmation or removal approval. Follow-up #8 remains open.
 
 ### 1.8.0 conditional cross-stanza qualification
 

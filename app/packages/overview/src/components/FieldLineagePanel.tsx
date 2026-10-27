@@ -4,6 +4,7 @@ import { DefinitionList, EvidenceList, InlineNotice, SmallText } from '../AppSty
 import { ContentObject, ExtractionOutputProvenance, FieldDependencyProvenance } from '../types';
 import { PropsContextPanel } from './PropsContextPanel';
 import { CrossStanzaPropsPanel } from './CrossStanzaPropsPanel';
+import { propsScopeLabel } from '../services/propsPatterns';
 
 const outputMethods: Record<ExtractionOutputProvenance['method'], string> = {
     inline_named_captures: 'Inline named captures', transform_named_captures: 'Transform named captures',
@@ -43,7 +44,7 @@ export function FieldLineagePanel({ object }: { object: ContentObject }): React.
         {facts.operation !== 'transform' ? <CrossStanzaPropsPanel key={`cross-${object.objectId}`} rows={facts.crossStanzaProps} truncated={facts.crossStanzaPropsTruncated} /> : null}
         <DefinitionList>
             <dt>Processing phase</dt><dd>{phases[facts.operation]}</dd>
-            <dt>Event scope</dt><dd>{facts.scope ? `${facts.scope.field}=${facts.scope.value}${facts.scope.exact ? ' · exact literal scope' : ' · pattern/default/encoded scope not evaluated'}` : 'Not independently established'}</dd>
+            <dt>Event scope</dt><dd>{propsScopeLabel(facts.scope)}</dd>
             <dt>Enabled state</dt><dd>{enabledLabel}</dd>
             <dt>Supported syntax</dt><dd>{facts.syntax}</dd>
             <dt>Declared inputs</dt><dd><FieldNames names={facts.inputs} label="input names" /></dd>
@@ -94,7 +95,7 @@ export function FieldProvenanceDetails({ provenance }: { provenance?: FieldDepen
         <DefinitionList>
             <dt>Declared fields</dt><dd>{provenance.fields.join(', ') || 'Scope/configuration binding only—not proven field consumption'}</dd>
             <dt>Dependency phases</dt><dd>{phases}</dd>
-            <dt>Scope</dt><dd>{provenance.scope ? `${provenance.scope.field}=${provenance.scope.value}` : 'Not established independently'}</dd>
+            <dt>Scope</dt><dd>{propsScopeLabel(provenance.scope)}</dd>
             {provenance.transformPositions.length ? <><dt>REPORT positions</dt><dd>{provenance.transformPositions.join(', ')} (one-based)</dd></> : null}
             {provenance.viaObjectIds.length ? <><dt>Transform provenance</dt><dd>{provenance.viaObjectIds.join('; ')}</dd></> : null}
             <dt>Namespace</dt><dd>{provenance.contextApps.join(', ')} · {provenance.invocation === 'fixed_app' ? 'fixed caller app' : 'possible invoking app, unverified at runtime'}</dd>
@@ -104,7 +105,7 @@ export function FieldProvenanceDetails({ provenance }: { provenance?: FieldDepen
                     <EvidenceList aria-label="Possible configuration contexts">{provenance.contexts.map(row => <li key={JSON.stringify(row)}>
                         <strong>Invoking app: {row.invokingApp}</strong>
                         <SmallText>Source: {row.declaringApp} · {row.declaration.replace(/_/g, ' ')}. Dependency: {row.dependencyApp ?? 'not resolved'} · {row.dependency.replace(/_/g, ' ')}.</SmallText>
-                        {row.selector ? <SmallText>Original selector: {row.selector.field}={row.selector.value} · {row.selector.sourceLocation}. Case-insensitive literal comparison; native identities are unchanged.</SmallText> : null}
+                        {row.selector ? <SmallText>Original selector: {row.selector.field}={row.selector.value} · {row.selector.sourceLocation}. Potential scope match only; case-sensitive source/sourcetype possibilities and native identities remain distinct.</SmallText> : null}
                     </li>)}</EvidenceList>
                 </CollapsiblePanel>
             </dd></> : <><dt>Configuration contexts</dt><dd>Not recorded by this snapshot. Run a complete scan to collect context evidence.</dd></>}

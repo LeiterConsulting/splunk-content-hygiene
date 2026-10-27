@@ -242,7 +242,7 @@ test('native interaction catalogs persist exact identities and source locations 
     const publicCache = JSON.stringify([...collections.get('ch_objects')!.values(), ...collections.get('ch_edges')!.values()]);
     expect(publicCache).not.toMatch(/private-query-marker|private-search-marker|hidden-private-navigation|<nav>|savedsearch Daily/);
     const cached = await splunkInventoryClient.getLatestSnapshot();
-    expect(cached?.edges).toEqual(result.edges); expect(cached?.objects.find(row => row.objectId === nav.objectId)?.reviewEvidence?.coverage?.policy).toBe('shared-static-v7');
+    expect(cached?.edges).toEqual(result.edges); expect(cached?.objects.find(row => row.objectId === nav.objectId)?.reviewEvidence?.coverage?.policy).toBe('shared-static-v8');
     expect([...collections.get('ch_reviews')!.values()]).toEqual([original]);
     expect([...collections.get('ch_app_policy_revisions')!.values()]).toEqual([policy]);
     expect(requests.filter(row => row.method !== 'GET').every(row => row.path.includes('/storage/collections/data/') && !/\/ch_(?:review|app_policy)/.test(row.path))).toBe(true);
@@ -318,7 +318,7 @@ test('native field catalogs persist compact facts and exact edge provenance with
     expect(stored).not.toContain('private_literal_must_not_be_cached');
     expect(stored).not.toContain('coalesce(');
     expect(stored).not.toContain('actor::$1');
-    expect(result.objects.find(row => row.objectType === 'Calculated Field')?.reviewEvidence?.coverage?.policy).toBe('shared-static-v7');
+    expect(result.objects.find(row => row.objectType === 'Calculated Field')?.reviewEvidence?.coverage?.policy).toBe('shared-static-v8');
     expect([...collections.get('ch_reviews')!.values()]).toEqual([original]);
     expect(requests.filter(row => row.method !== 'GET').every(row => row.path.includes('/storage/collections/data/') && !/\/ch_review/.test(row.path))).toBe(true);
 });
@@ -343,7 +343,7 @@ test.each(['inline', 'transform'] as const)('%s output provenance survives colle
     const edge = result.edges.find(row => row.relation === 'may_read_extracted_field')!;
     expect(edge.fieldProvenance?.outputDeclarations).toMatchObject([{ field: 'actor', objectId: nativeOrigin.objectId, capture: 2, offset: 8 }]);
     expect([...collections.get('ch_edges')!.values()].find(row => row.relation === edge.relation)).toMatchObject({ field_provenance: edge.fieldProvenance });
-    expect(result.scan.collectorVersions).toMatchObject({ field_lineage: '1.2.0', dependency_analysis: '1.8.0', interaction_dependencies: '1.0.1', props_precedence: '1.0.0', props_cross_stanza: '1.0.0' });
+    expect(result.scan.collectorVersions).toMatchObject({ field_lineage: '1.2.0', dependency_analysis: '1.9.0', interaction_dependencies: '1.0.1', props_precedence: '1.0.0', props_cross_stanza: '1.0.0', props_patterns: '1.0.0' });
     const cached = await splunkInventoryClient.getLatestSnapshot();
     expect(cached?.objects.find(row => row.objectId === nativeOrigin.objectId)?.fieldLineage).toEqual(nativeOrigin.fieldLineage);
     expect(cached?.edges.find(row => row.edgeId === edge.edgeId)?.fieldProvenance).toEqual(edge.fieldProvenance);

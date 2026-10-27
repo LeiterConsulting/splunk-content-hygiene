@@ -2,20 +2,14 @@
 import { ContentObject, FieldContextEvidence, LookupMappingFacts } from '../types';
 import { AutomaticLookupRule, EventSelector, ParsedReference, ParsedSource } from './dependencyParser';
 import type { FieldVisibility } from './fieldDependencies';
+import { compilePropsPattern, createPropsPatternIndex, matchPropsPattern, PROPS_PATTERN_SCAN_WORK, PROPS_PATTERN_SOURCE_WORK } from './propsPatterns';
 
 export const AUTOMATIC_MATCH_LIMIT = 250;
 export const AUTOMATIC_SCAN_EDGE_LIMIT = 50000;
 export const AUTOMATIC_CANDIDATE_VISIT_LIMIT = 100000;
 export const AUTOMATIC_SOURCE_VISIT_LIMIT = 5000;
 export const AUTOMATIC_APPLICABILITY_LIMITATION =
-    'Automatic lookup caller links are potential matches of positive exact event selectors, not observed execution. Wildcard/implicit scopes, props precedence, sourcetype renames, field availability and runtime invocation context remain unverified.';
-
-const exactScope = (value: string): boolean => Boolean(value) &&
-    !/[$*+?()[\]{}|^\\]/.test(value) && !value.includes('...');
-// Ordinary SPL search field values are case-insensitive. Props identities are
-// unchanged; case variants are separate possible rules, not merged identities.
-const scopeKey = (field: EventSelector['field'], value: string): string =>
-    `${field}\0${value.toLowerCase()}`;
+    'Automatic lookup caller links are potential matches of positive exact event selectors against literal, bounded * / ... patterns or captured default fallbacks, not observed execution. Unsupported patterns, complete props precedence, sourcetype renames, field availability and runtime invocation context remain unverified.';
 
 /** Native LOOKUP mappings contain field names, not executable expressions. */
 export function automaticLookupMapping(declaration: string): LookupMappingFacts | null {
@@ -100,7 +94,7 @@ export function parseAutomaticLookup(text: string, sourceLocation: string): Pars
     }
     const mapping = firstName === transform ? automaticLookupMapping(declaration) : null;
     const rule: AutomaticLookupRule = { stanza, attribute, transform, scopeField, scopeValue,
-        exactScope: exactScope(scopeValue) && stanza !== 'default' && !/^(?:rule|delayedrule)::/.test(stanza), disabled,
+        exactScope: compilePropsPattern({ field: scopeField, value: scopeValue, exact: false }).kind === 'literal', disabled,
         fieldInputs: mapping?.inputs.map(row => row.eventField) ?? [], fieldInputsComplete: mapping !== null,
         ...(mapping ? { fieldMapping: mapping } : {}) };
     return { warnings: [], gaps: [], automaticLookup: rule, references: disabled ? [] : [{
@@ -116,7 +110,8 @@ export function buildAutomaticLookupMatcher(rules: IndexedRule[], objects: Conte
     callers: (object: ContentObject, parsed: ParsedSource) => ParsedSource;
     bindings: (object: ContentObject, parsed: ParsedSource) => ParsedSource;
 } {
-    const scopes = new Map<string, IndexedRule[]>();
+    const scopes = createPropsPatternIndex<IndexedRule>();
+    const patternWork = { remaining: PROPS_PATTERN_SCAN_WORK };
     const definitions = new Map<string, Set<string>>();
     const definitionContexts = new Map<string, string[]>();
     const identities = new Set(objects.filter(row => row.objectType === 'Automatic Lookup').map(row => `${row.app}\0${row.canonicalName}`));
@@ -129,12 +124,10 @@ export function buildAutomaticLookupMatcher(rules: IndexedRule[], objects: Conte
         !(catalog.visibility?.privateTargets ? privateNames.has(`${app}\0${object.canonicalName}`) : privateApps.has(app));
     let remaining = AUTOMATIC_SCAN_EDGE_LIMIT;
     let visitsRemaining = AUTOMATIC_CANDIDATE_VISIT_LIMIT;
-    rules.filter(({ rule }) => rule.exactScope && !rule.disabled).forEach((item) => {
+    rules.filter(({ rule }) => !rule.disabled).sort((a, b) => a.object.canonicalName.localeCompare(b.object.canonicalName) || a.object.objectId.localeCompare(b.object.objectId)).forEach((item) => {
         if (!['app', 'global'].includes(item.object.sharing ?? '')) { return; }
-        const key = `${scopeKey(item.rule.scopeField, item.rule.scopeValue)}\0${item.object.sharing === 'global' ? '*' : item.object.app}`;
-        const list = scopes.get(key) ?? []; list.push(item); scopes.set(key, list);
+        scopes.add({ field: item.rule.scopeField, value: item.rule.scopeValue, exact: item.rule.exactScope }, item.object.app, item.object.sharing === 'global', item);
     });
-    scopes.forEach((list) => list.sort((a, b) => a.object.canonicalName.localeCompare(b.object.canonicalName) || a.object.objectId.localeCompare(b.object.objectId)));
     objects.filter((object) => object.objectType === 'Lookup Definition' && ['app', 'global'].includes(object.sharing ?? '')).forEach((object) => {
         const list = definitions.get(object.canonicalName) ?? new Set<string>(); list.add(object.app); definitions.set(object.canonicalName, list);
     });
@@ -160,29 +153,35 @@ export function buildAutomaticLookupMatcher(rules: IndexedRule[], objects: Conte
             const seen = new Set<string>();
             let count = 0;
             let visits = 0;
+            const sourceWork = { remaining: PROPS_PATTERN_SOURCE_WORK };
             for (const selector of parsed.eventSelectors ?? []) {
-                const key = scopeKey(selector.field, selector.value);
                 // Do not copy a potentially large bucket, or let repeated/withheld
                 // candidates evade the work budget merely because no edge emits.
-                for (const candidates of [scopes.get(`${key}\0${object.app}`) ?? [], scopes.get(`${key}\0*`) ?? []]) {
-                    for (const { object: candidate, rule } of candidates) {
+                for (const { item: { object: candidate, rule }, pattern } of scopes.candidates(selector, object.app)) {
                         if (visits >= AUTOMATIC_SOURCE_VISIT_LIMIT || visitsRemaining <= 0) {
                             limited(result, 'Automatic lookup caller candidate-visit budget reached; additional possible dependencies remain unverified.', 'automatic_lookup');
                             return result;
                         }
                         visits += 1; visitsRemaining -= 1;
-                        if (seen.has(candidate.canonicalName)) { continue; }
-                        seen.add(candidate.canonicalName);
+                        const matched = matchPropsPattern(pattern, selector, [sourceWork, patternWork]);
+                        if (matched === 'budget') { limited(result, 'Automatic lookup pattern-work budget reached; additional possible dependencies remain unverified.', 'automatic_lookup'); return result; }
+                        if (!['match', 'case_ambiguous'].includes(matched)) { continue; }
+                        if (!sourceAvailable(candidate, object.app)) { limited(result, 'Local, private or omitted automatic lookup declarations can override this source; no shared caller binding is guessed for this context.', 'automatic_lookup'); continue; }
+                        const identity = `${candidate.canonicalName}\0${selector.sourceLocation}`;
+                        if (seen.has(identity)) { continue; }
+                        seen.add(identity);
                         if (count >= AUTOMATIC_MATCH_LIMIT || remaining <= 0) {
                             limited(result, `Automatic lookup caller matching reached a safety limit (${AUTOMATIC_MATCH_LIMIT} per object / ${AUTOMATIC_SCAN_EDGE_LIMIT} per scan); additional possible dependencies are omitted.`, 'automatic_lookup');
                             return result;
                         }
-                        result.references.push({ targetType: 'automatic_lookup', targetName: candidate.canonicalName,
+                        result.references.push({ targetType: 'automatic_lookup', targetName: candidate.canonicalName, targetObjectId: candidate.objectId,
                             relation: 'may_apply_automatic_lookup', confidence: 'medium',
-                            evidence: `Potential automatic lookup: positive ${selector.field}=${selector.value} matches props.conf [${rule.stanza}] ${rule.attribute}. This does not establish field availability, precedence or actual execution.`,
+                            evidence: `Potential automatic lookup: positive ${selector.field}=${selector.value} has a ${pattern.kind === 'default' ? 'captured default fallback' : `${pattern.kind} scope possibility`} in props.conf [${rule.stanza}] ${rule.attribute}. This does not establish field availability, effective precedence or actual execution.`,
+                            fieldProvenance: { version: 1, kind: 'event_scope', fields: [], scope: { field: rule.scopeField, value: rule.scopeValue, exact: rule.exactScope },
+                                consumerPhase: null, producerPhase: 'lookup', transformPositions: [], viaObjectIds: [], contextApps: [object.app], invocation: 'fixed_app',
+                                contexts: [fieldContext(object, candidate, object.app, selector)] },
                             sourceLocation: selector.sourceLocation });
                         count += 1; remaining -= 1;
-                    }
                 }
             }
             return result;

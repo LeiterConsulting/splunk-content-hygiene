@@ -1,5 +1,34 @@
 # Changelog
 
+## 1.9.0 — 2026-10-27 (build 94)
+
+- Add bounded whole-name props caller matching for literal ASCII, `*` and `...`,
+  plus explicitly captured shared default fallbacks. Never execute customer PCRE,
+  SPL, EVAL, lookup rows or event sampling; unsupported scopes remain unknown.
+- Index literal prefixes and namespaces, and bound candidate visits, pattern
+  length, selector length and dynamic-programming character work. Failed matches
+  consume work; exhaustion creates a gap rather than an absence assertion.
+- Extend existing native stanza cross-checks and conditional same-attribute
+  ordering without increasing REST budgets or adding privileges/exposures.
+  Literal/pattern priority defaults are 100/0; specific stanzas precede defaults.
+  Retain all lower, default and shadowed potential removal-fallback paths.
+- Explain supported patterns, default fallbacks and unsupported scopes in
+  Explorer, relationship details and Review Library, with unchanged Splunk UI
+  controls, themes, keyboard access, wrapping, filtering and pagination.
+- Carry compact evidence through impact, required-content reports, freshness and
+  CSV/JSON. New `shared-static-v8` scans preserve decisions, history and v1–v7
+  baselines byte-for-byte. Pattern/default field-producer joins are not inferred.
+- Pass 1,024 automated checks, lint/style/types/build/portable package gates and
+  pre-cert AppInspect with zero errors/failures (three reviewed advisories, one
+  manifest skip). Fresh native/cache/schema replay, all seven pages in Light/Dark,
+  103 accepted captures and 29 JSON / 27 paired CSV downloads cover Enterprise
+  10.2.5, 10.2.8 and 10.4.4. Preserve original decisions/journals/preferences.
+- Document 24 real pattern declarations without a positive caller/default witness,
+  automated-only positive/props-Library cases and emulated readiness recoveries.
+  No customer objects were changed; no new reviews/policies/accounts or shared
+  restarts were used.
+
+
 ## 1.8.0 — 2026-10-27 (build 93)
 
 - Add bounded, conditional cross-stanza props ordering for identical attributes

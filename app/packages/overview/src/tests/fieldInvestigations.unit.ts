@@ -42,7 +42,7 @@ test.each(['shared-static-v1', 'shared-static-v2', 'shared-static-v3', 'shared-s
     saved.evidenceBaseline!.evidence.coverage!.policy = policy;
     const original = JSON.stringify(saved);
     expect(parseReviewBaseline(saved.evidenceBaseline)).not.toBeNull();
-    expect(calculated.reviewEvidence?.coverage?.policy).toBe('shared-static-v7');
+    expect(calculated.reviewEvidence?.coverage?.policy).toBe('shared-static-v8');
     expect(compareReviewEvidence(saved, calculated, data.scan, now)).toMatchObject({ status: 'needs_review',
         reasons: expect.arrayContaining([expect.stringContaining('coverage policy expanded')]) });
     expect(JSON.stringify(saved)).toBe(original);

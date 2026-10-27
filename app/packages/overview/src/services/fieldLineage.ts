@@ -4,6 +4,7 @@ import { ExtractionOutputProvenance, FieldAliasMapping, FieldContextEvidence, Fi
 import { inlineExtractionDeclarations, namedCaptureDeclarations } from './extractionDeclarations';
 import { readPropsContexts } from './propsEvidence';
 import { readCrossStanzaProps } from './crossStanzaEvidence';
+import { propsScopeLabel } from './propsPatterns';
 
 export type { FieldAliasMapping, FieldScope } from '../types';
 
@@ -39,7 +40,7 @@ export function fieldLineageFacts(definition: FieldLineageDefinition, issues: Ca
         ...(definition.outputProvenance ? { outputProvenance: definition.outputProvenance } : {}),
         sourceLocation: definition.sourceLocation, limitations: [...new Set([...issues.map(issue => issue.message),
             ...(definition.enabled === null ? ['Native metadata does not establish enabled state; configured applicability is potential.'] : []),
-            ...(definition.scope && !definition.scope.exact ? ['Pattern, default, rule or encoded props scopes are not evaluated by the exact-scope matcher.'] : [])])] };
+            ...(definition.scope && !definition.scope.exact ? [`Props caller scope: ${propsScopeLabel(definition.scope)}. No cross-pattern field-producer join is inferred.`] : [])])] };
 }
 
 /** Treat old/invalid compact cache values as unavailable, never as field proof. */

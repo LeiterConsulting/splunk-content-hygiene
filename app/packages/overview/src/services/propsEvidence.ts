@@ -11,11 +11,11 @@ export const propsReasonLabels: Record<PropsContextEvidence['reason'], string> =
     access_denied: 'Native read access was denied; no broader permissions were requested.',
     snapshot_changed: 'Native values or access metadata differ from the captured scan. Run a new complete scan before relying on this context.',
     metadata_mismatch: 'The handlers, namespace, identity or shared visibility do not agree. No winning declaration is inferred.',
-    unsupported_scope: 'Pattern, default, encoded or unsupported props scope; effective inheritance is not inferred.',
+    unsupported_scope: 'Unsupported PCRE, modifier, escaped, encoded, non-ASCII or oversized props scope; effective inheritance is not inferred.',
     budget: 'The bounded context-check budget was reached. This context remains unverified.',
     request_failed: 'A native metadata read failed. No shared binding is inferred.',
 };
-export const PROPS_CONTEXT_LIMITATION = 'Shared exact-stanza observation only, in the nobody/app REST namespace. It does not establish per-file local/default origin, user/private or system inheritance, cross-stanza source/host/sourcetype priority, field availability, activation in memory or runtime execution. Sequential reads are not an atomic configuration transaction. Shadowed paths are retained because removing an override can expose a fallback.';
+export const PROPS_CONTEXT_LIMITATION = 'Shared stanza observation only, in the nobody/app REST namespace, including supported literal, bounded * / ... pattern and captured default stanzas. It does not establish per-file local/default origin, user/private or system inheritance, complete cross-stanza priority, field availability, activation in memory or runtime execution. Sequential reads are not an atomic configuration transaction. Shadowed and default paths are retained because removing an override can expose a fallback.';
 const name = (value: unknown, max = 16384): value is string => typeof value === 'string' && value.length > 0 && value.length <= max &&
     value.trim() === value && !Array.from(value).some(character => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127);
 export function readPropsContexts(value: unknown): PropsContextEvidence[] | undefined {

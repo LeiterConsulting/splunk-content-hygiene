@@ -1,13 +1,14 @@
 /* eslint-disable no-restricted-syntax, no-continue -- Indexed matching exits at explicit build, per-source and whole-scan budgets. */
 import { ContentObject, FieldDependencyProvenance, FieldLineageFacts, FieldPhase, FieldScope, ProducerOutputDeclaration } from '../types';
 import { ParsedReference, ParsedSource, ReferenceTarget } from './dependencyParser';
+import { createPropsPatternIndex, matchPropsPattern, PROPS_PATTERN_SCAN_WORK, PROPS_PATTERN_SOURCE_WORK } from './propsPatterns';
 
 export const FIELD_MATCH_LIMIT = 250;
 export const FIELD_SCAN_EDGE_LIMIT = 50000;
 export const FIELD_INDEX_ENTRY_LIMIT = 50000;
 export const FIELD_CANDIDATE_VISIT_LIMIT = 100000;
 export const FIELD_SOURCE_VISIT_LIMIT = 5000;
-export const FIELD_LINEAGE_LIMITATION = 'Declared field paths are potential search-time dependencies, not proof a regex matched, a field exists, a declaration executes or a particular props override wins. Cross-scope precedence, wildcard/default rules, private/system inheritance and external consumers remain unverified.';
+export const FIELD_LINEAGE_LIMITATION = 'Declared field paths are potential search-time dependencies, not proof a regex matched, a field exists, a declaration executes or a particular props override wins. Caller matching includes bounded * / ... patterns and captured default fallbacks; unsupported patterns, full effective precedence, private/system inheritance and external consumers remain unverified. Pattern/default field-producer joins are not inferred.';
 export const FIELD_SOURCE_CONTEXT_LIMITATION = 'Invoking-app context cannot establish this source declaration because local, private or omitted field configuration may override it. No shared binding is guessed for that context.';
 export const FIELD_TARGETS: ReferenceTarget[] = ['field_extraction', 'field_alias', 'calculated_field', 'field_transform'];
 export interface FieldVisibility {
@@ -49,7 +50,8 @@ function* candidates<T>(index: ScopedIndex<T>, key: string, app: string, reusabl
 export function buildFieldDependencyMatcher(objects: ContentObject[], catalogComplete: boolean, visibility?: FieldVisibility):
     (object: ContentObject, parsed: ParsedSource) => ParsedSource {
     const transforms: ScopedIndex<Candidate> = new Map();
-    const scoped: ScopedIndex<Candidate> = new Map();
+    const scoped = createPropsPatternIndex<Candidate>();
+    const patternWork = { remaining: PROPS_PATTERN_SCAN_WORK };
     const producers: ScopedIndex<Producer> = new Map();
     const localIdentities = new Set<string>();
     const bindings = new Map<string, Binding[]>();
@@ -71,8 +73,8 @@ export function buildFieldDependencyMatcher(objects: ContentObject[], catalogCom
         localIdentities.add(`${item.object.app}\0${item.object.objectType}\0${item.object.canonicalName}`);
         if (item.facts.operation === 'transform') {
             addIndex(transforms, item.object.canonicalName, item.object.app, item.object.sharing === 'global', item);
-        } else if (item.facts.scope?.exact && item.facts.operation !== 'lookup') {
-            addIndex(scoped, scopeKey(item.facts.scope), item.object.app, item.object.sharing === 'global', item);
+        } else if (item.facts.scope && item.facts.operation !== 'lookup') {
+            scoped.add(item.facts.scope, item.object.app, item.object.sharing === 'global', item);
         }
     });
     // Search-time context applies to the source rule as well as its target.
@@ -137,6 +139,7 @@ export function buildFieldDependencyMatcher(objects: ContentObject[], catalogCom
         const result: ParsedSource = { ...parsed, references: [...parsed.references], warnings: [...parsed.warnings], gaps: [...(parsed.gaps ?? [])] };
         const own = parsed.fieldLineage;
         let count = 0; let visits = 0;
+        const sourceWork = { remaining: PROPS_PATTERN_SOURCE_WORK };
         const gap = (message: string, targets = FIELD_TARGETS): void => {
             if (!result.warnings.includes(message)) { result.warnings.push(message); }
             if (!result.gaps!.some(row => row.message === message)) { result.gaps!.push({ targets, message, sourceLocation: own?.sourceLocation ?? 'field-scope matching' }); }
@@ -239,13 +242,15 @@ export function buildFieldDependencyMatcher(objects: ContentObject[], catalogCom
             }
             const seen = new Set<string>();
             for (const selector of parsed.eventSelectors ?? []) {
-                const scope: FieldScope = { field: selector.field, value: selector.value, exact: true };
-                const possible = candidates(scoped, scopeKey(scope), object.app, false);
-                for (const candidate of possible) {
+                for (const { item: candidate, pattern } of scoped.candidates(selector, object.app)) {
                     if (!visit()) { return result; }
-                    if (seen.has(candidate.object.objectId) || privateTarget(collectorFor(candidate.object), candidate.object.canonicalName, object.app) ||
+                    const matched = matchPropsPattern(pattern, selector, [sourceWork, patternWork]);
+                    if (matched === 'budget') { gap('Field pattern-work budget reached; additional potential scope paths remain unverified.'); return result; }
+                    if (!['match', 'case_ambiguous'].includes(matched)) { continue; }
+                    const identity = `${candidate.object.objectId}\0${selector.sourceLocation}`;
+                    if (seen.has(identity) || privateTarget(collectorFor(candidate.object), candidate.object.canonicalName, object.app) ||
                         candidate.object.app !== object.app && localIdentities.has(`${object.app}\0${candidate.object.objectType}\0${candidate.object.canonicalName}`)) { continue; }
-                    seen.add(candidate.object.objectId);
+                    seen.add(identity);
                     const type = targetType(candidate.object);
                     const proof = provenance('event_scope', candidate.facts.scope, null, phase(candidate.facts), false);
                     proof.contextApps = [object.app];
@@ -257,7 +262,7 @@ export function buildFieldDependencyMatcher(objects: ContentObject[], catalogCom
                     else if (type === 'calculated_field') { relation = 'may_apply_calculated_field'; }
                     if (!add({ targetType: type, targetName: candidate.object.canonicalName, targetObjectId: candidate.object.objectId,
                         relation, confidence: 'medium', fieldProvenance: proof, sourceLocation: selector.sourceLocation,
-                        evidence: `Positive exact ${selector.field}=${selector.value} may enter this props field-processing scope. This does not establish field consumption, enabled state, precedence or runtime execution.${candidate.facts.enabled === false ? ' Declaration is disabled.' : ''}` })) { return result; }
+                        evidence: `Positive exact ${selector.field}=${selector.value} has a ${pattern.kind === 'default' ? 'captured default fallback' : `${pattern.kind} scope possibility`} in this props field-processing scope. This does not establish field consumption, enabled state, effective precedence or runtime execution.${candidate.facts.enabled === false ? ' Declaration is disabled.' : ''}` })) { return result; }
                 }
             }
         }

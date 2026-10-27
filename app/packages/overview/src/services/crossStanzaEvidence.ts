@@ -6,18 +6,18 @@ export const crossStanzaStatusLabels: Record<CrossStanzaPropsEvidence['status'],
     highest: 'Highest captured precedence (conditional)', lower: 'Lower captured precedence (possible fallback)', unverified: 'Unverified',
 };
 export const crossStanzaReasonLabels: Record<CrossStanzaPropsEvidence['reason'], string> = {
-    category: 'For the same attribute and matching event, source precedes host, then sourcetype. Numeric priority never overrides a different category.',
-    priority: 'Within the same category, the larger native numeric priority precedes the other captured literal stanza.',
-    ascii: 'Within the same category and priority, the earlier ASCII stanza name precedes the other captured literal stanza.',
-    single_stanza: 'Fewer than two distinct captured, verified literal stanzas can be compared. This is not proof that no other matching configuration exists.',
+    category: 'For the same attribute and matching event, source precedes host, then sourcetype; a specific stanza precedes a captured default fallback. Numeric priority never overrides a different category or promotes a default over a specific stanza.',
+    priority: 'Within the same category, the larger native numeric priority precedes the other captured supported stanza. Without an explicit priority, literal stanzas default to 100 and patterns to 0.',
+    ascii: 'Within the same category and priority, the earlier ASCII stanza name precedes the other captured supported stanza.',
+    single_stanza: 'Fewer than two distinct captured, verified supported stanzas can be compared. This is not proof that no other matching configuration exists.',
     no_conjunction: 'No supported single original-event selector conjunction was retained for this relationship. Unsupported syntax, separate queries, runtime expansion or parser ceilings remain unverified; independent selectors are never combined.',
     binding_unverified: 'A required native binding or priority observation is unavailable, changed, ambiguous or truncated. No highest binding is inferred.',
-    case_ambiguous: 'The selector and case-sensitive source/sourcetype spelling do not agree exactly, or literal ASCII scope is unsupported. Possible matching remains unverified.',
+    case_ambiguous: 'The selector and case-sensitive source/sourcetype match do not agree, or the bounded scope is unsupported. Possible matching remains unverified.',
     budget: 'A cross-stanza work, time, candidate or evidence-size ceiling was reached. Additional comparisons remain unverified.',
     incomplete_catalog: 'The shared props catalogs are incomplete. No highest captured binding is inferred.',
     same_stanza_shadow: 'This declaration is already shadowed within the same exact stanza/app context; it is not a separate cross-stanza winner.',
 };
-export const CROSS_STANZA_LIMITATION = 'Conditional order among captured shared exact stanzas for one declared initial-search conjunction, not full effective props or proof an event matches. Source and sourcetype matching are case-sensitive; host matching is case-insensitive. Patterns, defaults, sourcetype rewrites, private/system/file layers, field availability, runtime activation and execution remain unverified. Different attribute names are not competing settings. All possible paths remain in the graph; removing an override may expose a fallback.';
+export const CROSS_STANZA_LIMITATION = 'Conditional order among captured shared literal, bounded * / ... pattern and default stanzas for one declared initial-search conjunction, not full effective props or proof an event matches. Source and sourcetype matching are case-sensitive; host matching is case-insensitive. Unsupported PCRE/modifiers, Windows/encoded scopes, sourcetype rewrites, private/system/file layers, field availability, runtime activation and execution remain unverified. Different attribute names are not competing settings. All possible paths remain in the graph; removing an override may expose a fallback.';
 const name = (value: unknown, max = 4096): value is string => typeof value === 'string' && value.length > 0 && value.length <= max && value.trim() === value &&
     !Array.from(value).some(character => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127);
 const priority = (value: unknown): value is number | null => value === null || typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= 1000000000;

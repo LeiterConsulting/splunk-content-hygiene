@@ -1,6 +1,7 @@
 /* eslint-disable no-restricted-syntax, no-continue -- Work, groups, candidates, rows, bytes and wall-clock have explicit ceilings. */
 import { ContentObject, CrossStanzaPropsEvidence, DependencyEdge, PropsContextEvidence, PropsEventScope } from '../types';
 import { CROSS_STANZA_BYTES, CROSS_STANZA_ROWS } from './crossStanzaEvidence';
+import { compilePropsPattern, matchPropsPattern, PROPS_PATTERN_SCAN_WORK } from './propsPatterns';
 
 export interface ScopedPropsEventScope extends PropsEventScope { callerObjectId: string; app: string }
 export const CROSS_STANZA_VISITS = 100000;
@@ -9,13 +10,13 @@ export const CROSS_STANZA_MS = 5000;
 interface Member { object: ContentObject; edges: Set<string>; valid: boolean; shadowed: boolean; caseMatch: boolean; priority: number | null }
 interface Group { scope: ScopedPropsEventScope; attribute: string; members: Map<string, Member>; limited: boolean }
 const category = { sourcetype: 0, host: 1, source: 2 };
-const ascii = (value: string): boolean => /^[\x20-\x7e]+$/.test(value);
+const memberCategory = (member: Member): number => compilePropsPattern(member.object.fieldLineage!.scope!).kind === 'default' ? -1 : category[member.object.fieldLineage!.scope!.field];
 const selectorKey = (caller: string, field: string, value: string, location: string): string => JSON.stringify([caller, field, value.toLowerCase(), location]);
 const rowKey = (row: CrossStanzaPropsEvidence): string => JSON.stringify([row.objectId, row.callerObjectId, row.app, row.attribute, row.sourceLocation]);
 
 /** No new edges, confidence changes or customer/native writes. Rank only a
- * captured literal subset, for a single strict conjunctive source context.
- * Missing/private/pattern configuration never becomes an absence assertion. */
+ * captured supported subset, for a single strict conjunctive source context.
+ * Missing/private/unsupported configuration never becomes an absence assertion. */
 export async function compareCrossStanzaProps(objects: ContentObject[], edges: DependencyEdge[], scopes: ScopedPropsEventScope[],
     options: { catalogsComplete: boolean; signal?: AbortSignal; maxVisits?: number; maxMilliseconds?: number } = { catalogsComplete: false }): Promise<{
         objects: ContentObject[]; edges: DependencyEdge[]; counts: Record<string, number>;
@@ -29,6 +30,7 @@ export async function compareCrossStanzaProps(objects: ContentObject[], edges: D
     const maxVisits = Number.isSafeInteger(options.maxVisits) ? Math.max(0, Math.min(CROSS_STANZA_VISITS, options.maxVisits!)) : CROSS_STANZA_VISITS;
     const deadline = Date.now() + (Number.isSafeInteger(options.maxMilliseconds) ? Math.max(1, Math.min(CROSS_STANZA_MS, options.maxMilliseconds!)) : CROSS_STANZA_MS);
     let visits = 0; let records = 0;
+    const patternWork = { remaining: PROPS_PATTERN_SCAN_WORK };
     const available = (): boolean => visits < maxVisits && Date.now() <= deadline && !options.signal?.aborted;
     const counts: Record<string, number> = { props_cross_stanza_visits: 0, props_cross_stanza_groups: 0, props_cross_stanza_highest: 0, props_cross_stanza_lower: 0, props_cross_stanza_unverified: 0 };
     const store = (edge: string, row: CrossStanzaPropsEvidence): void => {
@@ -81,15 +83,17 @@ export async function compareCrossStanzaProps(objects: ContentObject[], edges: D
                 group.limited ||= (byId.get(edge.sourceId)?.analysisWarnings ?? []).some(message =>
                     /(?:field|lookup).*(?:budget|limit|truncat)|(?:budget|limit|truncat).*(?:field|lookup)/i.test(message));
                 const { fieldLineage: facts } = object; const relevant = scope.selectors.find(item => item.field === facts.scope?.field);
+                const pattern = facts.scope ? compilePropsPattern(facts.scope) : null;
+                const matched = pattern && (pattern.kind === 'default' || relevant) ? matchPropsPattern(pattern, relevant ?? scope.selectors[0], [patternWork]) : 'unsupported';
+                if (matched === 'budget') { group.limited = true; }
                 const native = nativeContexts.get(JSON.stringify([object.objectId, scope.app]));
                 const member = group.members.get(object.objectId) ?? { object, edges: new Set<string>(), valid: Boolean(native && ['local', 'inherited'].includes(native.status) &&
-                    native.selectedObjectId === object.objectId && !facts.propsContextsTruncated && !proof.propsContextsTruncated && facts.scope?.exact &&
+                    native.selectedObjectId === object.objectId && !facts.propsContextsTruncated && !proof.propsContextsTruncated && facts.scope && pattern && pattern.kind !== 'unsupported' &&
                     ['app', 'global'].includes(object.sharing ?? '') && (object.app === scope.app || object.sharing === 'global') &&
                     facts.enabled !== false && object.enabled !== false && object.canonicalName === `${facts.stanza} : ${facts.attribute}` &&
                     facts.stanza === (facts.scope.field === 'sourcetype' ? facts.scope.value : `${facts.scope.field}::${facts.scope.value}`)),
                     shadowed: native?.status === 'shadowed', priority: native?.stanzaPriority ?? null,
-                    caseMatch: Boolean(relevant && facts.scope && ascii(relevant.value) && ascii(facts.scope.value) &&
-                        (facts.scope.field === 'host' ? relevant.value.toLowerCase() === facts.scope.value.toLowerCase() : relevant.value === facts.scope.value)) };
+                    caseMatch: matched === 'match' };
                 if (!group.members.has(object.objectId) && group.members.size >= 16) { group.limited = true; limitedEdges.add(edge.edgeId); limitedObjects.add(object.objectId); continue; }
                 member.edges.add(edge.edgeId); group.members.set(object.objectId, member); groups.set(key, group); found = true;
             }
@@ -110,8 +114,8 @@ export async function compareCrossStanzaProps(objects: ContentObject[], edges: D
         else if (active.some(member => !member.valid)) { reason = 'binding_unverified'; }
         else if (new Set(active.map(member => member.object.fieldLineage!.stanza)).size !== active.length) { reason = 'binding_unverified'; }
         else if (new Set(active.map(member => member.object.fieldLineage!.stanza)).size >= 2) {
-            const highestCategory = Math.max(...active.map(member => category[member.object.fieldLineage!.scope!.field]));
-            const peers = active.filter(member => category[member.object.fieldLineage!.scope!.field] === highestCategory);
+            const highestCategory = Math.max(...active.map(memberCategory));
+            const peers = active.filter(member => memberCategory(member) === highestCategory);
             if (peers.length === 1) { [selected] = peers; reason = 'category'; }
             else if (peers.some(member => member.priority === null)) { reason = 'binding_unverified'; }
             else {
@@ -126,7 +130,7 @@ export async function compareCrossStanzaProps(objects: ContentObject[], edges: D
             if (selected && !member.shadowed) { status = selected === member ? 'highest' : 'lower'; }
             let basis: CrossStanzaPropsEvidence['reason'] = rowReason;
             if (selected && !member.shadowed && member !== selected) {
-                if (member.object.fieldLineage!.scope!.field !== selected.object.fieldLineage!.scope!.field) { basis = 'category'; }
+                if (memberCategory(member) !== memberCategory(selected)) { basis = 'category'; }
                 else { basis = member.priority !== selected.priority ? 'priority' : 'ascii'; }
             }
             const row: CrossStanzaPropsEvidence = { version: 1, objectId: member.object.objectId, callerObjectId: group.scope.callerObjectId, app: group.scope.app,

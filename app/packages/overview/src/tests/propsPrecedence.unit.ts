@@ -85,8 +85,8 @@ test('request budget is shared across edges, deterministic, and cached once per 
     expect(result.objects.find(row => row.objectId === original.item.objectId)?.fieldLineage?.propsContexts).toEqual(expect.arrayContaining([
         expect.objectContaining({ app: 'exporter', status: 'unverified', reason: 'budget' })]));
 });
-test('pattern/default scopes are not executed or assigned priority from unrelated selectors', async () => {
-    const dynamic = field('field_aliases', 'FIELDALIAS-owner', 'actor AS owner', 'exporter', 'global', 'source::*.log'); const read = native();
+test('unsupported PCRE scopes are not executed or assigned priority from unrelated selectors', async () => {
+    const dynamic = field('field_aliases', 'FIELDALIAS-owner', 'actor AS owner', 'exporter', 'global', 'source::*[ab].log'); const read = native();
     const result = await check(read, [caller, dynamic.item], [edge(dynamic.item)]);
     expect(read).not.toHaveBeenCalled();
     expect(result.edges[0].fieldProvenance?.propsContexts?.[0]).toMatchObject({ status: 'unverified', reason: 'unsupported_scope' });

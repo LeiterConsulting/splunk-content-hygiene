@@ -119,6 +119,18 @@ object-scoped freshness. Saved v1–v6 baselines remain readable and immutable.
 Conditional order never removes an edge, increases confidence, proves execution
 or clears a removal blocker; a lower binding remains a possible fallback.
 
+The 1.9 extension retains the same compact schemas and exact native identities.
+`scope.exact` stays false for patterns/defaults; it is never relabeled literal.
+The bounded support classifier derives literal / `*` / `...` pattern / captured
+default / unsupported from the stanza metadata. No customer regex is compiled,
+and no raw attribute values or events are cached. Potential event-scope edges
+retain the actual positive exact caller selector and its original query location.
+Pattern/default producer joins are not inferred. Default category is below any
+specific stanza; missing literal/pattern priorities use 100/0 respectively.
+The scan marker is `props_patterns: 1.0.0`, with `props_scope_*` counters and
+separate bounded character-work limits. `shared-static-v8` expands freshness
+without rewriting v1–v7 baselines, stages, notes, assignees or journals.
+
 ## Edges
 
 An edge points from a source object to a target identity and records relation,

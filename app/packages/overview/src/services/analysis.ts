@@ -15,6 +15,7 @@ import { isPotentialRelation, weakestDependencyConfidence } from '../utils/depen
 import { buildKnowledgeReferenceMatcher, parseTagBinding } from './knowledgeReferences';
 import { buildFieldDependencyMatcher, FIELD_TARGETS } from './fieldDependencies';
 import { createInteractionParser } from './interactiveSources';
+import { compilePropsPattern, propsScopeLabel } from './propsPatterns';
 
 export { extractSplReferences, extractDashboardReferences } from './dependencyParser';
 export type { ParsedReference } from './dependencyParser';
@@ -364,6 +365,11 @@ export function analyzeInventory(
         dashboard: 0,
         unresolved: 0,
     };
+    objects.forEach(item => {
+        if (!item.fieldLineage?.scope) { return; }
+        const key = `props_scope_${compilePropsPattern(item.fieldLineage.scope).kind}`;
+        parserCounts[key] = (parserCounts[key] ?? 0) + 1;
+    });
     const propsEventScopes: InventoryAnalysis['propsEventScopes'] = [];
 
     sources.forEach((source) => {
@@ -381,8 +387,7 @@ export function analyzeInventory(
         if (parsed.automaticLookup) {
             const rule = parsed.automaticLookup;
             sourceObject.evidence.push(`Search-time props rule: [${rule.stanza}] ${rule.attribute}; lookup definition ${rule.transform}.`,
-                rule.exactScope ? 'Caller inference uses only positive exact event selectors; applicability is not proof of execution.' :
-                    'This props scope uses a pattern not evaluated by the exact-selector matcher; caller coverage remains unverified.');
+                `Caller scope: ${propsScopeLabel(sourceObject.fieldLineage?.scope ?? null)}. Only positive exact original-event selectors can witness potential callers; this is not proof of execution.`);
         }
         const { references } = parsed;
         const gaps: ParserCoverageGap[] = parsed.gaps ?? parsed.warnings.map((message) => ({ targets: 'all' as const, message, sourceLocation: source.sourceLocation }));

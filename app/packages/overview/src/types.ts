@@ -160,7 +160,7 @@ export interface FieldLineageFacts {
     crossStanzaProps?: CrossStanzaPropsEvidence[];
     crossStanzaPropsTruncated?: boolean;
 }
-/** Native shared, exact-stanza observation, never file provenance or execution proof. */
+/** Native shared stanza observation, never file provenance or execution proof. */
 export interface PropsContextEvidence {
     version: 1;
     objectId: string;
@@ -177,7 +177,7 @@ export interface PropsEventScope {
     sourceLocation: string;
     selectors: Array<{ field: FieldScope['field']; value: string; sourceLocation: string }>;
 }
-/** Conditional order among captured exact stanzas, never an effective winner. */
+/** Conditional order among captured supported stanzas, never an effective winner. */
 export interface CrossStanzaPropsEvidence extends PropsEventScope {
     version: 1;
     objectId: string;
@@ -228,7 +228,7 @@ export interface EvidenceCoverageDimension {
     digest: string;
 }
 export interface ReviewCoverage {
-    policy: 'shared-static-v1' | 'shared-static-v2' | 'shared-static-v3' | 'shared-static-v4' | 'shared-static-v5' | 'shared-static-v6' | 'shared-static-v7';
+    policy: 'shared-static-v1' | 'shared-static-v2' | 'shared-static-v3' | 'shared-static-v4' | 'shared-static-v5' | 'shared-static-v6' | 'shared-static-v7' | 'shared-static-v8';
     configuration: EvidenceCoverageDimension;
     access: EvidenceCoverageDimension;
     outbound: EvidenceCoverageDimension;

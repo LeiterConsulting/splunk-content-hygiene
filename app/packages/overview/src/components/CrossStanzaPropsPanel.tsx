@@ -35,7 +35,7 @@ export function CrossStanzaPropsPanel({ rows, truncated = false }: { rows?: Cros
                     <strong>{crossStanzaStatusLabels[row.status]}</strong>
                     <SmallText>{row.app} · {row.attribute} · {row.sourceLocation}</SmallText>
                     <SmallText>{crossStanzaReasonLabels[row.reason]}</SmallText>
-                    {['priority', 'ascii'].includes(row.reason) ? <SmallText>Literal priority: this stanza {row.stanzaPriority ?? 'unverified'} · highest captured stanza {row.selectedPriority ?? 'unverified'}.</SmallText> : null}
+                    {['priority', 'ascii'].includes(row.reason) ? <SmallText>Captured priority: this stanza {row.stanzaPriority ?? 'unverified'} · highest captured stanza {row.selectedPriority ?? 'unverified'}.</SmallText> : null}
                     <SmallText>Declared conjunction: {row.selectors.length ? row.selectors.map(item => `${item.field}=${item.value}`).join(' AND ') : 'Not established by the supported grammar'}</SmallText>
                     <SmallText>Caller: <Link to={objectLink(row.callerObjectId)}>{row.callerObjectId}</Link></SmallText>
                     {row.status === 'lower' && row.selectedObjectId ? <SmallText>Higher captured binding: <Link to={objectLink(row.selectedObjectId)}>{row.selectedObjectId}</Link></SmallText> : null}

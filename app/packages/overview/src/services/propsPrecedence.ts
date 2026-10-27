@@ -2,6 +2,7 @@
 import { ContentObject, DependencyEdge, PropsContextEvidence } from '../types';
 import { configurationFingerprint } from './reviewEvidence';
 import { PROPS_CONTEXT_LIMIT } from './propsEvidence';
+import { compilePropsPattern } from './propsPatterns';
 
 export const PROPS_READ_BYTES = 131072;
 export const PROPS_CHECK_MS = 90000;
@@ -96,7 +97,8 @@ export async function checkPropsPrecedence(objects: ContentObject[], edges: Depe
     const observations = new Map<string, Observation>(); const queue: Task[] = [];
     [...groups.values()].sort((a, b) => a.rank - b.rank || a.key.localeCompare(b.key)).forEach(task => {
         const facts = task.object.fieldLineage!;
-        if (!facts.scope?.exact || !facts.stanza || !facts.attribute || ['.', '..'].includes(facts.stanza) ||
+        if (!facts.scope || compilePropsPattern(facts.scope).kind === 'unsupported' || !facts.stanza || !facts.attribute || ['.', '..'].includes(facts.stanza) ||
+            facts.stanza !== (facts.scope.field === 'sourcetype' ? facts.scope.value : `${facts.scope.field}::${facts.scope.value}`) ||
             !/^(?:EXTRACT|REPORT|FIELDALIAS|EVAL|LOOKUP)-.+$/.test(facts.attribute) || !appName(task.app) ||
             task.object.canonicalName !== `${facts.stanza} : ${facts.attribute}`) { observations.set(task.key, { reason: 'unsupported_scope' }); }
         else if (queue.length >= max) { observations.set(task.key, { reason: 'budget' }); }
@@ -134,7 +136,8 @@ export async function checkPropsPrecedence(objects: ContentObject[], edges: Depe
             // alone cannot make two differently encoded declarations equivalent.
             if (attrs![request.attribute] !== content.value) { return { reason: 'metadata_mismatch' }; }
             const rawPriority = attrs?.priority;
-            let priority: number | null = 100;
+            const { kind } = compilePropsPattern(facts.scope!);
+            let priority: number | null = kind === 'literal' ? 100 : 0;
             if (rawPriority !== undefined && rawPriority !== '') {
                 priority = (typeof rawPriority === 'string' && /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(rawPriority) || typeof rawPriority === 'number') &&
                     Number.isFinite(Number(rawPriority)) && Math.abs(Number(rawPriority)) <= 1000000000 ? Number(rawPriority) : null;

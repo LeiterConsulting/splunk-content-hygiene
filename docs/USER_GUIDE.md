@@ -321,7 +321,61 @@ remove shadowed dependencies or grant removal readiness. New scans use
 `shared-static-v6`; v1–v5 decisions, notes, assignees, baselines and journals remain
 unchanged. Changed context evidence can require explicit re-review.
 
+### Bounded props patterns and defaults (1.9)
+
+Run a new complete scan, then use the existing **Declared field lineage**,
+**Inspect shared props contexts** and **Inspect cross-stanza order** disclosures
+in Dependency Explorer, relationship dialogs or Review Library. The event-scope
+label distinguishes literal scopes, bounded patterns, captured default fallbacks
+and unsupported scopes. Viewing/filtering/exporting never saves a review or runs
+another metadata scan.
+
+Supported stanza patterns contain literal ASCII text, `*` (zero or more
+non-separator characters) and `...` (zero or more arbitrary characters), and must
+match the entire name. Dots outside `...` are literal. Matching uses a small
+bounded algorithm, never a customer-supplied regular expression. Host matching
+is ASCII-insensitive; source/sourcetype case-only possibilities remain unverified
+for conditional ordering because ordinary SPL selectors are case-insensitive.
+PCRE operators/classes/groups/modifiers, backslashes/Windows escapes, encoded or
+non-ASCII scopes and patterns longer than 256 characters are unsupported, not
+evidence of no dependency. Pattern selector values over 1,024 characters remain
+budget-limited. See the [native props specification](https://help.splunk.com/en/splunk-enterprise/administer/admin-manual/10.2/configuration-file-reference/10.2.0-configuration-file-reference/props.conf).
+
+A **may apply** path needs a positive exact original-event selector. Broad,
+generated or runtime-expanded searches remain gaps; app containment is not a
+caller witness. Only an actually captured shared `[default]` declaration adds a
+potential default path. It is not proof that a default is effective, that an
+uncaptured default is absent or that system/private defaults were inventoried.
+Field-name producer joins are still exact-scope only; matching two pattern names
+does not establish that their event domains overlap.
+
+Existing native rule/merged-attribute checks now admit the bounded stanza subset,
+with the same GET-only read/time/byte ceilings. Within a category, absent native
+priority defaults to 100 for literals and 0 for patterns. A captured default is
+below any specific matching stanza regardless of numeric priority. Same-attribute
+comparisons still require one supported conjunction, verified native observations
+and complete declared catalogs; every lower/default/shadowed path is retained.
+This is conditional subset ordering, not full effective props or runtime proof.
+
+Prefix/namespace indexes avoid inspecting every rule for every caller. Pattern
+comparison has separate ceilings of 2,000,000 character cells per source and
+20,000,000 per matcher per scan (field and automatic-lookup callers); conditional
+cross-stanza comparison has its own 20,000,000-cell ceiling and five-second
+deadline, alongside the existing candidate/edge ceilings. Failed
+matches consume work. Exhaustion produces a coverage gap and blocks a highest
+claim; `props_scope_*` counters expose supported/unsupported rule counts. The
+scan marker `props_patterns: 1.0.0` distinguishes new evidence from old caches.
+Impact, required-content, scan, Library and investigation CSV/JSON retain the
+same compact scope/context evidence and limitations.
+
+New scans use `shared-static-v8`; v1–v7 decisions, captured baselines and journals
+are not rewritten. Expanded evidence can request **Needs re-review**. No pattern,
+priority, default fallback or missing edge establishes safe removal.
+
 ### Conditional cross-stanza props order (1.8)
+
+The original literal-only behavior below is extended in 1.9 by the bounded
+pattern/default contract above; unsupported/runtime scopes remain unverified.
 
 Run a new complete scan, then expand **Inspect cross-stanza order** in a
 props-backed object's details or an original-event relationship. The same

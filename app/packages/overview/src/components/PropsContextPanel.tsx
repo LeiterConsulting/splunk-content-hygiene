@@ -34,7 +34,7 @@ export function PropsContextPanel({ rows, truncated = false }: { rows?: PropsCon
                     <strong>{row.app} · {propsStatusLabels[row.status]}</strong>
                     <SmallText>{row.objectId}</SmallText>
                     <SmallText>{propsReasonLabels[row.reason]}</SmallText>
-                    {row.stanzaPriority !== undefined ? <SmallText>Literal stanza priority: {row.stanzaPriority ?? 'unverified'}. Used only within the same category, not across source/host/sourcetype.</SmallText> : null}
+                    {row.stanzaPriority !== undefined ? <SmallText>Captured stanza priority: {row.stanzaPriority ?? 'unverified'}. Used only within the same category, not across source/host/sourcetype or to promote a default fallback.</SmallText> : null}
                     {row.selectedObjectId && row.selectedObjectId !== row.objectId ? <SmallText>Returned binding: <Link to={viewPath('dependencies', { object: row.selectedObjectId, scan: readQueryParam('scan'), tab: 'object' })}>{row.selectedObjectId}</Link></SmallText> : null}
                 </li>)}</EvidenceList>
                 {!matches.length ? <SmallText role="status">No contexts match these filters.</SmallText> : null}

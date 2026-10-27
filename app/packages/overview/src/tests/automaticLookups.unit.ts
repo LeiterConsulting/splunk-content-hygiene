@@ -40,10 +40,13 @@ test.each([
     { stanza: 'host::Server-A', query: 'index=main host=SERVER-A', matched: true },
     { stanza: 'source::/var/log/access.log', query: 'index=main source="/var/log/access.log"', matched: true },
     { stanza: 'source::/var/log/Access.log', query: 'index=main source="/var/log/access.log"', matched: true },
-    { stanza: 'source::/var/log/...', query: 'index=main source="/var/log/access.log"', matched: false },
+    { stanza: 'source::/var/log/...', query: 'index=main source="/var/log/access.log"', matched: true },
     { stanza: 'host::(?-i)Server-A', query: 'index=main host=Server-A', matched: false },
-    { stanza: 'access_*', query: 'index=main sourcetype=access_log', matched: false },
+    { stanza: 'access_*', query: 'index=main sourcetype=access_log', matched: true },
     { stanza: 'access_+', query: 'index=main sourcetype=access_log', matched: false },
+    { stanza: 'default', query: 'index=main sourcetype=access_log', matched: true },
+    { stanza: 'default', query: 'index=main source=/var/log/app.log', matched: true },
+    { stanza: 'source::*[ab].log', query: 'source=/var/log/a.log', matched: false },
 ])('exact selector matching respects scope semantics: $stanza', ({ stanza, query, matched }) => {
     const rule = automatic(stanza); const caller = item('Caller', 'Saved Search'); const target = item('owners', 'Lookup Definition');
     const result = analyzeInventory([caller, rule.value, target], [search(caller, query), rule.source], complete);

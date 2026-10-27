@@ -171,6 +171,24 @@ permissions, execute customer searches or change source configuration to clear
 a warning. Lower paths are retained as possible fallbacks, not recommendations
 to remove them. See the [comparison guide](USER_GUIDE.md#conditional-cross-stanza-props-order-18).
 
+## A pattern or default has no caller / remains unverified (1.9)
+
+Check the scan report for `props_patterns: 1.0.0`; an older snapshot needs a new
+complete scan, not a changed review decision. Inspect the event-scope label and
+`props_scope_*` counters. Only ASCII literal text with `*` / `...` is supported.
+PCRE operators/modifiers, escapes/Windows paths, encoded/non-ASCII and oversized
+scopes remain unknown. A captured default needs an existing positive exact
+original-event selector witness; broad or generated searches do not manufacture
+caller paths. No default returned does not establish that no default exists.
+
+Candidate or character-work ceilings, incomplete catalogs, changed/denied native
+reads and case ambiguity block ordering. The specific-over-default rule does
+not establish file-layer/private/system inheritance or runtime activation. Do not
+execute customer searches, sample events/lookup rows, expand permissions or edit
+source configuration to clear a warning. Retain lower/default paths for removal
+investigation; no result is approval to remove content. See the
+[bounded pattern/default contract](USER_GUIDE.md#bounded-props-patterns-and-defaults-19).
+
 ## Props drill-through links are hard to read
 
 Version 1.8 uses Splunk UI's themed, underlined Link controls for callers,

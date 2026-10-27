@@ -1895,12 +1895,13 @@ async function runInventoryScan(
         collector_totals: {},
         collector_versions: {
             rest_inventory: '0.2.0',
-            dependency_analysis: '1.8.0',
+            dependency_analysis: '1.9.0',
             interaction_dependencies: '1.0.1',
             knowledge_catalogs: '1.0.0',
             field_lineage: '1.2.0',
             props_precedence: '1.0.0',
             props_cross_stanza: '1.0.0',
+            props_patterns: '1.0.0',
             classification: '1.0.0',
             review_evidence: '1.0.0',
         },
@@ -2090,7 +2091,7 @@ async function runInventoryScan(
                     return { status: 200, data };
                 } catch (error) { return { status: error instanceof RestRequestError ? error.status : 0, data: null }; }
             }, { ...(mode === 'bounded' ? { maxContexts: 32, maxMilliseconds: 15000 } : {}), signal: activeScanController?.signal });
-            onProgress?.({ completedCollectors, totalCollectors, stage: 'Comparing captured exact-stanza props order (conditional, bounded)' });
+            onProgress?.({ completedCollectors, totalCollectors, stage: 'Comparing captured supported props order (conditional, bounded)' });
             const crossStanza = await compareCrossStanzaProps(contexts.objects, contexts.edges, analysis.propsEventScopes, {
                 catalogsComplete: [completeness.field_extractions, completeness.field_aliases, completeness.calculated_fields, completeness.automatic_lookups].every(value => value === true),
                 signal: activeScanController?.signal,

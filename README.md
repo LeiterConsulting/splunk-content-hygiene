@@ -17,6 +17,47 @@ The app keeps customer content read-only:
   app-local KV Store collections.
 - Every finding carries reasons, evidence, and a suggested investigation step.
 
+## Version 1.9.0 — bounded props patterns and default fallbacks
+
+[Release 1.9.0, build 94](https://github.com/LeiterConsulting/splunk-content-hygiene/releases/tag/v1.9.0)
+extends dependency investigations to a deliberately small props
+pattern language: literal ASCII text, `*` within a path segment and `...` across
+segments, matched against existing positive exact original-event selectors.
+Explicitly captured shared `[default]` declarations remain visible as potential
+fallbacks. No customer regex, search, field expression or lookup data is executed.
+
+Explorer, relationship details and Review Library explain whether the scope is
+literal, a supported bounded pattern, a default fallback or unsupported. Native
+stanza observations and conditional same-attribute ordering retain every possible
+path. Literal priority defaults to 100, pattern priority to 0; a captured default
+never outranks a specific stanza. Candidate and character-work ceilings leave
+unassessed paths unknown. No field-name joins across pattern/default scopes are
+guessed.
+
+`shared-static-v8` preserves existing decisions, journals and v1–v7 baselines.
+Expanded evidence may request explicit re-review, never silently reaffirm a
+decision. Full effective props, arbitrary PCRE/modifiers, escaped Windows paths,
+encoded/non-ASCII scopes, private/system/file layers and runtime execution remain
+outside this slice. Follow-up #8 remains open. See the
+[pattern/default guide](docs/USER_GUIDE.md#bounded-props-patterns-and-defaults-19)
+and [coverage matrix](docs/DEPENDENCY_COVERAGE.md).
+
+![Qualified, wrapping props context in native Dark mode](docs/images/props-pattern-context-dark.jpg)
+
+The native capture intentionally retains **Unverified** instead of inventing an
+effective winner. [Light-mode context](docs/images/props-pattern-context-light.jpg).
+
+Build 94 passes 1,024 automated checks and pre-cert AppInspect with zero
+errors/failures. Native/cache/schema replay, all seven pages in Light/Dark,
+103 accepted captures and 29 JSON / 27 paired CSV downloads cover Enterprise
+10.2.5, 10.2.8 and 10.4.4. Original decisions, journals and appearance choices
+are preserved; customer content remains read-only. Native catalogs include 24
+supported pattern declarations but no positive pattern-caller or captured-default
+witness. Those positives and props-specific Library cases have automated
+contracts, not manufactured native content. Emulated readiness recoveries and
+the bounded qualification are documented in the
+[compatibility notes](docs/COMPATIBILITY.md#190-bounded-patterndefault-qualification).
+
 ## Version 1.8.0 — conditional cross-stanza props order
 
 [Release 1.8.0, build 93](https://github.com/LeiterConsulting/splunk-content-hygiene/releases/tag/v1.8.0)

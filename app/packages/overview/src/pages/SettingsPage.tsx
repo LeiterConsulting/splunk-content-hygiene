@@ -303,8 +303,13 @@ export function SettingsPage({
                             </DefinitionList>
                             {displayedScan?.collectorVersions?.props_precedence === '1.0.0' ? <section aria-label="Shared props scan diagnostics">
                                 <CollapsiblePanel appearance="subtle" title="Shared props context diagnostics">
-                                    <SmallText>Scan-time shared exact-stanza observations, not runtime execution or complete effective-props coverage. Unverified and truncated contexts do not establish absence.</SmallText>
+                                    <SmallText>Scan-time shared stanza observations, not runtime execution or complete effective-props coverage. Unverified and truncated contexts do not establish absence.</SmallText>
                                     <DefinitionList>
+                                        <dt>Pattern/default coverage</dt><dd>{displayedScan.collectorVersions?.props_patterns === '1.0.0' ? 'Bounded caller matching recorded' : 'Not recorded; run a complete scan'}</dd>
+                                        {displayedScan.collectorVersions?.props_patterns === '1.0.0' ? <>
+                                            <dt>Literal / bounded pattern rules</dt><dd>{displayedScan.parserCounts?.props_scope_literal ?? 0} / {displayedScan.parserCounts?.props_scope_pattern ?? 0}</dd>
+                                            <dt>Default / unsupported rules</dt><dd>{displayedScan.parserCounts?.props_scope_default ?? 0} / {displayedScan.parserCounts?.props_scope_unsupported ?? 0}</dd>
+                                        </> : null}
                                         <dt>Context observations</dt><dd>{(displayedScan.parserCounts?.props_context_checks ?? 0).toLocaleString()}</dd>
                                         <dt>Native GET reads</dt><dd>{(displayedScan.parserCounts?.props_context_reads ?? 0).toLocaleString()}</dd>
                                         <dt>Local / inherited</dt><dd>{displayedScan.parserCounts?.props_context_local ?? 0} / {displayedScan.parserCounts?.props_context_inherited ?? 0}</dd>
