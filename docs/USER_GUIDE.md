@@ -273,6 +273,54 @@ The supported syntax follows Splunk's [navigation XML reference](https://dev.spl
 and [workflow configuration reference](https://help.splunk.com/en/splunk-enterprise/administer/admin-manual/10.2/configuration-file-reference/10.2.0-configuration-file-reference/workflow_actions.conf),
 with the deliberately narrower uncertainty and privacy limits above.
 
+### Shared props precedence and inheritance
+
+Run a new complete scan, select a props-backed object in **Dependency Explorer**
+or **Review Library**, and open **Inspect shared props contexts** near the top of
+its declared field details. Relationship-context dialogs show the same evidence
+for participating props objects. Find an app/object, filter by binding status,
+or page through contexts without issuing more native reads.
+
+| Status | Interpretation |
+| --- | --- |
+| Local merged match | Native rule ownership and the merged exact-stanza value agree with the captured definition in this app. |
+| Inherited merged match | Both native reads agree with a captured globally shared definition returned from another app. |
+| Shadowed in this context | Both reads agree on a different captured shared binding. Follow **Returned binding** to investigate it. The original potential path remains as a possible fallback. |
+| Unverified | A scope, access, snapshot, handler or budget limitation prevents this cross-check. Read the specific reason; do not interpret it as absence. |
+
+The cross-check uses `nobody` plus the qualified app namespace. Rule-level ACL
+and captured value/access digests must agree; a whole-stanza ACL, equal values in
+two apps or an app-name ordering alone cannot establish attribute origin. Native
+reads are observations, not an atomic configuration transaction or proof that
+settings have activated in memory. No raw props value is cached or exported.
+Captured fingerprints retain the app's existing configuration-normalization
+policy; they do not assert byte-for-byte source-file equality or file-layer origin.
+
+This resolves a bounded shared exact-stanza question, not every effective-props
+question. Search-time app/user precedence differs from global indexing
+precedence. Matching source, host and sourcetype stanzas can interact; the app
+does not evaluate pattern/default scopes or turn unrelated positive selectors
+into a proven event domain. Per-file local/default provenance, user/private and
+system inheritance, field availability and execution remain unverified. See
+Splunk's [configuration context rules](https://help.splunk.com/en/splunk-enterprise/administer/admin-manual/10.2/administer-splunk-enterprise-with-configuration-files/configuration-file-precedence)
+and [within-props priority rules](https://help.splunk.com/en/splunk-enterprise/administer/admin-manual/10.2/administer-splunk-enterprise-with-configuration-files/attribute-precedence-within-a-single-props.conf-file).
+
+Context checks are scan-time, deduplicated and bounded: complete scans inspect
+at most 256 native attribute/app pairs (two GETs each, four workers, 90 seconds);
+bounded scans use 32 pairs and 15 seconds. Each response is capped at 128 KiB,
+each read at eight seconds, without hidden retries.
+Calculated-field requests use a narrowly filtered native REST catalog, not an
+event search job or an additional Web exposure. Candidate visits, stored
+tasks and per-object/edge context rows also have explicit ceilings. Fixed caller
+contexts are prioritized before reusable and own-app inspection. Budget-limited
+contexts and truncated evidence remain unknown; there is no page-load crawl.
+
+CSV/JSON retain compact observations in declared field facts and relationship
+provenance, including required-content and removal-impact reports. They do not
+remove shadowed dependencies or grant removal readiness. New scans use
+`shared-static-v6`; v1–v5 decisions, notes, assignees, baselines and journals remain
+unchanged. Changed context evidence can require explicit re-review.
+
 ### Declared field lineage
 
 Run a complete scan after upgrading to 1.4 to collect output

@@ -10,6 +10,26 @@
         "value": { "type": "string", "minLength": 1, "maxLength": 4096 }, "exact": { "type": "boolean" } }
     }] },
     "phase": { "enum": ["extraction", "alias", "calculated", "lookup"] },
+    "propsContexts": { "type": "array", "maxItems": 256, "items": { "$ref": "#/$defs/propsContext" } },
+    "propsContext": {
+      "type": "object", "additionalProperties": false,
+      "required": ["version", "objectId", "app", "status", "selectedObjectId", "valueDigest", "reason"],
+      "properties": {
+        "version": { "const": 1 }, "objectId": { "type": "string", "minLength": 1, "maxLength": 16384 },
+        "app": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "status": { "enum": ["local", "inherited", "shadowed", "unverified"] },
+        "selectedObjectId": { "type": ["string", "null"], "minLength": 1, "maxLength": 16384 },
+        "valueDigest": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
+        "reason": { "enum": ["matched", "different_binding", "not_returned", "access_denied", "snapshot_changed", "metadata_mismatch", "unsupported_scope", "budget", "request_failed"] }
+      },
+      "allOf": [
+        { "if": { "properties": { "status": { "const": "unverified" } } },
+          "then": { "properties": { "selectedObjectId": { "type": "null" }, "valueDigest": { "type": "null" }, "reason": { "not": { "enum": ["matched", "different_binding"] } } } },
+          "else": { "properties": { "selectedObjectId": { "type": "string" }, "valueDigest": { "type": "string" } } } },
+        { "if": { "properties": { "status": { "enum": ["local", "inherited"] } } }, "then": { "properties": { "reason": { "const": "matched" } } } },
+        { "if": { "properties": { "status": { "const": "shadowed" } } }, "then": { "properties": { "reason": { "const": "different_binding" } } } }
+      ]
+    },
     "lookupMapping": {
       "type": "object", "additionalProperties": false, "required": ["version", "inputs", "outputs", "outputMode"],
       "properties": { "version": { "const": 1 }, "outputMode": { "enum": ["OUTPUT", "OUTPUTNEW", "implicit"] },
@@ -84,7 +104,8 @@
         "syntax": { "enum": ["declared", "partial", "unsupported"] }, "sourceLocation": { "type": "string" },
         "limitations": { "type": "array", "maxItems": 250, "items": { "type": "string" } },
         "outputProvenance": { "$ref": "#/$defs/outputProvenance" },
-        "lookupMapping": { "$ref": "#/$defs/lookupMapping" }
+        "lookupMapping": { "$ref": "#/$defs/lookupMapping" },
+        "propsContexts": { "$ref": "#/$defs/propsContexts" }, "propsContextsTruncated": { "type": "boolean" }
       }
     },
     "provenance": {
@@ -98,7 +119,8 @@
         "viaObjectIds": { "type": "array", "maxItems": 250, "items": { "type": "string", "minLength": 1, "maxLength": 16384 } }, "contextApps": { "$ref": "#/$defs/names" },
         "invocation": { "enum": ["fixed_app", "invoking_app_unverified"] },
         "outputDeclarations": { "type": "array", "maxItems": 250, "items": { "$ref": "#/$defs/producerDeclaration" } },
-        "contexts": { "type": "array", "maxItems": 250, "items": { "$ref": "#/$defs/context" } }
+        "contexts": { "type": "array", "maxItems": 250, "items": { "$ref": "#/$defs/context" } },
+        "propsContexts": { "$ref": "#/$defs/propsContexts" }, "propsContextsTruncated": { "type": "boolean" }
       }
     }
   }

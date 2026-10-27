@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.7.0 — 2026-10-27 (build 89)
+
+- Add bounded scan-time shared props observations: cross-check native rule-level
+  ownership/export against the merged value of the same exact stanza/attribute.
+  Distinguish local, inherited, shadowed and unverified with explicit reasons.
+- Keep shadowed paths as possible removal fallbacks. Do not infer execution,
+  full effective configuration, private/system inheritance or file-layer origin.
+- Add accessible, wrapping, searchable and paginated context details in Explorer,
+  Library and relationship dialogs. Carry the same evidence through freshness,
+  removal impact, required-content reports and CSV/JSON.
+- Introduce `shared-static-v6` while preserving v1–v5 decisions, captured evidence
+  and journals. Changed context evidence requires explicit review, never a silent
+  reaffirmation or rewrite of an existing decision.
+- Bound native reads, bytes, candidates, fan-out and time; propagate cancellation
+  and retain unknown/truncated outcomes. Use the existing filtered calculated-field
+  catalog route on classic Web hosts, without new exposures or an event search.
+- Pass 907 automated checks, lint/style/types/build/package gates and pre-cert
+  AppInspect with zero errors/failures (three reviewed warnings, one manifest skip).
+  Fresh native/catalog/cache/schema parity, all seven pages in Light/Dark, 29 JSON
+  and 27 paired CSV downloads cover Enterprise 10.2.5, 10.2.8 and 10.4.4.
+- Preserve original decisions, baselines, policy history and appearance settings.
+  Customer content stays read-only. Add public native built-in-metadata screenshots
+  and document automated-only shadowing/props-Library positives and remaining #8
+  coverage; full effective-props/runtime closure is not claimed.
+
 ## 1.6.0 — 2026-10-27 (build 85)
 
 - Add GET-only shared workflow-action and navigation-menu inventory with strict

@@ -155,6 +155,19 @@ export interface FieldLineageFacts {
     limitations: string[];
     outputProvenance?: ExtractionOutputProvenance;
     lookupMapping?: LookupMappingFacts;
+    propsContexts?: PropsContextEvidence[];
+    propsContextsTruncated?: boolean;
+}
+/** Native shared, exact-stanza observation, never file provenance or execution proof. */
+export interface PropsContextEvidence {
+    version: 1;
+    objectId: string;
+    app: string;
+    status: 'local' | 'inherited' | 'shadowed' | 'unverified';
+    selectedObjectId: string | null;
+    valueDigest: string | null;
+    reason: 'matched' | 'different_binding' | 'not_returned' | 'access_denied' | 'snapshot_changed' |
+        'metadata_mismatch' | 'unsupported_scope' | 'budget' | 'request_failed';
 }
 export interface FieldDependencyProvenance {
     version: 1;
@@ -170,6 +183,8 @@ export interface FieldDependencyProvenance {
     invocation: 'fixed_app' | 'invoking_app_unverified';
     outputDeclarations?: ProducerOutputDeclaration[];
     contexts?: FieldContextEvidence[];
+    propsContexts?: PropsContextEvidence[];
+    propsContextsTruncated?: boolean;
 }
 
 export interface ConfigurationFingerprint {
@@ -188,7 +203,7 @@ export interface EvidenceCoverageDimension {
     digest: string;
 }
 export interface ReviewCoverage {
-    policy: 'shared-static-v1' | 'shared-static-v2' | 'shared-static-v3' | 'shared-static-v4' | 'shared-static-v5';
+    policy: 'shared-static-v1' | 'shared-static-v2' | 'shared-static-v3' | 'shared-static-v4' | 'shared-static-v5' | 'shared-static-v6';
     configuration: EvidenceCoverageDimension;
     access: EvidenceCoverageDimension;
     outbound: EvidenceCoverageDimension;
@@ -315,6 +330,7 @@ export interface ScanSummary {
     /** Native entries (such as tag stanzas) can expand into many normalized records. */
     collectorNativeCounts?: Record<string, number>;
     collectorVersions?: Record<string, string>;
+    parserCounts?: Record<string, number>;
     analysisStatus: 'pending' | 'complete' | 'partial' | 'failed';
     dataSource: 'live';
     snapshotVersion?: number;

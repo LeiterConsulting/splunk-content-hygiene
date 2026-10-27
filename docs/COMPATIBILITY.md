@@ -27,9 +27,57 @@ the minimum is not a recommendation to downgrade or remain on an old patch.
 
 | Runtime | Purpose | Current evidence |
 | --- | --- | --- |
-| 10.2.5 | Exact minimum; classic navigation; coordinator and reported regressions | App 1.6.0 build 85: isolated Linux VM; fresh bounded/full scans, native interaction catalog/cache and schema parity, targeted light/dark graphs/context, impact/footprint/scan exports and empty Library checks; broader earlier qualification remains distinct below |
-| 10.2.8 | Representative 10.2 maintenance release and real-estate regression | App 1.6.0 build 85: fresh scans, native catalog/cache/schema parity, targeted light/dark workflow/report-menu investigations, grouped context, impact/footprint/scan and preserved Library exports |
-| 10.4.4 | Modern navigation, current theme host, and newer bundled runtime | App 1.6.0 build 85: fresh scans, native catalog/cache/schema parity, targeted light/dark navigation graphs/context, impact/footprint/scan exports and empty Library checks; original decisions unchanged |
+| 10.2.5 | Exact minimum; classic navigation; coordinator and reported regressions | App 1.7.0 build 89: isolated Linux VM at 1280 × 720; fresh bounded/full scans, shared-props native/cache/schema parity, all seven pages in Light/Dark, context/impact/footprint/scan exports and empty Library checks |
+| 10.2.8 | Representative 10.2 maintenance release and real-estate regression | App 1.7.0 build 89 at 1434 × 940: fresh scans, native/cache/schema parity, all seven pages in Light/Dark, shared-props investigations and preserved Library evidence/exports |
+| 10.4.4 | Modern navigation, current theme host, and newer bundled runtime | App 1.7.0 build 89 at 1434 × 940: fresh scans, native/cache/schema parity, all seven pages in Light/Dark, shared-props investigations and empty Library checks; original decisions unchanged |
+
+### 1.7.0 shared props qualification
+
+The same checksum-identified build 89 archive was installed on all three runtimes
+without restarting the shared installations. Fresh bounded scans preserve the
+prior complete baseline. Complete scans and fresh GET-only native replay agree
+with cached rule identities, local/inherited observations, source locations and
+compact context evidence. Real objects, relationships and scan records pass the
+local published schemas. Budget-limited and unsupported-scope contexts remain
+explicitly unverified; they are not counted as absent or effective matches.
+
+Calculated fields use the existing native collection route with an escaped exact
+stanza/attribute result filter and strict single-result identity checks. This
+works through classic Splunk Web without adding an entry-route exposure or
+running an event search. The merged props attribute is independently cross-checked.
+
+There are 63 accepted native captures: all seven pages in both themes on each
+runtime plus focused object, filtered context, relationship and removal-impact
+checks. Measured surfaces have no document/detail horizontal overflow, graph
+label/card overlap or dialog-control overflow at the viewports above. Sampled
+active text contrast exceeds 4.5:1. Native appearance preferences are restored.
+These are bounded desktop checks, not comprehensive accessibility certification.
+
+Actual downloads include 29 JSON reports and 27 paired CSV files. They retain
+captured props provenance, partial scope and blocked removal readiness; six
+positive required-content investigations use real caller-to-props witnesses.
+Existing decisions, captured baselines, review journals and policy history are
+unchanged. The native Library contains a non-props decision on one runtime and
+is empty on the other two; props-specific Library positives and shadowing
+collisions have automated adversarial coverage, not a manufactured native witness.
+No reviews, policies, temporary accounts or customer objects were saved for this slice.
+
+The exact release candidate passes 907 automated checks: 860 overview, 16 native
+host, 22 backend and nine archive-policy checks, with no skipped/failing cases.
+Lint, style, types, branding, production build and portable packaging pass.
+Pre-cert AppInspect 4.3.1 reports zero errors, failures or future failures, with
+the same three reviewed advisories and one manifest-based skip as 1.6.0. The
+existing bundle-size advisories remain; this is not Cloud certification.
+Earlier candidates are not substituted for final-candidate evidence. Native test
+locator/reload adjustments are separate from production fixes.
+
+This qualifies a bounded shared exact-stanza observation, not full effective props
+or byte-for-byte source-file provenance. Private/system inheritance, per-file
+layers, cross-stanza priority, runtime activation/field availability and dynamic,
+external or ad-hoc consumer closure remain unverified. No dependency confidence
+is upgraded to execution, and shadowed paths remain possible removal fallbacks.
+Follow-up #8 remains open. Earlier backend permission/concurrency and native
+policy lifecycle qualification remains separately documented below.
 
 ### 1.6.0 interaction qualification
 

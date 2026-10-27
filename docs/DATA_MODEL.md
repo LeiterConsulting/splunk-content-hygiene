@@ -84,6 +84,17 @@ the overall scan remains partial; this does not relax removal-impact blockers.
 Supported health values are `active`, `dormant`, `orphaned`, `broken`,
 `unowned`, `protected`, and `unknown`.
 
+Shared props observations (1.7) are optional `propsContexts` arrays in field facts
+and relationship provenance. Each fixed-key row contains version, object ID,
+qualified app, status, selected shared object ID or null, value digest or null,
+and a fixed reason code. `propsContextsTruncated` is explicit. No raw native
+attribute, expression, regex, file path or private identity is stored. The
+`props_precedence` collector version is 1.0.0; scan parser counters distinguish
+checked contexts, native reads, local/inherited/shadowed/unverified rows and
+truncation. Coverage policy `shared-static-v6` hashes context evidence, including
+for an otherwise unconnected props object. Earlier v1–v5 baselines stay readable
+and immutable; a scan does not reaffirm a review.
+
 ## Edges
 
 An edge points from a source object to a target identity and records relation,

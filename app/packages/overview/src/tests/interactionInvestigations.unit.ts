@@ -119,7 +119,7 @@ test('old v4 decisions and captured evidence remain readable, never migrated to 
     const saved = review(target.objectId, { stage: 'confirmed_eligible', note: 'Original decision', evidenceBaseline: { capturedAt: new Date(now).toISOString(), capturedBy: 'reviewer', evidence: baseline } });
     const before = JSON.stringify(saved);
     expect(parseReviewBaseline(saved.evidenceBaseline)?.evidence.coverage?.policy).toBe('shared-static-v4');
-    expect(objects[0].reviewEvidence?.coverage?.policy).toBe('shared-static-v5');
+    expect(objects[0].reviewEvidence?.coverage?.policy).toBe('shared-static-v6');
     expect(JSON.stringify(saved)).toBe(before);
 });
 

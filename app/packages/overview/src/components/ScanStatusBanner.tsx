@@ -86,6 +86,7 @@ export function ScanStatusBanner({
                         </div>
                     ) : null}
                     {fieldNotice ? <div>{fieldNotice}</div> : null}
+                    {scan.collectorVersions?.props_precedence !== '1.0.0' ? <div>This snapshot predates shared props precedence checks. Run a new complete scan; existing decisions and baselines are preserved.</div> : null}
                     {!['workflow_actions', 'navigation'].every(collector => Object.prototype.hasOwnProperty.call(scan.collectorCounts, collector)) || scan.collectorVersions?.interaction_dependencies !== '1.0.1' ? (
                         <div>
                             This snapshot predates current workflow/navigation coverage. Run a new complete scan from Settings; individual decisions, policy history and captured baselines are unchanged.

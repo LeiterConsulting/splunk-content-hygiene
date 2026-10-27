@@ -43,3 +43,15 @@ test('requests have a bounded timeout', async () => {
         name: 'TimeoutError',
     });
 });
+
+test.each([200, 403, 503])('bounded metadata reads limit even HTTP %s error bodies and never retry', async status => {
+    globalThis.fetch = jest.fn().mockResolvedValue({ status, text: async () => '☃'.repeat(4) });
+    await expect(splunkRequest('/native-metadata', {}, [200], 1000, 10)).rejects.toThrow('byte budget');
+    expect(fetch).toHaveBeenCalledTimes(1);
+});
+test('streaming metadata stops before parsing an oversized chunk', async () => {
+    const cancel = jest.fn(); const releaseLock = jest.fn(); const read = jest.fn().mockResolvedValue({ done: false, value: new Uint8Array(11) });
+    globalThis.fetch = jest.fn().mockResolvedValue({ status: 200, body: { getReader: () => ({ read, cancel, releaseLock }) } });
+    await expect(splunkRequest('/native-metadata', {}, [200], 1000, 10)).rejects.toThrow('byte budget');
+    expect(cancel).toHaveBeenCalledTimes(1); expect(releaseLock).toHaveBeenCalledTimes(1); expect(read).toHaveBeenCalledTimes(1);
+});

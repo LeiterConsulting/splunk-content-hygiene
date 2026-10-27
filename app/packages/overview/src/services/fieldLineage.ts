@@ -2,6 +2,7 @@
 import { CatalogIssue, CatalogResult, decodeSharedKnowledgeIdentity, NativeKnowledgeEntry, SharedKnowledgeIdentity } from './knowledgeCatalog';
 import { ExtractionOutputProvenance, FieldAliasMapping, FieldContextEvidence, FieldDependencyProvenance, FieldLineageFacts, FieldOutputDeclaration, FieldScope, LookupMappingFacts, ProducerOutputDeclaration } from '../types';
 import { inlineExtractionDeclarations, namedCaptureDeclarations } from './extractionDeclarations';
+import { readPropsContexts } from './propsEvidence';
 
 export type { FieldAliasMapping, FieldScope } from '../types';
 
@@ -54,6 +55,8 @@ export function readFieldLineageFacts(value: unknown): FieldLineageFacts | undef
         row.scope !== null && (!row.scope || !['sourcetype', 'host', 'source'].includes(row.scope.field) || !identifier(row.scope.value) || typeof row.scope.exact !== 'boolean')) { return undefined; }
     const outputProvenance = row.outputProvenance === undefined ? undefined : readOutputProvenance(row.outputProvenance);
     const lookupMapping = row.lookupMapping === undefined ? undefined : readLookupMapping(row.lookupMapping);
+    const propsContexts = row.propsContexts === undefined ? undefined : readPropsContexts(row.propsContexts);
+    if (row.propsContexts !== undefined && !propsContexts || row.propsContextsTruncated !== undefined && typeof row.propsContextsTruncated !== 'boolean') { return undefined; }
     if (row.lookupMapping !== undefined && (!lookupMapping || row.operation !== 'lookup' ||
         JSON.stringify(row.inputs) !== JSON.stringify(lookupMapping.inputs.map(item => item.eventField)) ||
         JSON.stringify(row.outputs) !== JSON.stringify(lookupMapping.outputs.map(item => item.eventField)))) { return undefined; }
@@ -65,7 +68,8 @@ export function readFieldLineageFacts(value: unknown): FieldLineageFacts | undef
         scope: row.scope ? { field: row.scope.field, value: row.scope.value, exact: row.scope.exact } : null,
         enabled: row.enabled, inputs: row.inputs, outputs: row.outputs, aliases: row.aliases.map(mapping => ({ input: mapping.input, output: mapping.output, mode: mapping.mode })),
         transforms: row.transforms, syntax: row.syntax, sourceLocation: row.sourceLocation, limitations: row.limitations,
-        ...(outputProvenance ? { outputProvenance } : {}), ...(lookupMapping ? { lookupMapping } : {}) };
+        ...(outputProvenance ? { outputProvenance } : {}), ...(lookupMapping ? { lookupMapping } : {}),
+        ...(propsContexts ? { propsContexts } : {}), ...(row.propsContextsTruncated !== undefined ? { propsContextsTruncated: row.propsContextsTruncated } : {}) };
 }
 
 export function readLookupMapping(value: unknown): LookupMappingFacts | undefined {
@@ -136,6 +140,9 @@ export function readFieldProvenance(value: unknown): FieldDependencyProvenance |
     if (row.contexts !== undefined && (!Array.isArray(row.contexts) || row.contexts.length > FIELD_DECLARATION_ITEMS)) { return undefined; }
     const contexts = row.contexts?.map(readContext);
     if (contexts?.some(item => !item || !row.contextApps.includes(item.invokingApp))) { return undefined; }
+    const propsContexts = row.propsContexts === undefined ? undefined : readPropsContexts(row.propsContexts);
+    if (row.propsContexts !== undefined && (!propsContexts || propsContexts.some(item => !row.contextApps.includes(item.app))) ||
+        row.propsContextsTruncated !== undefined && typeof row.propsContextsTruncated !== 'boolean') { return undefined; }
     if (row.outputDeclarations !== undefined) {
         if (!Array.isArray(row.outputDeclarations) || row.outputDeclarations.length > FIELD_DECLARATION_ITEMS) { return undefined; }
         outputDeclarations = [];
@@ -150,7 +157,8 @@ export function readFieldProvenance(value: unknown): FieldDependencyProvenance |
     return { version: 1, kind: row.kind, fields: row.fields, scope: row.scope ? { field: row.scope.field, value: row.scope.value, exact: row.scope.exact } : null,
         consumerPhase: row.consumerPhase, producerPhase: row.producerPhase, transformPositions: row.transformPositions,
         viaObjectIds: row.viaObjectIds, contextApps: row.contextApps, invocation: row.invocation,
-        ...(outputDeclarations ? { outputDeclarations } : {}), ...(contexts ? { contexts: contexts as FieldContextEvidence[] } : {}) };
+        ...(outputDeclarations ? { outputDeclarations } : {}), ...(contexts ? { contexts: contexts as FieldContextEvidence[] } : {}),
+        ...(propsContexts ? { propsContexts } : {}), ...(row.propsContextsTruncated !== undefined ? { propsContextsTruncated: row.propsContextsTruncated } : {}) };
 }
 const object = (value: unknown): Record<string, unknown> | null => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
 const identifier = (value: unknown): value is string => typeof value === 'string' && value.length > 0 && value.length <= 4096 && value.trim() === value &&

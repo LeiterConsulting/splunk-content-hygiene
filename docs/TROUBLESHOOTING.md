@@ -119,6 +119,33 @@ feed them. Alias chaining and cross-transform input availability are not inferre
 Narrow an investigation if a producer/index/candidate ceiling is reached; omitted
 edges remain unverified. See the [field guide](USER_GUIDE.md#declared-field-lineage).
 
+## Shared props context is unverified or shadowed
+
+Run a new complete scan if the snapshot predates `props_precedence` 1.0.0.
+Open the context disclosure in object or relationship details and inspect the
+specific reason. **Shadowed** retains a possible fallback path and provides a
+link to the different returned shared binding; it is not a deletion suggestion.
+
+- **Access denied / read failed:** retain native permissions and check normal
+  Splunk REST availability. Do not grant customer-content write privileges or
+  broader catalog access to clear the warning.
+- **Snapshot changed / handlers disagree:** repeat a complete scan after the
+  configuration settles. Rule ownership, namespace, exact attribute text and
+  captured value/access evidence must agree; a stanza ACL is not attribute origin.
+- **Unsupported scope:** patterns, defaults, encoded scopes and cross-stanza
+  source/host/sourcetype priority are not evaluated.
+- **Budget reached / truncated:** inspect the scan's `props_context_*` counters.
+  Fixed-caller checks are prioritized within explicit pair/read/byte/time and
+  candidate ceilings. More unverified contexts do not imply fewer dependencies.
+
+Page navigation and context filtering read the existing app-local snapshot only.
+Calculated-field checks use the existing filtered native catalog GET endpoint;
+older Web proxies do not necessarily expose its individual-entry route. No new
+REST exposure, restart or broader permission is needed for this transport.
+No shell, `btool`, customer expression, regex or workflow is run. Even a local or
+inherited merged match is not per-file origin, runtime activation or proof of use.
+See the [scope and status definitions](USER_GUIDE.md#shared-props-precedence-and-inheritance).
+
 ## Workflow or navigation targets are missing
 
 Confirm the installed candidate includes the two collectors, then run a complete

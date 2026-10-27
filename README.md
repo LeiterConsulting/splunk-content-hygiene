@@ -17,6 +17,41 @@ The app keeps customer content read-only:
   app-local KV Store collections.
 - Every finding carries reasons, evidence, and a suggested investigation step.
 
+## Version 1.7.0 — shared props precedence and inheritance
+
+[Release 1.7.0, build 89](https://github.com/LeiterConsulting/splunk-content-hygiene/releases/tag/v1.7.0) cross-checks native rule-level ownership/export scope
+against the merged value of the same exact props stanza/attribute. Explorer and
+Review Library distinguish **local merged match**, **inherited merged match**,
+**shadowed in this context**, and **unverified**, with reasons, filtering,
+pagination and a drill-down to a different returned binding. Shadowed paths stay
+in the graph as possible fallbacks after removal; no execution is inferred.
+
+Checks run only during explicit inventory scans, not page navigation. Values are
+compared transiently; only compact IDs, status/reason and digests are cached.
+Read, byte, candidate, fan-out and wall-clock ceilings leave unassessed contexts
+explicitly unknown. The same evidence travels through impact, required-content,
+freshness and CSV/JSON. Existing decisions and v1–v5 baselines remain intact under
+coverage policy `shared-static-v6`.
+
+This is **not full effective-props evaluation**: user/private/system inheritance,
+per-file local/default provenance, cross-stanza priority, runtime activation and
+execution remain unverified. See the [props investigation guide](docs/USER_GUIDE.md#shared-props-precedence-and-inheritance)
+and [coverage matrix](docs/DEPENDENCY_COVERAGE.md).
+
+Build 89 passes 907 automated checks and pre-cert AppInspect with no
+errors/failures. Fresh native catalog/cache/schema comparisons and all seven pages
+in Light/Dark cover Enterprise 10.2.5, 10.2.8 and 10.4.4. Actual JSON/CSV exports,
+original decisions, policy history and restored appearance preferences are
+verified. See the [qualification and limits](docs/COMPATIBILITY.md#170-shared-props-qualification),
+including automated-only shadowing and props-specific Library positives. Broader
+dependency follow-up #8 remains open.
+
+![Shared props relationship context in native Dark mode](docs/images/props-context-dark.jpg)
+
+The capture uses built-in native metadata, not demonstration data or execution
+evidence. Long context details wrap in a persistent, paginated disclosure.
+[Light-mode example](docs/images/props-context-light.jpg).
+
 ## Version 1.6.0 — workflow and navigation dependencies
 
 [Release 1.6.0, build 85](https://github.com/LeiterConsulting/splunk-content-hygiene/releases/tag/v1.6.0) adds shared **Workflow Action** and **Navigation Menu**
@@ -181,12 +216,12 @@ the shared cache; access is restricted to explicit hygiene roles.
    connectivity check succeeds.
 
 The support baseline is Splunk Enterprise **10.2.5 or later** on a standalone
-Linux x86-64 search head with KV Store. Release 1.6.0 **build 85** has
+Linux x86-64 search head with KV Store. Release 1.7.0 **build 89** has
 real-data qualification on **10.2.5, 10.2.8 and 10.4.4**: fresh bounded/full scans,
-native catalog/cache and schema comparisons, targeted light/dark interaction
-investigations, required-content and removal-impact exports, and the existing
+native catalog/cache and schema comparisons, all seven pages in Light/Dark,
+shared-props investigations, required-content and removal-impact exports, and the existing
 Review Library. Saved decisions, policy journals and evidence baselines are
-preserved. Broader seven-page, backend permission/concurrency and native policy
+preserved. Broader backend permission/concurrency and native policy
 lifecycle evidence from 1.5.0 remains separately documented. This is bounded static
 coverage, not execution telemetry or a large-estate benchmark.
 
@@ -309,7 +344,7 @@ yarn validate
 ```
 
 The verified installable archive is written to
-`app/dist/content_hygiene-<VERSION>.tar.gz` (currently 1.6.0, build 85).
+`app/dist/content_hygiene-<VERSION>.tar.gz` (currently 1.7.0, build 89).
 Run `yarn release:prepare` to
 perform the complete validation and update `SHA256SUMS`.
 

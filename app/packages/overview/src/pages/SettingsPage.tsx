@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import WaitSpinner from '@splunk/react-ui/WaitSpinner';
+import CollapsiblePanel from '@splunk/react-ui/CollapsiblePanel';
 import {
     ButtonRow,
     Card,
@@ -13,6 +14,7 @@ import {
     ProgressBar,
     ProgressTrack,
     Select,
+    SmallText,
     SpacedBlock,
     StyledButton,
     Table,
@@ -161,6 +163,7 @@ export function SettingsPage({
                                         'Normalized collector records',
                                         'Collected native entries',
                                         'Visible native entries',
+                                        'Analysis counters',
                                     ],
                                     displayedScan
                                         ? [
@@ -183,6 +186,7 @@ export function SettingsPage({
                                                   JSON.stringify(displayedScan.collectorCounts),
                                                   JSON.stringify(displayedScan.collectorNativeCounts ?? {}),
                                                   JSON.stringify(displayedScan.collectorTotals),
+                                                  JSON.stringify(displayedScan.parserCounts ?? {}),
                                               ],
                                           ]
                                         : [],
@@ -297,6 +301,19 @@ export function SettingsPage({
                                 <dt>Review library</dt>
                                 <dd>{reviews.length.toLocaleString()}</dd>
                             </DefinitionList>
+                            {displayedScan?.collectorVersions?.props_precedence === '1.0.0' ? <section aria-label="Shared props scan diagnostics">
+                                <CollapsiblePanel appearance="subtle" title="Shared props context diagnostics">
+                                    <SmallText>Scan-time shared exact-stanza observations, not runtime execution or complete effective-props coverage. Unverified and truncated contexts do not establish absence.</SmallText>
+                                    <DefinitionList>
+                                        <dt>Context observations</dt><dd>{(displayedScan.parserCounts?.props_context_checks ?? 0).toLocaleString()}</dd>
+                                        <dt>Native GET reads</dt><dd>{(displayedScan.parserCounts?.props_context_reads ?? 0).toLocaleString()}</dd>
+                                        <dt>Local / inherited</dt><dd>{displayedScan.parserCounts?.props_context_local ?? 0} / {displayedScan.parserCounts?.props_context_inherited ?? 0}</dd>
+                                        <dt>Shadowed / unverified</dt><dd>{displayedScan.parserCounts?.props_context_shadowed ?? 0} / {displayedScan.parserCounts?.props_context_unverified ?? 0}</dd>
+                                        <dt>Truncated edges / objects</dt><dd>{displayedScan.parserCounts?.props_context_truncated_edges ?? 0} / {displayedScan.parserCounts?.props_context_truncated_objects ?? 0}</dd>
+                                    </DefinitionList>
+                                    <SmallText>Complete-scan ceiling: 256 native attribute/app pairs, two reads per pair, four workers, 90 seconds; 128 KiB per response and eight seconds per read. Bounded scans use 32 pairs and 15 seconds. Fixed callers are prioritized. Additional candidate/task/row ceilings remain explicit in context details and JSON diagnostics.</SmallText>
+                                </CollapsiblePanel>
+                            </section> : null}
                             {displayedScan && displayedScan.warnings.length > 0 ? (
                                 <SpacedBlock>
                                     <strong>Collector warnings</strong>

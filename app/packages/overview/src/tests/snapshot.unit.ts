@@ -21,6 +21,7 @@ let tagEntries: Row[] = [];
 let failKnowledge = false;
 let fieldEntries: Record<string, Row[]> = {};
 let failFields = false;
+let nativeProps = false;
 let fieldPaging: 'normal' | 'repeat' | 'missing_total' | 'shrinking_total' = 'normal';
 let interactionEntries: Record<string, Row[]> = {};
 let interactionViews: Row[] = [];
@@ -50,6 +51,7 @@ beforeEach(() => {
     failKnowledge = false;
     fieldEntries = {};
     failFields = false;
+    nativeProps = false;
     fieldPaging = 'normal';
     interactionEntries = {}; interactionViews = []; failInteractions = false; interactionPaging = 'normal';
     tagPaging = 'normal';
@@ -134,6 +136,29 @@ beforeEach(() => {
             content: { disabled: false },
         };
         let entries: Row[] = [];
+        const propsItem = url.pathname.match(/\/data\/props\/(extractions|fieldaliases|calcfields|lookups)\/(.+)$/);
+        const propsStanza = url.pathname.match(/\/configs\/conf-props\/(.+)$/);
+        const filteredCalc = url.pathname.endsWith('/data/props/calcfields') && url.searchParams.has('search');
+        if (nativeProps && (propsItem || propsStanza || filteredCalc)) {
+            const context = decodeURIComponent(url.pathname.split('/')[3]);
+            const all = [...Object.values(fieldEntries).flat(), ...automaticEntries];
+            const visible = all.filter(row => row.acl.app === context || row.acl.sharing === 'global');
+            if (filteredCalc) {
+                const possible = visible.filter(row => url.searchParams.get('search') === `stanza=${JSON.stringify(row.content.stanza)} AND attribute=${JSON.stringify(row.content.attribute)}`);
+                const selected = possible.find(row => row.acl.app === context) ?? possible[0];
+                return reply({ entry: selected ? [selected] : [], paging: { total: selected ? 1 : 0 } });
+            }
+            if (propsItem) {
+                const name = decodeURIComponent(propsItem[2]);
+                const possible = visible.filter(row => row.name === name);
+                const selected = possible.find(row => row.acl.app === context) ?? possible[0];
+                return reply({ entry: selected ? [selected] : [] }, selected ? 200 : 404);
+            }
+            const stanza = decodeURIComponent(propsStanza![1]);
+            const content: Row = { 'eai:appName': context, 'eai:userName': 'nobody' };
+            visible.filter(row => row.content.stanza === stanza).forEach(row => { content[row.content.attribute] = row.content.value; });
+            return reply({ entry: [{ name: stanza, content }] });
+        }
         const fieldEndpoint = ['data/props/extractions', 'data/props/fieldaliases', 'data/props/calcfields', 'data/transforms/extractions'].find(endpoint => url.pathname.endsWith(`/${endpoint}`));
         const interactionEndpoint = ['data/ui/nav', 'data/ui/workflow-actions'].find(endpoint => url.pathname.endsWith(`/${endpoint}`));
         if (interactionEndpoint) {
@@ -217,7 +242,7 @@ test('native interaction catalogs persist exact identities and source locations 
     const publicCache = JSON.stringify([...collections.get('ch_objects')!.values(), ...collections.get('ch_edges')!.values()]);
     expect(publicCache).not.toMatch(/private-query-marker|private-search-marker|hidden-private-navigation|<nav>|savedsearch Daily/);
     const cached = await splunkInventoryClient.getLatestSnapshot();
-    expect(cached?.edges).toEqual(result.edges); expect(cached?.objects.find(row => row.objectId === nav.objectId)?.reviewEvidence?.coverage?.policy).toBe('shared-static-v5');
+    expect(cached?.edges).toEqual(result.edges); expect(cached?.objects.find(row => row.objectId === nav.objectId)?.reviewEvidence?.coverage?.policy).toBe('shared-static-v6');
     expect([...collections.get('ch_reviews')!.values()]).toEqual([original]);
     expect([...collections.get('ch_app_policy_revisions')!.values()]).toEqual([policy]);
     expect(requests.filter(row => row.method !== 'GET').every(row => row.path.includes('/storage/collections/data/') && !/\/ch_(?:review|app_policy)/.test(row.path))).toBe(true);
@@ -293,7 +318,7 @@ test('native field catalogs persist compact facts and exact edge provenance with
     expect(stored).not.toContain('private_literal_must_not_be_cached');
     expect(stored).not.toContain('coalesce(');
     expect(stored).not.toContain('actor::$1');
-    expect(result.objects.find(row => row.objectType === 'Calculated Field')?.reviewEvidence?.coverage?.policy).toBe('shared-static-v5');
+    expect(result.objects.find(row => row.objectType === 'Calculated Field')?.reviewEvidence?.coverage?.policy).toBe('shared-static-v6');
     expect([...collections.get('ch_reviews')!.values()]).toEqual([original]);
     expect(requests.filter(row => row.method !== 'GET').every(row => row.path.includes('/storage/collections/data/') && !/\/ch_review/.test(row.path))).toBe(true);
 });
@@ -318,7 +343,7 @@ test.each(['inline', 'transform'] as const)('%s output provenance survives colle
     const edge = result.edges.find(row => row.relation === 'may_read_extracted_field')!;
     expect(edge.fieldProvenance?.outputDeclarations).toMatchObject([{ field: 'actor', objectId: nativeOrigin.objectId, capture: 2, offset: 8 }]);
     expect([...collections.get('ch_edges')!.values()].find(row => row.relation === edge.relation)).toMatchObject({ field_provenance: edge.fieldProvenance });
-    expect(result.scan.collectorVersions).toMatchObject({ field_lineage: '1.2.0', dependency_analysis: '1.6.1', interaction_dependencies: '1.0.1' });
+    expect(result.scan.collectorVersions).toMatchObject({ field_lineage: '1.2.0', dependency_analysis: '1.7.0', interaction_dependencies: '1.0.1', props_precedence: '1.0.0' });
     const cached = await splunkInventoryClient.getLatestSnapshot();
     expect(cached?.objects.find(row => row.objectId === nativeOrigin.objectId)?.fieldLineage).toEqual(nativeOrigin.fieldLineage);
     expect(cached?.edges.find(row => row.edgeId === edge.edgeId)?.fieldProvenance).toEqual(edge.fieldProvenance);
@@ -344,6 +369,27 @@ test('field native pagination separates shared records and excluded private entr
     expect(partial.scan.scanId).toBe(result.scan.scanId);
     expect(partial.scan.retainedBaseline).toBe(true);
     expect(partial.latestCheck?.warnings.join(' ')).toContain('Field aliases (props)');
+});
+
+test.each(['field_aliases', 'calculated_fields'] as const)('native %s props checks persist compact evidence through the manifest, cache, graph and immutable review journals', async catalog => {
+    const calculated = catalog === 'calculated_fields';
+    const alias = declaredField(catalog, calculated ? 'EVAL-context' : 'FIELDALIAS-context', calculated ? 'lower(actor)' : 'actor AS owner', 'example', 'global');
+    fieldEntries[calculated ? 'data/props/calcfields' : 'data/props/fieldaliases'] = [alias.entry]; nativeProps = true; sourceSearch = 'sourcetype="example:events"';
+    const original = { _key: 'saved', note: 'Keep exactly', stage: 'retain', baseline: 'immutable' };
+    collections.set('ch_reviews', new Map([['saved', original]])); collections.set('ch_review_revisions', new Map([['saved', original]]));
+    const result = await splunkInventoryClient.runFullScan();
+    const current = result.objects.find(row => row.canonicalName === alias.entry.name)!;
+    expect(current.fieldLineage?.propsContexts).toEqual([expect.objectContaining({ status: 'local', app: 'example', reason: 'matched' })]);
+    const edge = result.edges.find(row => row.targetId === current.objectId && row.relation === (calculated ? 'may_apply_calculated_field' : 'may_apply_field_alias'))!;
+    expect(edge.fieldProvenance?.propsContexts?.[0]).toMatchObject({ status: 'local', objectId: current.objectId });
+    const cached = await splunkInventoryClient.getLatestSnapshot();
+    expect(cached?.objects.find(row => row.objectId === current.objectId)?.fieldLineage).toEqual(current.fieldLineage);
+    expect(cached?.scan.parserCounts).toMatchObject({ props_context_local: 1, props_context_unverified: 0, props_context_reads: 2 });
+    expect(cached?.edges.find(row => row.edgeId === edge.edgeId)?.fieldProvenance).toEqual(edge.fieldProvenance);
+    expect([...collections.get('ch_reviews')!.values()]).toEqual([original]);
+    expect([...collections.get('ch_review_revisions')!.values()]).toEqual([original]);
+    expect(requests.filter(row => /\/configs\/conf-props\/|\/data\/props\/[^/]+\//.test(row.path)).every(row => row.method === 'GET')).toBe(true);
+    expect(JSON.stringify([...collections.get('ch_objects')!.values()])).not.toContain('actor AS owner');
 });
 
 test('an excluded private transform with an unavailable app cannot establish a shared REPORT binding', async () => {

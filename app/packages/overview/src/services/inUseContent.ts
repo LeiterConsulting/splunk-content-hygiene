@@ -4,6 +4,7 @@ import { compareReviewEvidence } from './reviewEvidence';
 import { usageSourceForObject, usageValidity } from './usage';
 import { isPotentialRelation } from '../utils/dependencySemantics';
 import { AppPolicyStore, appPolicyStore, buildPolicyProtection } from './appPolicies';
+import { PROPS_CONTEXT_LIMITATION } from './propsEvidence';
 
 export interface InUseOptions {
     activity: 'all' | 'dashboard_view' | 'saved_search_execution' | 'none';
@@ -63,6 +64,7 @@ export interface InUseReport {
     appPolicies: AppPolicyStore;
 }
 const implicitGaps = [
+    PROPS_CONTEXT_LIMITATION,
     'This is a supported shared static dependency footprint, not a complete migration manifest or proof that excluded objects are unused.',
     'Shared event types and distinct tag assignments have bounded literal-reference coverage. Implicit classification, wildcard names, encoded tag values, system inheritance and invoking-app contexts are not exhaustively resolved.',
     'Field extractions, aliases, calculated fields and transforms have bounded declared-metadata coverage. Potential field paths respect extraction → alias → parallel calculated fields → lookup. Supported capture declarations do not prove regex validity, matches or field availability; dynamic outputs, cross-scope precedence and chaining remain unverified.',

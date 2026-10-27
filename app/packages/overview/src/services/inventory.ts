@@ -8,6 +8,7 @@ import { attachReviewEvidence, configurationFingerprint } from './reviewEvidence
 import { PrivateObjectCount } from './dependencyCoverage';
 import { CatalogIssue, decodeEventType, decodeTagBindings, decodeSharedKnowledgeIdentity, MAX_TAG_BINDINGS_PER_STANZA } from './knowledgeCatalog';
 import { decodeFieldLineage, FieldCatalog, fieldLineageFacts, readFieldLineageFacts, readFieldProvenance } from './fieldLineage';
+import { checkPropsPrecedence, PROPS_READ_BYTES, PropsReadRequest, propsReadPlan } from './propsPrecedence';
 import {
     CollectedUsageSource,
     DASHBOARD_ACCESS_SOURCE_ID,
@@ -1231,6 +1232,8 @@ function scanRecordToSummary(record: KvScanRecord): ScanSummary {
             .map(([key, value]) => [key, numberValue(value)])),
         collectorVersions: Object.fromEntries(Object.entries(asRecord(record.collector_versions))
             .filter((entry): entry is [string, string] => typeof entry[1] === 'string')),
+        parserCounts: Object.fromEntries(Object.entries(asRecord(record.parser_counts))
+            .filter((entry): entry is [string, number] => Number.isSafeInteger(entry[1]) && Number(entry[1]) >= 0)),
         analysisStatus:
             record.analysis_status === 'complete' ||
             record.analysis_status === 'partial' ||
@@ -1891,10 +1894,11 @@ async function runInventoryScan(
         collector_totals: {},
         collector_versions: {
             rest_inventory: '0.2.0',
-            dependency_analysis: '1.6.1',
+            dependency_analysis: '1.7.0',
             interaction_dependencies: '1.0.1',
             knowledge_catalogs: '1.0.0',
             field_lineage: '1.2.0',
+            props_precedence: '1.0.0',
             classification: '1.0.0',
             review_evidence: '1.0.0',
         },
@@ -2074,6 +2078,21 @@ async function runInventoryScan(
                 assertionCompleteness,
                 { privateObjects: [...privateCounts.values()], privateTargets, privateTargetGaps: [...privateTargetGaps.values()] },
             );
+            onProgress?.({ completedCollectors, totalCollectors, stage: 'Cross-checking shared props bindings and inheritance (bounded native reads)' });
+            const contexts = await checkPropsPrecedence(analysis.objects, analysis.edges, async (request: PropsReadRequest) => {
+                const plan = propsReadPlan(request);
+                const url = new URL(createRESTURL(plan.path, { owner: 'nobody', app: request.app }), window.location.origin);
+                url.search = plan.query.toString();
+                try {
+                    const data = await splunkRequest(url.toString(), { method: 'GET', signal: request.signal }, [200], 8000, PROPS_READ_BYTES);
+                    return { status: 200, data };
+                } catch (error) { return { status: error instanceof RestRequestError ? error.status : 0, data: null }; }
+            }, { ...(mode === 'bounded' ? { maxContexts: 32, maxMilliseconds: 15000 } : {}), signal: activeScanController?.signal });
+            analysis.objects = contexts.objects; analysis.edges = contexts.edges;
+            Object.assign(analysis.parserCounts, contexts.counts);
+            if (contexts.counts.props_context_unverified) {
+                warnings.push(`Shared props context: ${contexts.counts.props_context_unverified} observation(s) remain unverified. Inspect context reasons; runtime/file/cross-stanza precedence is not inferred.`);
+            }
             if (analysis.parserWarnings.length) {
                 const affectedCount = analysis.objects.filter(
                     (item) => item.analysisWarnings?.length,

@@ -11,6 +11,7 @@ import { evidenceWindowFresh, usageSourceForObject, usageValidity } from './usag
 import { compareReviewEvidence } from './reviewEvidence';
 import { isPotentialRelation, weakestDependencyConfidence } from '../utils/dependencySemantics';
 import { PolicyProtection } from './appPolicies';
+import { PROPS_CONTEXT_LIMITATION } from './propsEvidence';
 
 export type RemovalImpactLevel = 'critical' | 'high' | 'medium' | 'low' | 'unknown';
 
@@ -610,6 +611,7 @@ export function analyzeRemovalImpact(
 
     const caveats = [
         'This is a read-only simulation from the latest persisted live scan; it does not remove or modify Splunk content.',
+        PROPS_CONTEXT_LIMITATION,
         'Supported explicit relationships, literal navigation/workflow targets, event-type/tag filters and labeled potential field/props bindings are included. Dynamic menu lists, runtime namespaces/views, external/embedded links, implicit classification, opaque PCRE, unsupported expressions, effective field availability, props precedence, dynamic SPL, tokens and unobserved usage can add impact.',
     ];
     if (potentialAffectedCount > 0 || outboundEdges.some((edge) => isPotentialRelation(edge.relation))) {

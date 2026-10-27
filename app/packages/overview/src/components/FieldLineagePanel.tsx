@@ -2,6 +2,7 @@ import React from 'react';
 import CollapsiblePanel from '@splunk/react-ui/CollapsiblePanel';
 import { DefinitionList, EvidenceList, InlineNotice, SmallText } from '../AppStyles';
 import { ContentObject, ExtractionOutputProvenance, FieldDependencyProvenance } from '../types';
+import { PropsContextPanel } from './PropsContextPanel';
 
 const outputMethods: Record<ExtractionOutputProvenance['method'], string> = {
     inline_named_captures: 'Inline named captures', transform_named_captures: 'Transform named captures',
@@ -37,6 +38,7 @@ export function FieldLineagePanel({ object }: { object: ContentObject }): React.
     return <section aria-label="Declared field lineage">
         <strong>Declared field lineage</strong>
         <SmallText>Configured names and provenance only—not field values, proven execution or removal approval.</SmallText>
+        {facts.operation !== 'transform' ? <PropsContextPanel key={object.objectId} rows={facts.propsContexts} truncated={facts.propsContextsTruncated} /> : null}
         <DefinitionList>
             <dt>Processing phase</dt><dd>{phases[facts.operation]}</dd>
             <dt>Event scope</dt><dd>{facts.scope ? `${facts.scope.field}=${facts.scope.value}${facts.scope.exact ? ' · exact literal scope' : ' · pattern/default/encoded scope not evaluated'}` : 'Not independently established'}</dd>
@@ -85,6 +87,7 @@ export function FieldProvenanceDetails({ provenance }: { provenance?: FieldDepen
     if (provenance.kind === 'report_binding') { phases = 'REPORT configuration → named transform'; }
     else if (provenance.kind === 'lookup_binding') { phases = 'LOOKUP configuration → named lookup definition (not a lookup execution chain)'; }
     return <section aria-label="Field relationship provenance">
+        <PropsContextPanel rows={provenance.propsContexts} truncated={provenance.propsContextsTruncated} />
         <DefinitionList>
             <dt>Declared fields</dt><dd>{provenance.fields.join(', ') || 'Scope/configuration binding only—not proven field consumption'}</dd>
             <dt>Dependency phases</dt><dd>{phases}</dd>
