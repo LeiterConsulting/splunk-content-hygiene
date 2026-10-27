@@ -6,7 +6,7 @@ No missing edge, usage gap or review stage authorizes removal.
 
 ## Supported sources
 
-The workflow/navigation rows below are in 1.6.0 build 84. See the
+The workflow/navigation rows below are in 1.6.0 build 85. See the
 [compatibility policy](COMPATIBILITY.md#160-interaction-qualification) for its exact
 qualification and publication status; older release evidence is separate.
 
