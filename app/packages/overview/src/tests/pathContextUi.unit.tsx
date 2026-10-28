@@ -92,8 +92,8 @@ test.each(['light', 'dark'] as const)('impact witness details open at full width
     expect(screen.getByRole('heading', { name: '3 known affected objects' }).closest('[data-investigation-workspace]')).not.toBeNull();
 });
 
-test.each(['light', 'dark'] as const)('Explorer relationship/impact CSV and JSON agree on cached path context in %s', async scheme => {
-    const { data, byId } = pathFixture(); const user = userEvent.setup(); const saved = review('c'); const bytes = JSON.stringify(saved);
+test.each(['light', 'dark'] as const)('Explorer relationship CSV and JSON agree on cached path context in %s', async scheme => {
+    const { data } = pathFixture(); const user = userEvent.setup(); const saved = review('c'); const bytes = JSON.stringify(saved);
     window.history.replaceState(null, '', '/?object=c');
     render(frame(scheme, <DependencyPage {...actions} snapshot={data} isLoading={false} reviews={[saved]} />));
     await user.click(screen.getByRole('button', { name: 'Export investigation' }));
@@ -103,14 +103,28 @@ test.each(['light', 'dark'] as const)('Explorer relationship/impact CSV and JSON
     await user.click(screen.getByRole('menuitem', { name: 'Filtered relationships CSV' }));
     const [, columns, rows] = jest.mocked(downloadCsv).mock.calls[0];
     expect(JSON.parse(String(rows[0][columns.indexOf('Directed relationship context (one hop)')]))).toEqual(exported.relationships[0].pathContext);
+    expect(JSON.stringify(saved)).toBe(bytes); expect(actions.onSaveReview).not.toHaveBeenCalled(); expect(actions.onDeleteReview).not.toHaveBeenCalled();
+});
+
+test.each(['light', 'dark'] as const)('Explorer impact CSV and JSON agree on cached path context in %s', async scheme => {
+    const { data, byId } = pathFixture(); const user = userEvent.setup(); const saved = review('c'); const bytes = JSON.stringify(saved);
+    window.history.replaceState(null, '', '/?object=c');
+    render(frame(scheme, <DependencyPage {...actions} snapshot={data} isLoading={false} reviews={[saved]} />));
     await user.click(screen.getByRole('button', { name: 'Export investigation' }));
     await user.click(screen.getByRole('menuitem', { name: 'Full removal impact CSV' }));
-    const [, impactColumns, impactRows] = jest.mocked(downloadCsv).mock.calls[1];
+    const [, impactColumns, impactRows] = jest.mocked(downloadCsv).mock.calls[0];
     const expected = createPathContextTracker(byId).path('caller', data.edges);
     const callerRow = impactRows.find(row => row[impactColumns.indexOf('Affected object ID')] === 'caller')!;
     expect(JSON.parse(String(callerRow[impactColumns.indexOf('Chosen witness path context')]))).toEqual(expected);
     expect(JSON.parse(String(callerRow[impactColumns.indexOf('Chosen witness edge IDs')]))).toEqual(data.edges.map(edge => edge.edgeId));
-    expect(JSON.stringify(saved)).toBe(bytes); expect(actions.onSaveReview).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Export investigation' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Full removal impact JSON' }));
+    expect(downloadJson).toHaveBeenCalledWith('content-hygiene-impact.json', expect.objectContaining({
+        analysis: expect.objectContaining({ affectedObjects: expect.arrayContaining([
+            expect.objectContaining({ objectId: 'caller', pathContext: expected, pathEdgeIds: data.edges.map(edge => edge.edgeId) }),
+        ]) }),
+    }));
+    expect(JSON.stringify(saved)).toBe(bytes); expect(actions.onSaveReview).not.toHaveBeenCalled(); expect(actions.onDeleteReview).not.toHaveBeenCalled();
 });
 
 test.each(['light', 'dark'] as const)('required-content detail and full/CSV exports preserve one chosen context in %s', async scheme => {

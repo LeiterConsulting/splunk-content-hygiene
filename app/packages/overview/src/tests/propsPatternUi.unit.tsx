@@ -38,26 +38,33 @@ test.each(['light', 'dark'] as const)('old scan requests explicit pattern/defaul
     rerender(frame(scheme, <ScanStatusBanner scan={{ ...data.scan, collectorVersions: { ...data.scan.collectorVersions, props_patterns: '1.0.0' } }} isLoading={false} loadError={null} />));
     expect(screen.queryByText(/predates bounded props pattern\/default caller coverage/)).not.toBeInTheDocument();
 });
-test.each(['light', 'dark'] as const)('Explorer and Library exports preserve compact default evidence and the v7 review in %s', async scheme => {
-    const { data, calculated, saved } = await fieldInvestigationFixture(); const user = userEvent.setup();
+async function defaultEvidenceFixture() {
+    const { data, calculated, saved } = await fieldInvestigationFixture();
     // Presentation/export contract; no native inventory or source definition is created.
     calculated.fieldLineage = { ...calculated.fieldLineage!, scope: { field: 'sourcetype', value: 'default', exact: false } };
     const baseline = JSON.parse(JSON.stringify(saved.evidenceBaseline)); baseline.evidence.coverage.policy = 'shared-static-v7'; saved.evidenceBaseline = baseline;
+    return { data, calculated, saved, baseline };
+}
+test.each(['light', 'dark'] as const)('Explorer CSV/JSON preserve compact default evidence and the v7 review in %s', async scheme => {
+    const { data, calculated, saved } = await defaultEvidenceFixture(); const user = userEvent.setup();
     const bytes = JSON.stringify(saved); window.history.replaceState(null, '', `/?object=${encodeURIComponent(calculated.objectId)}&tab=object`);
-    const { unmount } = render(frame(scheme, <DependencyPage {...actions} snapshot={data} isLoading={false} reviews={[saved]} />));
+    render(frame(scheme, <DependencyPage {...actions} snapshot={data} isLoading={false} reviews={[saved]} />));
     expect(screen.getByText(/\[default\] · potential shared fallback/)).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Export investigation' })); await user.click(screen.getByRole('menuitem', { name: 'Filtered relationships JSON' }));
     expect(downloadJson).toHaveBeenCalledWith('content-hygiene-dependencies.json', expect.objectContaining({ centerObject: expect.objectContaining({ fieldLineage: calculated.fieldLineage }) }));
     await user.click(screen.getByRole('button', { name: 'Export investigation' })); await user.click(screen.getByRole('menuitem', { name: 'Filtered relationships CSV' }));
     const [, columns, rows] = jest.mocked(downloadCsv).mock.calls[0]; expect(JSON.parse(String(rows[0][columns.indexOf('Center declared field facts')]))).toEqual(calculated.fieldLineage);
-    unmount(); jest.clearAllMocks(); window.history.replaceState(null, '', '/');
+    expect(JSON.stringify(saved)).toBe(bytes); expect(actions.onSaveReview).not.toHaveBeenCalled(); expect(actions.onDeleteReview).not.toHaveBeenCalled();
+});
+test.each(['light', 'dark'] as const)('Library details and JSON preserve compact default evidence and the v7 review in %s', async scheme => {
+    const { data, calculated, saved, baseline } = await defaultEvidenceFixture(); const user = userEvent.setup(); const bytes = JSON.stringify(saved);
     render(frame(scheme, <ReviewLibraryPage {...actions} snapshot={data} isLoading={false} loadError={null} reviews={[saved]} />));
     await user.click(screen.getByRole('button', { name: calculated.name })); await user.click(screen.getByRole('tab', { name: 'Object & usage details' }));
     expect(screen.getByText(/\[default\] · potential shared fallback/)).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Export this review' })); await user.click(screen.getByRole('menuitem', { name: 'Selected review JSON' }));
     expect(downloadJson).toHaveBeenCalledWith('content-hygiene-review.json', expect.objectContaining({ currentObject: expect.objectContaining({ fieldLineage: calculated.fieldLineage }),
         review: expect.objectContaining({ evidenceBaseline: baseline }) }));
-    expect(JSON.stringify(saved)).toBe(bytes); expect(actions.onSaveReview).not.toHaveBeenCalled();
+    expect(JSON.stringify(saved)).toBe(bytes); expect(actions.onSaveReview).not.toHaveBeenCalled(); expect(actions.onDeleteReview).not.toHaveBeenCalled();
 });
 test.each(['light', 'dark'] as const)('relationship scope uses the same bounded-pattern explanation in %s', async scheme => {
     const { data, alias } = await fieldInvestigationFixture(); const proof = { ...data.edges.find(row => row.sourceId === alias.objectId)!.fieldProvenance!,

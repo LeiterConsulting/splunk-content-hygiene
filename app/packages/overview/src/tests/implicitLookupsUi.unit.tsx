@@ -33,7 +33,7 @@ beforeEach(() => {
 });
 afterEach(() => jest.restoreAllMocks());
 
-test.each(['light', 'dark'] as const)('Explorer labels potential callers and exports their semantics without saving decisions in %s', async (scheme) => {
+test.each(['light', 'dark'] as const)('Explorer exports potential callers and retains their qualification when opening impact in %s', async (scheme) => {
     const user = userEvent.setup(); const bytes = JSON.stringify(saved);
     window.history.replaceState(null, '', `/?object=${encodeURIComponent(automatic.objectId)}`);
     render(frame(<DependencyPage {...actions} snapshot={data} isLoading={false} />, scheme));
@@ -49,12 +49,26 @@ test.each(['light', 'dark'] as const)('Explorer labels potential callers and exp
     expect(screen.getByText('Potential implicit path')).toBeVisible();
     expect(screen.getByText(/potential implicit matches; verify them before assuming consumption/)).toBeVisible();
     expect(screen.queryByText(/Only explicit relationships supported/)).not.toBeInTheDocument();
+    expect(actions.onSaveReview).not.toHaveBeenCalled();
+    expect(actions.onDeleteReview).not.toHaveBeenCalled();
+    expect(JSON.stringify(saved)).toBe(bytes);
+});
+
+test.each(['light', 'dark'] as const)('potential impact JSON retains conditional callers without changing decisions in %s', async scheme => {
+    const user = userEvent.setup(); const bytes = JSON.stringify(saved);
+    window.history.replaceState(null, '', `/?object=${encodeURIComponent(automatic.objectId)}`);
+    render(frame(<DependencyPage {...actions} snapshot={data} isLoading={false} />, scheme));
+    await user.click(screen.getByRole('button', { name: 'Assess removal impact' }));
+    expect(screen.getByText('Potential implicit path')).toBeVisible();
+    expect(screen.getByText(/potential implicit matches; verify them before assuming consumption/)).toBeVisible();
+    expect(screen.queryByText(/Only explicit relationships supported/)).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Export investigation' }));
     await user.click(screen.getByRole('menuitem', { name: 'Full removal impact JSON' }));
     expect(downloadJson).toHaveBeenCalledWith('content-hygiene-impact.json', expect.objectContaining({
         analysis: expect.objectContaining({ affectedObjects: expect.arrayContaining([expect.objectContaining({ objectId: caller.objectId, conditional: true })]) }),
     }));
     expect(actions.onSaveReview).not.toHaveBeenCalled();
+    expect(actions.onDeleteReview).not.toHaveBeenCalled();
     expect(JSON.stringify(saved)).toBe(bytes);
 });
 

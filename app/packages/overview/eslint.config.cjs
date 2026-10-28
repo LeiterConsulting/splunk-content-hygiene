@@ -16,7 +16,7 @@ module.exports = defineConfig(
             'no-unused-vars': 'off',
             'import/no-extraneous-dependencies': [
                 'error',
-                { devDependencies: ['src/**/tests/*.unit*'] },
+                { devDependencies: ['src/**/tests/*.unit*', 'src/**/tests/nativeMotionClock.ts'] },
             ],
         },
     },

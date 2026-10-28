@@ -27,9 +27,60 @@ the minimum is not a recommendation to downgrade or remain on an old patch.
 
 | Runtime | Purpose | Current evidence |
 | --- | --- | --- |
-| 10.2.5 | Exact minimum; classic navigation; coordinator and reported regressions | App 1.12.0 build 100 at 1280 × 720 in the isolated Linux VM: preserved real cache, prior-release path comparisons, all seven pages in Light/Dark, full-width impact/context keyboard flows, real exports and empty Library |
-| 10.2.8 | Representative 10.2 maintenance release and real-estate regression | Same archive at 1280 × 720: all seven pages in Light/Dark, exact uncertain-hop links, existing Library decision/drill-through, real exports and unchanged review/policy journals |
-| 10.4.4 | Modern navigation, current theme host, and newer bundled runtime | Same archive at 1280 × 720: all seven pages in Light/Dark, native modern navigation, graph/impact/required-content context, real exports and empty Library; original decisions unchanged |
+| 10.2.5 | Exact minimum; classic navigation; coordinator and reported regressions | App 1.13.0 build 107 at 1280 × 720 in the isolated Linux VM: preserved real cache, bounded graph pages, exact-endpoint focus/fullscreen, all seven pages in Light/Dark, real exports and empty Library |
+| 10.2.8 | Representative 10.2 maintenance release and real-estate regression | Same archive at 1280 × 720: high-degree application cases, all graph controls and seven pages in Light/Dark, existing Library evidence/exports and unchanged review/policy journals |
+| 10.4.4 | Modern navigation, current theme host, and newer bundled runtime | Same archive at 1280 × 720: all seven pages in Light/Dark, native modern navigation, bounded graph/focus/fullscreen, real exports and empty Library; original decisions unchanged |
+
+### 1.13.0 navigable-map qualification
+
+The exact build 107 archive passes 1,194 automated checks, lint/style/types,
+build and portable-package gates. Pre-cert AppInspect 4.3.1 reports zero errors,
+failures and future failures, with three existing reviewed advisories and one
+manifest skip. Trusted-library updates use the existing cache. The main bundle
+retains its size advisory (approximately 1.52 MiB).
+
+The same archive was installed on all three runtimes without shared restarts.
+All 21 app-owned page definitions match the archive. Original real catalogs,
+manifests, review/revision and policy journals retain their published-baseline
+hashes. All 11 schemas pass over 21,104 object/edge/scan records and the original
+exported review baseline. Thirty cached presentation replays preserve membership
+and exact references across viewport/zoom choices. No collection, coverage
+version, underlying dependency evidence or review protocol is changed.
+
+All seven pages pass desktop Light/Dark checks with 120 accepted native
+captures. High-degree maps retain counted continuation groups, bounded vertical
+layout, card paging, exact highlighted connectors/endpoints, searchable evidence,
+off-page endpoint focus, map restoration and full-window/keyboard behavior.
+No measured page overflow, card/label overlap or control overflow occurs in the
+qualified captures; sampled active graph text/link contrast is at least 4.5:1.
+Actual 12 JSON / 10 CSV downloads match cached edge facts, provenance and directed
+context. Full direct reports stay complete while the map shows a focused pair;
+the original Library decision, note, assignee and baseline remain unchanged.
+
+Qualification uses 1280 × 720 desktop viewports. A separately observed 426-pixel
+embedded pane overflows the modern Splunk host header and cramps tabs; it is not
+a qualified mobile/narrow-pane layout. Enlarge the browser/pane. Full-window
+mode remains inside that browser viewport. Wide multi-hop maps can still require
+horizontal panning; exact-endpoint focus is provided. Three-hop / 60-source-card
+/ 20,000-expansion-visit limits are display bounds, not coverage or absence
+conclusions. Group loops can connect distinct members, not a single object.
+
+Recovery evidence remains private. The owned guest's cold-start wrapper expired
+after daemon startup; fresh health checks established readiness without a reset,
+reseed or repeated startup. Its initial post-login host dashboard/feature-settings
+failure occurred before the app started and recovered on a fresh page load; its
+underlying host cause is not established. One Library readiness check needed a
+fresh settled-state observation. A grouped automation batch expired; completed
+evidence was retained and remaining pages checked in smaller calls. Native menu
+state and reference-page ordering assumptions were corrected in the harness,
+without weakening application deadlines, evidence assertions or the archive.
+These are not zero-timeout, production-latency or runtime-execution claims.
+
+Appearance preferences are restored and read back. Customer SPL/PCRE/EVAL,
+events and lookup contents were not executed or sampled; no customer content,
+source permissions, accounts, policies or review decisions were created/changed.
+The owned minimum-version guest retains its original disk/authentication/seed
+and is gracefully stopped after qualification.
 
 ### 1.12.0 context-aware witness qualification
 

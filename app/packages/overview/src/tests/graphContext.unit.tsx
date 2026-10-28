@@ -1,6 +1,6 @@
 // Synthetic presentation contracts only; fixtures never enter the app bundle.
 import React from 'react';
-import { render, screen, within, waitFor } from '@testing-library/react';
+import { act, render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SplunkThemeProvider } from '@splunk/themes';
 import { AnimationToggleProvider } from '@splunk/react-ui/AnimationToggle';
@@ -8,6 +8,7 @@ import { DependencyGraph } from '../components/DependencyGraph';
 import { buildDependencyIndex } from '../services/dependencyGraph';
 import { ContentObject, DependencyEdge } from '../types';
 import { object, edge } from './milestoneFixtures';
+import { nativeMotionClock } from './nativeMotionClock';
 
 const longName =
     'Events for account entitlement and ownership verification across business units — LOOKUP-'.repeat(
@@ -82,14 +83,23 @@ test.each(['light', 'dark'] as const)(
 );
 
 test.each(['light', 'dark'] as const)('default animated context settles, dismisses and restores focus in %s', async scheme => {
-    const user = userEvent.setup(); render(frame(scheme, jest.fn(), [center, caller], edges, true));
-    const trigger = screen.getByRole('button', { name: `Full context for ${longName}` });
-    await user.click(trigger); const dialog = await visibleContextDialog('Object context');
-    await waitFor(() => expect(dialog).toHaveStyle({ opacity: '1' }));
-    await user.keyboard('{Escape}');
-    await waitFor(() => expect(dialog).not.toBeVisible());
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    await waitFor(() => expect(trigger).toHaveFocus());
+    // Exercise real SUI motion with a deterministic clock. Do not make spring
+    // completion depend on a busy host delivering animation frames in 1s.
+    const clock = nativeMotionClock();
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+    const view = render(frame(scheme, jest.fn(), [center, caller], edges, true));
+    try {
+        const trigger = screen.getByRole('button', { name: `Full context for ${longName}` });
+        await user.click(trigger);
+        await clock.settle();
+        const dialog = await visibleContextDialog('Object context');
+        expect(dialog).toHaveStyle({ opacity: '1' });
+        await user.keyboard('{Escape}');
+        await clock.settle();
+        expect(dialog).not.toBeVisible();
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        expect(trigger).toHaveFocus();
+    } finally { view.unmount(); clock.restore(); }
 });
 
 test.each(['light', 'dark'] as const)(
@@ -106,7 +116,7 @@ test.each(['light', 'dark'] as const)(
         await user.hover(trigger);
         expect(await screen.findByRole('tooltip')).toHaveTextContent(longName);
         await user.unhover(trigger);
-        trigger.focus();
+        act(() => trigger.focus());
         expect(await screen.findByRole('tooltip')).toHaveTextContent(
             'may apply automatic lookup · uses lookup',
         );

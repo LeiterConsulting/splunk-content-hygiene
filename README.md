@@ -17,6 +17,27 @@ The app keeps customer content read-only:
   app-local KV Store collections.
 - Every finding carries reasons, evidence, and a suggested investigation step.
 
+## Version 1.13.0 — navigable dependency maps
+
+[Release 1.13.0, build 107](https://github.com/LeiterConsulting/splunk-content-hygiene/releases/tag/v1.13.0)
+names displayed relationship endpoints and highlights their exact connector and cards on
+hover or keyboard focus. It adds bounded global/branch expansion, viewport-aware
+object pages, counted continuation groups and a full-window graph workspace.
+High-degree expansions no longer require a tall stack: browse/search captured
+connections and focus both exact endpoints together, then return to the same map.
+Existing dependency evidence, review decisions and customer content are unchanged.
+The exact archive passes 1,194 automated checks and pre-cert AppInspect with
+zero errors/failures. All seven pages pass desktop Light/Dark checks on Enterprise
+10.2.5, 10.2.8 and 10.4.4: 120 accepted native captures and 12 JSON / 10 CSV
+downloads, including full reports while the map shows only a focused pair.
+See [the visualization guide](docs/USER_GUIDE.md#visual-navigation-113) and
+[qualification and narrow-pane limits](docs/COMPATIBILITY.md#1130-navigable-map-qualification).
+
+![Full-window dependency map in Light mode](docs/images/dependency-workspace-light.jpg)
+
+Built-in Monitoring Console content, with one connection and both endpoint
+cards emphasized. [View the Dark-mode example](docs/images/dependency-workspace-dark.jpg).
+
 ## Version 1.12.0 — context-aware witness paths
 
 [Release 1.12.0, build 100](https://github.com/LeiterConsulting/splunk-content-hygiene/releases/tag/v1.12.0)

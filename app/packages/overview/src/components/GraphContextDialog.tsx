@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import Modal from '@splunk/react-ui/Modal';
 import styled from 'styled-components';
 import { variables } from '@splunk/themes';
-import { DefinitionList, InlineNotice, RowButton, SmallText, StyledButton } from '../AppStyles';
+import { DefinitionList, FilterField, Input, InlineNotice, RowButton, SmallText, StyledButton } from '../AppStyles';
 import { DependencyIndex, GraphLink, GraphNode } from '../services/dependencyGraph';
 import { isPotentialRelation } from '../utils/dependencySemantics';
 import { ResultPagination } from './ResultPagination';
@@ -10,6 +10,7 @@ import { StatusBadge } from './StatusBadge';
 import { FieldLineagePanel, FieldProvenanceDetails } from './FieldLineagePanel';
 import { PathContextDetails } from './PathContextDetails';
 import { createPathContextTracker } from '../services/pathContext';
+import { DependencyEdge } from '../types';
 
 const ContextFacts = styled(DefinitionList)`
     grid-template-columns: minmax(90px, 0.3fr) minmax(0, 1fr);
@@ -43,6 +44,8 @@ export function GraphContextDialog({
     onClose,
     onInspect,
     returnFocus,
+    onFocusConnection,
+    title,
 }: {
     context: GraphContext | null;
     open: boolean;
@@ -50,23 +53,32 @@ export function GraphContextDialog({
     onClose: () => void;
     onInspect: (id: string) => void;
     returnFocus: () => void;
+    onFocusConnection?: (edge: DependencyEdge) => void;
+    title?: string;
 }): React.ReactElement {
     const [page, setPage] = useState(0);
+    const [query, setQuery] = useState('');
     const node = context && 'node' in context ? context.node : null;
     const link = context && 'link' in context ? context.link : null;
     const ids = node?.memberIds ?? [];
-    const references = link?.edges ?? [];
+    const references = useMemo(() => link?.edges ?? [], [link?.edges]);
+    const name = (id: string): string => index.objects.get(id)?.name ?? id;
+    const normalized = query.trim().toLocaleLowerCase();
+    const filteredReferences = useMemo(() => references.filter(edge => !normalized ||
+        [edge.sourceId, edge.targetId, index.objects.get(edge.sourceId)?.name, index.objects.get(edge.targetId)?.name,
+            edge.relation.replace(/_/g, ' '), edge.evidence, edge.sourceLocation].join(' ').toLocaleLowerCase().includes(normalized)), [references, normalized, index]);
+    const filteredIds = ids.filter(id => !normalized || `${id} ${name(id)}`.toLocaleLowerCase().includes(normalized));
+    const total = link ? filteredReferences.length : filteredIds.length;
+    const currentPage = Math.min(page, Math.max(0, Math.ceil(total / 25) - 1));
+    const visibleReferences = useMemo(() => filteredReferences.slice(currentPage * 25, (currentPage + 1) * 25), [filteredReferences, currentPage]);
     const referenceContexts = useMemo(() => {
         const tracker = createPathContextTracker(index.objects);
-        return new Map((context && 'link' in context ? context.link.edges : []).map(edge => [edge.edgeId, tracker.path(edge.sourceId, [edge])]));
-    }, [context, index]);
-    const total = link ? references.length : ids.length;
-    const currentPage = Math.min(page, Math.max(0, Math.ceil(total / 25) - 1));
+        return new Map(visibleReferences.map(edge => [edge.edgeId, tracker.path(edge.sourceId, [edge])]));
+    }, [visibleReferences, index]);
     const inspect = (id: string): void => {
         onClose();
         onInspect(id);
     };
-    const name = (id: string): string => index.objects.get(id)?.name ?? id;
     const nodeTitle = node?.memberIds ? 'Grouped object context' : 'Object context';
     return (
         <Modal
@@ -75,11 +87,16 @@ export function GraphContextDialog({
             returnFocus={returnFocus}
             style={{ width: 760, maxWidth: 'calc(100vw - 32px)' }}
         >
-            <Modal.Header title={link ? 'Relationship context' : nodeTitle} />
+            <Modal.Header title={title ?? (link ? 'Relationship context' : nodeTitle)} />
             <Modal.Body
                 data-content-hygiene-portal="true"
                 style={{ maxHeight: '65vh', overflowY: 'auto', overflowWrap: 'anywhere' }}
             >
+                {link || node?.memberIds ? <FilterField>
+                    {link ? 'Find a captured connection' : 'Find a grouped object'}
+                    <Input value={query} onChange={event => { setQuery(event.currentTarget.value); setPage(0); }}
+                        placeholder={link ? 'Endpoint, relationship or evidence' : 'Object name or identity'} />
+                </FilterField> : null}
                 {node ? (
                     <>
                         <ContextFacts>
@@ -126,7 +143,7 @@ export function GraphContextDialog({
                                     onChange={setPage}
                                 />
                                 <ContextList>
-                                    {ids
+                                    {filteredIds
                                         .slice(currentPage * 25, (currentPage + 1) * 25)
                                         .map((id) => (
                                             <li key={id}>
@@ -176,10 +193,13 @@ export function GraphContextDialog({
                             onChange={setPage}
                         />
                         <ContextList>
-                            {references
-                                .slice(currentPage * 25, (currentPage + 1) * 25)
+                            {visibleReferences
                                 .map((edge) => (
                                     <li key={edge.edgeId}>
+                                        {onFocusConnection ? <StyledButton
+                                            onClick={() => { onClose(); onFocusConnection(edge); }}
+                                            aria-label={`Focus endpoints: ${name(edge.sourceId)} to ${name(edge.targetId)}`}
+                                        >Focus both endpoints</StyledButton> : null}
                                         <ContextFacts>
                                             <dt>From</dt>
                                             <dd>
@@ -221,6 +241,7 @@ export function GraphContextDialog({
                                     </li>
                                 ))}
                         </ContextList>
+                        {!total ? <InlineNotice>No captured connections match this text. Clear the filter to browse all {references.length} references.</InlineNotice> : null}
                     </>
                 ) : null}
             </Modal.Body>

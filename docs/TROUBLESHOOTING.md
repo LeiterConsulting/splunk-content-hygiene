@@ -1,5 +1,32 @@
 # Troubleshooting
 
+## Dependency boxes are difficult to associate
+
+In 1.13 and later, hover or keyboard-focus a relationship
+box: its exact connector and both endpoint cards are emphasized, and the context
+line names the source/relationship/target. Click the box for complete, selectable
+evidence. Group names describe displayed aggregates, not a single original
+object; use the paginated context to identify individual endpoints.
+
+Crowded/zoomed-out overview cards intentionally omit secondary type text. Open
+Details or use the full-window workspace. Dense hop columns use counted
+continuation groups with Previous/Next rather than an extremely tall stack.
+Browse connections searches the captured map references; Focus both endpoints
+brings an exact connection together, and Return to map restores navigation.
+Compact labels keep full endpoints in their accessible names/preview/Details.
+An undrawn-connection count is a drawing limit, not missing evidence. Expand all is still
+bounded to three hops and 60 cards; a work-limit notice means the drawing is
+partial, not that remaining dependencies do not exist. Narrow filters or center
+on a branch. Full reports/exports and impact assessments keep their existing
+scope. These controls do not require a rescan or resetting any review decisions.
+
+The qualified desktop viewport is 1280 × 720. At a 426-pixel embedded-pane
+width, the modern Splunk host header itself can overflow and tabs become
+cramped. Enlarge the pane or use a wider desktop browser. Full screen graph
+expands within the browser's current viewport; it cannot enlarge that browser
+window. Very narrow/mobile layouts are not qualified. Do not interpret an
+off-screen card or a drawing limit as missing dependency evidence.
+
 ## A dependency path has no shared captured context
 
 Open **Inspect path context** on the chosen witness. Different captured apps,

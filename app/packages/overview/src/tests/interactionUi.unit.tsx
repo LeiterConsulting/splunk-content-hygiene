@@ -26,7 +26,7 @@ beforeEach(() => {
 });
 afterEach(() => jest.restoreAllMocks());
 
-test.each(['light', 'dark'] as const)('Explorer keeps declared navigation targets and export provenance distinct from execution in %s', async scheme => {
+test.each(['light', 'dark'] as const)('Explorer CSV keeps declared navigation targets and provenance distinct from execution in %s', async scheme => {
     const { data, saved, nav, view, report } = await interactionFixture(); const original = JSON.stringify(saved); const user = userEvent.setup();
     window.history.replaceState(null, '', `/?object=${encodeURIComponent(nav.objectId)}`);
     render(frame(<DependencyPage {...actions} reviews={[saved]} snapshot={data} isLoading={false} />, scheme));
@@ -40,6 +40,15 @@ test.each(['light', 'dark'] as const)('Explorer keeps declared navigation target
     expect(rows.find(row => row[target] === report.objectId)?.[relation]).toBe('links_to_report');
     expect(rows.find(row => row[target] === view.objectId)?.[columns.indexOf('Source location')]).toBe('eai:data.nav.view[1]@name');
     expect(rows.every(row => row[columns.indexOf('Potential implicit relationship')] === false)).toBe(true);
+    expect(actions.onSaveReview).not.toHaveBeenCalled(); expect(actions.onDeleteReview).not.toHaveBeenCalled(); expect(JSON.stringify(saved)).toBe(original);
+});
+
+test.each(['light', 'dark'] as const)('Explorer JSON retains declared navigation provenance without changing decisions in %s', async scheme => {
+    const { data, saved, nav } = await interactionFixture(); const original = JSON.stringify(saved); const user = userEvent.setup();
+    window.history.replaceState(null, '', `/?object=${encodeURIComponent(nav.objectId)}`);
+    render(frame(<DependencyPage {...actions} reviews={[saved]} snapshot={data} isLoading={false} />, scheme));
+    expect(screen.getByText('Configuration is not execution evidence')).toBeVisible();
+    expect(screen.getByText(/Interaction links retain exact declared destinations, not clicks or execution/)).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Export investigation' }));
     await user.click(screen.getByRole('menuitem', { name: 'Filtered relationships JSON' }));
     expect(downloadJson).toHaveBeenCalledWith('content-hygiene-dependencies.json', expect.objectContaining({
@@ -47,7 +56,7 @@ test.each(['light', 'dark'] as const)('Explorer keeps declared navigation target
         relationships: expect.arrayContaining([expect.objectContaining({ edge: expect.objectContaining({ relation: 'navigates_to',
             evidence: expect.stringContaining('not observed execution'), sourceLocation: 'eai:data.nav.view[1]@name' }) })]),
     }));
-    expect(actions.onSaveReview).not.toHaveBeenCalled(); expect(JSON.stringify(saved)).toBe(original);
+    expect(actions.onSaveReview).not.toHaveBeenCalled(); expect(actions.onDeleteReview).not.toHaveBeenCalled(); expect(JSON.stringify(saved)).toBe(original);
 });
 
 test.each(['light', 'dark'] as const)('required-content exports configured destinations without manufacturing observed roots in %s', async scheme => {

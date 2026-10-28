@@ -42,6 +42,8 @@ export interface GraphNode {
     groupKey?: string;
     memberIds?: string[];
     resolved: boolean;
+    expanded?: boolean;
+    canExpand?: boolean;
     witness?: {
         centerId: string;
         direction: 'inbound' | 'outbound';
@@ -72,6 +74,7 @@ export interface GraphModel {
     height: number;
     representedObjects: number;
     omittedObjects: number;
+    expansionLimited?: boolean;
 }
 export const GRAPH_NODE_WIDTH = 280;
 export const GRAPH_NODE_HEIGHT = 208;
@@ -79,8 +82,10 @@ export const GRAPH_COLUMN_GAP = 232;
 export const GRAPH_LABEL_WIDTH = 208;
 export const GRAPH_LABEL_HEIGHT = 76;
 export const GRAPH_NODE_BUDGET = 60;
+export const GRAPH_MAX_HOPS = 3;
+export const GRAPH_EXPANSION_WORK = 20000;
 
-function nodeFor(
+export function nodeFor(
     id: string,
     level: number,
     index: DependencyIndex,
@@ -110,6 +115,9 @@ export function buildGraphModel(
         grouping: 'app' | 'type' | 'none';
         expandedGroups: Map<string, number>;
         expandedNodes: Set<string>;
+        expandAll?: boolean;
+        expandedBranches?: Set<string>;
+        collapsedNodes?: Set<string>;
         allows?: (id: string, edge: DependencyEdge) => boolean;
     },
 ): GraphModel {
@@ -141,7 +149,12 @@ export function buildGraphModel(
     const omitted = new Set<string>();
     groups.forEach((members, groupKey) => {
         const groupable = options.grouping !== 'none' && sorted.length > 12 && members.length > 4;
-        const limit = groupable ? (options.expandedGroups.get(groupKey) ?? 0) : members.length;
+        const requested = groupable ? (options.expandedGroups.get(groupKey) ?? 0) : members.length;
+        const available = GRAPH_NODE_BUDGET - nodes.length;
+        // A partially revealed group must retain the unrevealed members, not
+        // silently drop members that could not fit the requested reveal count.
+        const limit = groupable && members.length > Math.min(requested, available)
+            ? Math.min(requested, Math.max(0, available - 1)) : requested;
         members.slice(0, limit).forEach((node) => {
             if (nodes.length >= GRAPH_NODE_BUDGET - (members.length > limit ? 1 : 0)) {
                 omitted.add(node.id);
@@ -171,32 +184,64 @@ export function buildGraphModel(
         remaining.forEach((node) => renderedId.set(node.id, id));
     });
     const capturedEdges = new Map(scopedEdges.map((edge) => [edge.edgeId, edge]));
-    // Explicit node expansion walks only its branch. Cycles share one node.
-    for (let cursor = 0; cursor < nodes.length && cursor < GRAPH_NODE_BUDGET; cursor += 1) {
-        const node = nodes[cursor];
-        if (node.memberIds || !options.expandedNodes.has(node.id) || Math.abs(node.level) >= 3) {
+    const branchNodes = new Set(options.expandedBranches);
+    const expanded = new Set<string>();
+    const queue = [...nodes];
+    let expansionWork = 0;
+    let expansionLimited = false;
+    // Explicit branch/all expansion is bounded. Requeue a previously visible
+    // node if a later branch reaches it; cycles still expand each node once.
+    for (let cursor = 0; cursor < queue.length; cursor += 1) {
+        const node = queue[cursor];
+        if (node.memberIds || node.level === 0 || expanded.has(node.id) ||
+            options.collapsedNodes?.has(node.id) ||
+            !(options.expandAll || options.expandedNodes.has(node.id) || branchNodes.has(node.id)) ||
+            Math.abs(node.level) >= GRAPH_MAX_HOPS) {
             // eslint-disable-next-line no-continue -- Skip unexpanded branches without traversing the estate.
             continue;
         }
         const adjacent = node.level < 0 ? index.inbound.get(node.id) : index.outbound.get(node.id);
-        (adjacent ?? []).forEach((edge) => {
+        if (!adjacent?.length) {
+            // eslint-disable-next-line no-continue -- A leaf is not an expanded branch with a disabled collapse action.
+            continue;
+        }
+        expanded.add(node.id);
+        for (let edgeIndex = 0; edgeIndex < (adjacent?.length ?? 0); edgeIndex += 1) {
+            const edge = adjacent![edgeIndex];
+            if (expansionWork >= GRAPH_EXPANSION_WORK) { expansionLimited = true; break; }
+            expansionWork += 1;
             const id = node.level < 0 ? edge.sourceId : edge.targetId;
             if (options.allows && !options.allows(id, edge)) {
-                return;
+                // eslint-disable-next-line no-continue -- Preserve the related-object filter at every hop.
+                continue;
             }
             if (!renderedId.has(id)) {
                 if (nodes.length >= GRAPH_NODE_BUDGET) {
                     omitted.add(id);
-                    return;
+                    // eslint-disable-next-line no-continue -- Card limits do not change the underlying graph.
+                    continue;
                 }
-                nodes.push(nodeFor(id, node.level + (node.level < 0 ? -1 : 1), index, edge));
+                const child = nodeFor(id, node.level + (node.level < 0 ? -1 : 1), index, edge);
+                nodes.push(child);
+                queue.push(child);
                 renderedId.set(id, id);
                 const parent = witnesses.get(node.id) ?? [];
                 witnesses.set(id, node.level < 0 ? [edge, ...parent] : [...parent, edge]);
             }
+            if (branchNodes.has(node.id) && !branchNodes.has(id) && id !== centerId) {
+                branchNodes.add(id);
+                const child = nodes.find(item => item.id === renderedId.get(id));
+                if (child && !expanded.has(child.id)) { queue.push(child); }
+            }
             capturedEdges.set(edge.edgeId, edge);
-        });
+        }
     }
+    nodes.forEach(node => {
+        const adjacent = node.level < 0 ? index.inbound.get(node.id) : index.outbound.get(node.id);
+        Object.assign(node, { expanded: expanded.has(node.id),
+            canExpand: Boolean(node.resolved && node.level !== 0 && Math.abs(node.level) < GRAPH_MAX_HOPS &&
+                adjacent?.length) });
+    });
     const contextTracker = createPathContextTracker(index.objects);
     nodes.forEach(node => {
         const path = witnesses.get(node.id);
@@ -289,6 +334,7 @@ export function buildGraphModel(
         ),
         representedObjects: renderedId.size - 1,
         omittedObjects: omitted.size,
+        expansionLimited,
     };
 }
 
@@ -297,28 +343,29 @@ export function graphLinkPath(
     source: GraphNode,
     target: GraphNode,
     label?: GraphLinkLabel,
+    geometry = { nodeWidth: GRAPH_NODE_WIDTH, nodeHeight: GRAPH_NODE_HEIGHT, labelWidth: GRAPH_LABEL_WIDTH, labelHeight: GRAPH_LABEL_HEIGHT },
 ): string {
     const forward = target.x >= source.x;
-    const sx = source.x + (forward ? GRAPH_NODE_WIDTH : 0);
-    const tx = target.x + (forward ? 0 : GRAPH_NODE_WIDTH);
-    const sy = source.y + GRAPH_NODE_HEIGHT / 2;
-    const ty = target.y + GRAPH_NODE_HEIGHT / 2;
+    const sx = source.x + (forward ? geometry.nodeWidth : 0);
+    const tx = target.x + (forward ? 0 : geometry.nodeWidth);
+    const sy = source.y + geometry.nodeHeight / 2;
+    const ty = target.y + geometry.nodeHeight / 2;
     if (label) {
-        const lx = label.x + GRAPH_LABEL_WIDTH / 2;
-        const ly = label.y + GRAPH_LABEL_HEIGHT / 2;
+        const lx = label.x + geometry.labelWidth / 2;
+        const ly = label.y + geometry.labelHeight / 2;
         if (source.id === target.id) {
-            const topX = source.x + GRAPH_NODE_WIDTH * 0.75;
+            const topX = source.x + geometry.nodeWidth * 0.75;
             return `M ${sx} ${sy} C ${lx} ${sy}, ${lx} ${ly}, ${lx} ${ly} C ${lx + 40} ${ly}, ${topX + 90} ${source.y - 48}, ${topX} ${source.y}`;
         }
         if (source.x === target.x) {
-            return `M ${sx} ${sy} C ${lx} ${sy}, ${lx} ${ly}, ${lx} ${ly} C ${lx} ${ly}, ${lx} ${ty}, ${target.x + GRAPH_NODE_WIDTH} ${ty}`;
+            return `M ${sx} ${sy} C ${lx} ${sy}, ${lx} ${ly}, ${lx} ${ly} C ${lx} ${ly}, ${lx} ${ty}, ${target.x + geometry.nodeWidth} ${ty}`;
         }
         const bend = Math.max(30, Math.min(Math.abs(lx - sx), Math.abs(tx - lx)) / 2);
         const sign = forward ? 1 : -1;
         return `M ${sx} ${sy} C ${sx + sign * bend} ${sy}, ${lx - sign * bend} ${ly}, ${lx} ${ly} C ${lx + sign * bend} ${ly}, ${tx - sign * bend} ${ty}, ${tx} ${ty}`;
     }
     if (source.id === target.id) {
-        const topX = source.x + GRAPH_NODE_WIDTH * 0.75;
+        const topX = source.x + geometry.nodeWidth * 0.75;
         return `M ${sx} ${sy} C ${sx + 90} ${sy}, ${topX + 90} ${source.y - 64}, ${topX} ${source.y}`;
     }
     const bend = Math.max(30, Math.abs(tx - sx) / 2);

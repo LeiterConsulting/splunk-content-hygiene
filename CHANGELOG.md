@@ -1,5 +1,34 @@
 # Changelog
 
+## 1.13.0 — 2026-10-28 (build 107)
+
+- Associate relationship boxes with their exact rendered connection and both
+  endpoint cards on pointer hover or keyboard focus. Keep association visible
+  while full context is open. Regular boxes name source → target; compact boxes
+  retain complete endpoints in their accessible name, preview and full context.
+- Order deeper nodes near their connected parents in a deterministic layered
+  layout. Adapt density and per-hop object pages to the viewport and zoom;
+  preserve off-page members/references in explicit counted continuation groups.
+  Bound relationship-label lanes too, disclosing any undrawn map connections.
+- Add searchable, paginated captured connections and exact-endpoint focus,
+  including references inside large groups. Returning restores map pages,
+  expansion, zoom and pan. No filtering of reports or inference of new edges.
+- Add Expand all / Collapse all and contextual branch/group controls. Keep the
+  three-hop / 60-card limits explicit, bound expansion work to 20,000 candidate
+  visits, and retain unrevealed group members instead of losing them at the cap.
+- Add a full-window graph workspace, preserving grouping, expansion, zoom and
+  pan. Nested context dismisses before the workspace; exit restores focus.
+- Use documented native Tooltip anchors so hidden screen-reader descriptions
+  cannot enlarge the map or introduce false scroll bounds.
+- Qualify the exact archive with 1,194 checks, zero AppInspect errors/failures,
+  all seven pages in desktop Light/Dark on Enterprise 10.2.5, 10.2.8 and 10.4.4,
+  120 accepted native captures and 12 JSON / 10 CSV download comparisons.
+  Full direct reports remain complete while the map shows a focused pair.
+- Preserve original caches, decisions, journals, baselines and native appearance
+  settings. No collectors, coverage policies or customer-content operations
+  change; no rescan or shared restart is required. Document narrow-pane and
+  bounded-map limits plus recovered test-environment readiness interruptions.
+
 ## 1.12.0 — 2026-10-28 (build 100)
 
 - Check the captured app and exact caller/query/conjunction context across one

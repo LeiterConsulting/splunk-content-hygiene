@@ -44,21 +44,25 @@ test.each(['light', 'dark'] as const)('both scopes and no-observed-event qualifi
     expect(panel.getByText(/Producer: sourcetype=example:\*/)).toBeVisible();
     expect(panel.getByText(/not an observed event/)).toBeVisible();
 });
-test.each(['light', 'dark'] as const)('Explorer/Library exports and v8 decisions survive expanded domains in %s', async scheme => {
+test.each(['light', 'dark'] as const)('Explorer CSV/JSON retain expanded-domain provenance and v8 decisions in %s', async scheme => {
     const { data, current, saved, proof } = await fixture(); const user = userEvent.setup(); const bytes = JSON.stringify(saved);
     window.history.replaceState(null, '', `/?object=${encodeURIComponent(current.objectId)}`);
-    const { unmount } = render(frame(scheme, <DependencyPage {...actions} snapshot={data} isLoading={false} reviews={[saved]} />));
+    render(frame(scheme, <DependencyPage {...actions} snapshot={data} isLoading={false} reviews={[saved]} />));
     await user.click(screen.getByRole('button', { name: 'Export investigation' })); await user.click(screen.getByRole('menuitem', { name: 'Filtered relationships JSON' }));
     expect(downloadJson).toHaveBeenCalledWith('content-hygiene-dependencies.json', expect.objectContaining({ relationships: [expect.objectContaining({ edge: expect.objectContaining({ fieldProvenance: proof }) })] }));
     await user.click(screen.getByRole('button', { name: 'Export investigation' })); await user.click(screen.getByRole('menuitem', { name: 'Filtered relationships CSV' }));
     const [, columns, rows] = jest.mocked(downloadCsv).mock.calls[0]; expect(JSON.parse(String(rows[0][columns.indexOf('Field relationship provenance')]))).toEqual(proof);
-    unmount(); jest.clearAllMocks(); window.history.replaceState(null, '', '/');
+    expect(parseReviewBaseline(saved.evidenceBaseline)).not.toBeNull(); expect(compareReviewEvidence(saved, current, data.scan, now).status).toBe('needs_review');
+    expect(JSON.stringify(saved)).toBe(bytes); expect(actions.onSaveReview).not.toHaveBeenCalled(); expect(actions.onDeleteReview).not.toHaveBeenCalled();
+});
+test.each(['light', 'dark'] as const)('Library exports preserve v8 decisions alongside current expanded-domain evidence in %s', async scheme => {
+    const { data, current, saved } = await fixture(); const user = userEvent.setup(); const bytes = JSON.stringify(saved);
     render(frame(scheme, <ReviewLibraryPage {...actions} snapshot={data} isLoading={false} loadError={null} reviews={[saved]} />));
     await user.click(screen.getByRole('button', { name: current.name })); await user.click(screen.getByRole('button', { name: 'Export this review' }));
     await user.click(screen.getByRole('menuitem', { name: 'Selected review JSON' }));
     expect(downloadJson).toHaveBeenCalledWith('content-hygiene-review.json', expect.objectContaining({ review: saved, currentObject: current }));
     expect(parseReviewBaseline(saved.evidenceBaseline)).not.toBeNull(); expect(compareReviewEvidence(saved, current, data.scan, now).status).toBe('needs_review');
-    expect(JSON.stringify(saved)).toBe(bytes); expect(actions.onSaveReview).not.toHaveBeenCalled();
+    expect(JSON.stringify(saved)).toBe(bytes); expect(actions.onSaveReview).not.toHaveBeenCalled(); expect(actions.onDeleteReview).not.toHaveBeenCalled();
 });
 test('scope compatibility reaches required-content witnesses and keeps removal blocked', async () => {
     const { data, current, proof } = await fixture();

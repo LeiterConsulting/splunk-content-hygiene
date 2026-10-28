@@ -643,6 +643,71 @@ reaffirm explicitly only after investigation. Do not delete or edit review KV
 records to force a Current badge. Automatic rules and lookup inbound coverage
 remain partial where implicit applicability is not established.
 
+### Visual navigation (1.13)
+
+These visualization controls are available in 1.13.0 build 107. They change
+presentation and navigation, not dependency evidence or review decisions.
+
+Regular relationship boxes name their displayed **source → target**. Hover one or move
+keyboard focus to it to emphasize the exact arrow and both endpoint cards. The
+context line also names the connection; selecting full context keeps that
+association until the dialog closes. Object hover/focus highlights its displayed
+connections instead. Names that exceed the box still have their complete text
+in the quick preview and selectable Details dialog. Grouped arrows refer to the
+displayed group, with individual original endpoints retained in full context.
+A loop on a grouped card can represent references between different members,
+not a self-reference by one object. Open context and focus the exact endpoints
+before interpreting it as a cycle.
+
+**Expand all** reveals groups and follows matching branches within the displayed
+three-hop / 60-card limits; it is not an unbounded traversal of the environment.
+Unrevealed group members remain grouped. **Collapse all** restores the direct
+neighborhood and grouped view. **Expand branch / Collapse branch** applies at the
+selected card. A shared object can remain through another expanded branch;
+cycles reuse one card. Group cards retain **Show up to 12 more** and, while a
+partially revealed group remains, **Collapse group**. Full relationship reports
+and exports remain the route to objects outside these display limits. If the
+20,000-visit expansion budget is reached, narrow filters or center on a branch;
+this display limit is not a coverage or absence conclusion.
+
+The map adapts to available height and width, not just the number of neighbors.
+Crowded hop columns show a bounded page of cards plus a counted continuation
+group. **Previous / Next** on that group browse object cards without changing the
+center. Continuation Details lists every off-page member; a page is a display
+choice, not a dependency-coverage boundary. At very small sizes, use Details,
+zoom out or enlarge the workspace. Larger windows can show more cards per hop.
+
+**Browse connections** searches the exact captured references in the expanded
+map scope by endpoint, relationship or evidence, in pages of 25. Choose
+**Focus both endpoints** to put an exact source and target together in a readable
+view, even if they are in a large group or another page. **Return to map** restores
+its pages, expansion, zoom and pan. The original center, filters, reports and
+review decisions do not change. This browser covers the bounded map scope;
+the relationship table/exports remain the complete filtered direct report.
+
+Smaller overview cards are used below 100% zoom or when the viewport is crowded;
+otherwise the map uses detailed cards. Connected parents guide stable ordering.
+Dense connection lanes use shorter boxes with complete endpoints in their
+accessible names, preview and Details. If more lanes would overfill the viewport,
+the map explicitly counts undrawn connections; Browse connections still exposes
+every captured reference in its scope. Zoom never changes evidence. **Fit graph**
+respects the 60% minimum; wide multi-hop maps can still require horizontal panning.
+**Fit selection** returns to a visible selected object, or focuses a captured
+connection when that object is off-page.
+
+Use a desktop-sized browser for investigations. A very narrow embedded pane
+can be smaller than Splunk's own navigation and cannot fit both endpoint cards
+at the minimum zoom. Enlarge the pane or open a wider browser; the graph's
+full-window control uses the current browser viewport, not a new browser window.
+
+**Full screen graph** expands the graph to a focused full-window workspace, not
+the operating system's exclusive browser-fullscreen mode. Grouping, branches,
+zoom and pan survive entry/exit; visible pages adapt to the larger viewport.
+**Exit full screen**, the close control or Escape
+returns to the normal page and restores focus. If Details is open, the first
+Escape closes only Details; a second exits the full-window workspace. All controls
+use native Splunk themes and make no scan, review save or customer-content write.
+
 The **Relationships** tab puts consumers on the left and dependencies on the
 right. Inspect a card to update its details without changing the center. Use
 **Center on this object** or table **Drill in** to continue the path. High-degree
@@ -653,7 +718,7 @@ paginated evidence table and full filtered exports remain available. The center
 picker shows up to 200 matches; refine its search to reach any other object.
 Filters and the reset action remain available even when a group is empty.
 
-Graph cards wrap names across three lines and reserve a separate area for status
+Detailed graph cards wrap names across three lines and reserve a separate area for status
 and actions. Hover or keyboard-focus a name for its full name, type and app.
 **Details** opens the complete object context without moving the graph center;
 group Details lists individual members in pages of 25. **Inspect object** opens
