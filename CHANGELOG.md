@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.10.0 — 2026-10-27 (build 95)
+
+- Add bounded same-dimension literal/pattern domain intersection and explicitly
+  captured shared default producer paths. Preserve phase order, exact namespace,
+  private/local shadows, REPORT provenance and all possible fallback paths.
+- Correct case-only false producer joins for source and sourcetype scopes;
+  host scopes remain ASCII-insensitive. Common names across unrelated dimensions
+  do not establish co-applicability.
+- Record both consumer/producer scopes and the static compatibility basis in
+  relationship details, required-content/impact paths, freshness and CSV/JSON.
+  This is not sampled event evidence or proof of field availability/execution.
+- Retain direct exact-scope indexes; bound pattern/default candidates, product
+  states, per-source and scan work. Exhaustion and unsupported syntax stay gaps.
+- Add scan diagnostics/refresh guidance and `shared-static-v9`, preserving
+  v1–v8 baselines and all decisions/journals. No source permissions broadened.
+- Document #8's supported source-family acceptance and explicit advanced limits.
+- Qualify the exact archive with 1,065 checks, zero AppInspect errors/failures,
+  all seven pages in Light/Dark on Enterprise 10.2.5, 10.2.8 and 10.4.4,
+  106 accepted captures, 34 JSON / 32 paired CSV content checks, and preserved
+  decisions/journals/preferences. No customer writes or shared restarts.
+- Document native literal-only producer witnesses, automated-only positive
+  pattern/default/props-Library cases and recovered collector/pagination/cold
+  readiness checks; no production timeout or source was changed for recovery.
+
 ## 1.9.0 — 2026-10-27 (build 94)
 
 - Add bounded whole-name props caller matching for literal ASCII, `*` and `...`,

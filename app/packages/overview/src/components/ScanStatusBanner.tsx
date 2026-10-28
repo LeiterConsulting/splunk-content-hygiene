@@ -89,6 +89,7 @@ export function ScanStatusBanner({
                     {scan.collectorVersions?.props_precedence !== '1.0.0' ? <div>This snapshot predates shared props precedence checks. Run a new complete scan; existing decisions and baselines are preserved.</div> : null}
                     {scan.collectorVersions?.props_cross_stanza !== '1.0.0' ? <div>This snapshot lacks current conditional cross-stanza props comparisons. Run a new complete scan; existing decisions and baselines are unchanged.</div> : null}
                     {scan.collectorVersions?.props_patterns !== '1.0.0' ? <div>This snapshot predates bounded props pattern/default caller coverage. Run a new complete scan; existing decisions and baselines are unchanged.</div> : null}
+                    {scan.collectorVersions?.props_domains !== '1.0.0' ? <div>This snapshot predates bounded props producer-domain compatibility. Run a new complete scan; existing decisions and baselines are unchanged.</div> : null}
                     {!['workflow_actions', 'navigation'].every(collector => Object.prototype.hasOwnProperty.call(scan.collectorCounts, collector)) || scan.collectorVersions?.interaction_dependencies !== '1.0.1' ? (
                         <div>
                             This snapshot predates current workflow/navigation coverage. Run a new complete scan from Settings; individual decisions, policy history and captured baselines are unchanged.

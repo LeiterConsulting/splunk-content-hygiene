@@ -198,6 +198,44 @@ Review Library stage. Select a resolved related object to continue the
 investigation as a multi-step drill-through. Cross-view links preserve the
 selected object context.
 
+### Declared producer-domain compatibility (1.10)
+
+A declared alias, calculated field or automatic lookup input may have an
+earlier-phase producer in a compatible props domain. Open the relationship's
+context to inspect **Scope compatibility**, its **Consumer** and **Producer**
+scopes, exact namespace and output attribution. The basis is one of:
+
+- Same literal event scope.
+- Overlapping bounded declaration patterns (ASCII literal text, `*`, `...`).
+- Captured shared default fallback.
+
+These are static declaration possibilities, not observed events or proof a
+particular field exists, a regex matches, a default wins or a declaration runs.
+Source/sourcetype domains compare case-sensitively; host domains compare
+ASCII-insensitively. Unlike ordinary case-insensitive SPL selector possibilities,
+case-only source/sourcetype producer domains are disjoint. Field names themselves
+remain case-sensitive.
+
+No field-name join is made between unrelated host/source/sourcetype dimensions.
+Private/local shadows and phase restrictions remain: no alias-to-alias,
+calculated-to-calculated or lookup-output chain is inferred. Unknown inputs,
+unsupported scopes and hidden configuration remain coverage gaps, not proof of
+no dependency. Possible lower/default paths are never pruned as safe fallbacks.
+
+The matcher keeps direct exact-scope indexes and limits candidate visits to
+5,000/source and 100,000/scan, with 250 edges/source and 50,000/scan. Bounded
+intersection processes at most 65,536 states/pair, two million work units/source
+and 20 million/scan. Rejected candidates consume visits. Exhaustion stays partial;
+no customer PCRE, SPL, EVAL, event samples or lookup rows are executed/read.
+Cached page loads do not run the matcher or collect native configuration.
+
+Settings shows the `props_domains: 1.0.0` scan marker and compatibility counts.
+Old caches request a new complete scan; existing decisions and baselines do not
+change. Export relationship JSON/CSV for the full compact scope receipt, and use
+the required-content report for multi-hop witnesses. Library decisions can open
+Explorer at the exact identity; no new review save is needed to investigate.
+See the [#8 acceptance boundaries](STATIC_COVERAGE_ACCEPTANCE.md).
+
 ### Event types and tag bindings (1.3)
 
 Run a **complete scan** after upgrading to 1.3.

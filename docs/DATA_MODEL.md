@@ -133,6 +133,19 @@ without rewriting v1–v7 baselines, stages, notes, assignees or journals.
 
 ## Edges
 
+Version 1.10 adds optional `fieldProvenance.scopeCompatibility` to `field_input`
+edges: version 1, exact `consumer` and `producer` scope projections and `basis`
+(`same_literal`, `bounded_intersection`, `captured_default`). It contains no
+generated event witness, sampled value, expression or regex execution result.
+Old edges without it remain readable. Native identities and original
+`scope.exact` flags do not change; both pattern scopes remain non-literal.
+The compact receipt is validated on cache read without repeating the product
+automaton or reconstructing the graph. Existing provenance/export/freshness
+digests include it. New scans record `props_domains: 1.0.0`, field lineage 1.3.0,
+dependency analysis 1.10.0 and `props_domain_*` edge counters.
+`shared-static-v9` retains all v1–v8 baseline readers and does not write reviews,
+review revisions or app-policy revisions.
+
 An edge points from a source object to a target identity and records relation,
 confidence, evidence, source location, resolution state, and scan provenance.
 Unresolved targets remain valuable evidence and are not discarded.

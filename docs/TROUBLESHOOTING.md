@@ -1,5 +1,21 @@
 # Troubleshooting
 
+## Producer-domain links are missing or newly visible
+
+Run a new complete scan if the snapshot predates `props_domains: 1.0.0`. Existing
+reviews and baselines stay intact; expanded evidence can request explicit
+re-review. Relationship context shows both scopes and the static compatibility
+basis. Source/sourcetype names differing only by case no longer create false
+producer joins; host names remain case-insensitive. Supported overlapping
+patterns and captured defaults can add potential paths, not observed events.
+
+A shared field name across host/source/sourcetype dimensions is insufficient.
+Unsupported PCRE/encoding, hidden/local overrides, unknown output declarations,
+phase restrictions and budget ceilings can withhold a path. Inspect scoped
+warnings, namespace/output attribution and Settings diagnostics. Do not widen
+customer permissions, execute source expressions or treat a missing path as
+proof of safe removal. See the [finite #8 contract](STATIC_COVERAGE_ACCEPTANCE.md).
+
 ## Bulk review skips objects or stops partway through
 
 Existing decisions are skipped by default. Archived/unverifiable histories are

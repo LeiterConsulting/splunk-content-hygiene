@@ -4,7 +4,7 @@ import { ExtractionOutputProvenance, FieldAliasMapping, FieldContextEvidence, Fi
 import { inlineExtractionDeclarations, namedCaptureDeclarations } from './extractionDeclarations';
 import { readPropsContexts } from './propsEvidence';
 import { readCrossStanzaProps } from './crossStanzaEvidence';
-import { propsScopeLabel } from './propsPatterns';
+import { compilePropsPattern, propsScopeLabel } from './propsPatterns';
 
 export type { FieldAliasMapping, FieldScope } from '../types';
 
@@ -40,7 +40,7 @@ export function fieldLineageFacts(definition: FieldLineageDefinition, issues: Ca
         ...(definition.outputProvenance ? { outputProvenance: definition.outputProvenance } : {}),
         sourceLocation: definition.sourceLocation, limitations: [...new Set([...issues.map(issue => issue.message),
             ...(definition.enabled === null ? ['Native metadata does not establish enabled state; configured applicability is potential.'] : []),
-            ...(definition.scope && !definition.scope.exact ? [`Props caller scope: ${propsScopeLabel(definition.scope)}. No cross-pattern field-producer join is inferred.`] : [])])] };
+            ...(definition.scope && !definition.scope.exact ? [`Props declaration scope: ${propsScopeLabel(definition.scope)}. Compatible bounded domains can expose potential field producers, not observed event matches.`] : [])])] };
 }
 
 /** Treat old/invalid compact cache values as unavailable, never as field proof. */
@@ -145,6 +145,22 @@ export function readFieldProvenance(value: unknown): FieldDependencyProvenance |
     if (row.contexts !== undefined && (!Array.isArray(row.contexts) || row.contexts.length > FIELD_DECLARATION_ITEMS)) { return undefined; }
     const contexts = row.contexts?.map(readContext);
     if (contexts?.some(item => !item || !row.contextApps.includes(item.invokingApp))) { return undefined; }
+    const domain = row.scopeCompatibility;
+    if (domain !== undefined && (!domain || domain.version !== 1 || row.kind !== 'field_input' || !row.scope ||
+        !domain.consumer || !domain.producer || [domain.consumer, domain.producer].some(scope =>
+            !['sourcetype', 'host', 'source'].includes(scope.field) || !identifier(scope.value) || typeof scope.exact !== 'boolean') ||
+        domain.consumer.field !== row.scope.field || domain.consumer.value !== row.scope.value || domain.consumer.exact !== row.scope.exact ||
+        !['same_literal', 'bounded_intersection', 'captured_default'].includes(domain.basis))) { return undefined; }
+    if (domain) {
+        // Validate the compact scan receipt, not the product automaton again on
+        // every cached page load. Runtime readers do not reconstruct the graph.
+        const left = compilePropsPattern(domain.consumer); const right = compilePropsPattern(domain.producer);
+        if (left.kind === 'unsupported' || right.kind === 'unsupported') { return undefined; }
+        const fallback = left.kind === 'default' || right.kind === 'default';
+        if (fallback !== (domain.basis === 'captured_default') || !fallback && left.field !== right.field ||
+            !fallback && (left.kind === 'literal' && right.kind === 'literal') !== (domain.basis === 'same_literal') ||
+            domain.basis === 'same_literal' && (left.field === 'host' ? left.value.toLowerCase() !== right.value.toLowerCase() : left.value !== right.value)) { return undefined; }
+    }
     const propsContexts = row.propsContexts === undefined ? undefined : readPropsContexts(row.propsContexts);
     const crossStanzaProps = row.crossStanzaProps === undefined ? undefined : readCrossStanzaProps(row.crossStanzaProps);
     if (row.crossStanzaProps !== undefined && (!crossStanzaProps || crossStanzaProps.some(item => !row.contextApps.includes(item.app))) ||
@@ -166,6 +182,8 @@ export function readFieldProvenance(value: unknown): FieldDependencyProvenance |
         consumerPhase: row.consumerPhase, producerPhase: row.producerPhase, transformPositions: row.transformPositions,
         viaObjectIds: row.viaObjectIds, contextApps: row.contextApps, invocation: row.invocation,
         ...(outputDeclarations ? { outputDeclarations } : {}), ...(contexts ? { contexts: contexts as FieldContextEvidence[] } : {}),
+        ...(domain ? { scopeCompatibility: { version: 1 as const, consumer: { field: domain.consumer.field, value: domain.consumer.value, exact: domain.consumer.exact },
+            producer: { field: domain.producer.field, value: domain.producer.value, exact: domain.producer.exact }, basis: domain.basis } } : {}),
         ...(propsContexts ? { propsContexts } : {}), ...(row.propsContextsTruncated !== undefined ? { propsContextsTruncated: row.propsContextsTruncated } : {}),
         ...(crossStanzaProps ? { crossStanzaProps } : {}), ...(row.crossStanzaPropsTruncated !== undefined ? { crossStanzaPropsTruncated: row.crossStanzaPropsTruncated } : {}) };
 }

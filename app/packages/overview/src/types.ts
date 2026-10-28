@@ -192,6 +192,13 @@ export interface CrossStanzaPropsEvidence extends PropsEventScope {
     stanzaPriority: number | null;
     selectedPriority: number | null;
 }
+/** Compatibility of declared domains only; never a sampled/observed event. */
+export interface PropsDomainEvidence {
+    version: 1;
+    consumer: FieldScope;
+    producer: FieldScope;
+    basis: 'same_literal' | 'bounded_intersection' | 'captured_default';
+}
 export interface FieldDependencyProvenance {
     version: 1;
     kind: 'report_binding' | 'lookup_binding' | 'field_input' | 'event_scope';
@@ -205,6 +212,7 @@ export interface FieldDependencyProvenance {
     contextApps: string[];
     invocation: 'fixed_app' | 'invoking_app_unverified';
     outputDeclarations?: ProducerOutputDeclaration[];
+    scopeCompatibility?: PropsDomainEvidence;
     contexts?: FieldContextEvidence[];
     propsContexts?: PropsContextEvidence[];
     propsContextsTruncated?: boolean;
@@ -228,7 +236,7 @@ export interface EvidenceCoverageDimension {
     digest: string;
 }
 export interface ReviewCoverage {
-    policy: 'shared-static-v1' | 'shared-static-v2' | 'shared-static-v3' | 'shared-static-v4' | 'shared-static-v5' | 'shared-static-v6' | 'shared-static-v7' | 'shared-static-v8';
+    policy: 'shared-static-v1' | 'shared-static-v2' | 'shared-static-v3' | 'shared-static-v4' | 'shared-static-v5' | 'shared-static-v6' | 'shared-static-v7' | 'shared-static-v8' | 'shared-static-v9';
     configuration: EvidenceCoverageDimension;
     access: EvidenceCoverageDimension;
     outbound: EvidenceCoverageDimension;

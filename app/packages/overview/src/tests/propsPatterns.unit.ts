@@ -136,11 +136,15 @@ test('default needs a positive selector witness, not app containment or generate
         expect(result.coverageGaps.length).toBeGreaterThan(0);
     });
 });
-test('pattern/default field producers are not joined by matching field names alone', () => {
+test('captured defaults retain potential earlier-phase pattern producers with domain evidence', () => {
     const first = field('field_extractions', 'EXTRACT-actor', '(?<actor>synthetic)', 'example', 'app', 'source::*.log');
     const second = field('field_aliases', 'FIELDALIAS-owner', 'actor AS owner', 'example', 'app', 'default');
     const result = analyzeInventory([first.item, second.item], [first.source, second.source], fieldCompleteness);
-    expect(result.edges.filter(edge => edge.fieldProvenance?.kind === 'field_input')).toEqual([]);
+    expect(result.edges.filter(edge => edge.fieldProvenance?.kind === 'field_input')).toEqual([
+        expect.objectContaining({ sourceId: second.item.objectId, targetId: first.item.objectId, relation: 'may_read_extracted_field',
+            fieldProvenance: expect.objectContaining({ scopeCompatibility: { version: 1, consumer: second.item.fieldLineage!.scope,
+                producer: first.item.fieldLineage!.scope, basis: 'captured_default' } }) }),
+    ]);
 });
 test('v7 baseline/decision bytes are preserved; new policy requests review and report builders retain fallbacks', async () => {
     const result = await patternFixture(); const data = snapshot(result.objects, result.edges);
@@ -149,7 +153,7 @@ test('v7 baseline/decision bytes are preserved; new policy requests review and r
     const legacy = JSON.parse(JSON.stringify(current.reviewEvidence)); legacy.coverage.policy = 'shared-static-v7';
     const baseline = { capturedAt: new Date(now).toISOString(), capturedBy: 'reviewer', evidence: legacy }; expect(parseReviewBaseline(baseline)).toEqual(baseline);
     const saved = review(current.objectId, { stage: 'retain', note: 'Keep original decision', evidenceBaseline: baseline }); const bytes = JSON.stringify(saved);
-    expect(current.reviewEvidence?.coverage?.policy).toBe('shared-static-v8');
+    expect(current.reviewEvidence?.coverage?.policy).toBe('shared-static-v9');
     expect(compareReviewEvidence(saved, current, data.scan, now).status).toBe('needs_review');
     const report = buildInUseReport(data, [], { selectedIds: [result.caller.objectId], activity: 'none', includeRetained: false, successfulOnly: false }, now);
     expect(report.relationships).toHaveLength(3); expect(report.rows.filter(row => row.objectId !== result.caller.objectId).every(row => row.via?.conditional)).toBe(true);

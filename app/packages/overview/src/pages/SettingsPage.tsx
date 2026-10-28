@@ -306,6 +306,10 @@ export function SettingsPage({
                                     <SmallText>Scan-time shared stanza observations, not runtime execution or complete effective-props coverage. Unverified and truncated contexts do not establish absence.</SmallText>
                                     <DefinitionList>
                                         <dt>Pattern/default coverage</dt><dd>{displayedScan.collectorVersions?.props_patterns === '1.0.0' ? 'Bounded caller matching recorded' : 'Not recorded; run a complete scan'}</dd>
+                                        <dt>Producer-domain coverage</dt><dd>{displayedScan.collectorVersions?.props_domains === '1.0.0' ? 'Bounded same-dimension/default compatibility recorded' : 'Not recorded; run a complete scan'}</dd>
+                                        {displayedScan.collectorVersions?.props_domains === '1.0.0' ? <>
+                                            <dt>Literal / overlapping / default producer links</dt><dd>{displayedScan.parserCounts?.props_domain_same_literal ?? 0} / {displayedScan.parserCounts?.props_domain_bounded_intersection ?? 0} / {displayedScan.parserCounts?.props_domain_captured_default ?? 0}</dd>
+                                        </> : null}
                                         {displayedScan.collectorVersions?.props_patterns === '1.0.0' ? <>
                                             <dt>Literal / bounded pattern rules</dt><dd>{displayedScan.parserCounts?.props_scope_literal ?? 0} / {displayedScan.parserCounts?.props_scope_pattern ?? 0}</dd>
                                             <dt>Default / unsupported rules</dt><dd>{displayedScan.parserCounts?.props_scope_default ?? 0} / {displayedScan.parserCounts?.props_scope_unsupported ?? 0}</dd>
@@ -322,6 +326,7 @@ export function SettingsPage({
                                     </DefinitionList>
                                     <SmallText>Complete-scan ceiling: 256 native attribute/app pairs, two reads per pair, four workers, 90 seconds; 128 KiB per response and eight seconds per read. Bounded scans use 32 pairs and 15 seconds. Fixed callers are prioritized. Additional candidate/task/row ceilings remain explicit in context details and JSON diagnostics.</SmallText>
                                     <SmallText>Cross-stanza comparisons reuse these reads. They inspect at most 100,000 indexed work items, 10,000 groups and 16 members per group in five seconds, with 32 rows/32 KiB per object or relationship. Only identical attributes in a supported literal conjunction are compared; partial or budget-limited evidence stays unverified.</SmallText>
+                                    <SmallText>Producer domains use declared field/output/namespace indexes, up to 5,000 candidates per source and 100,000 per scan. Bounded intersection processes at most 65,536 states per pair, two million work units per source and 20 million per scan. Defaults are only explicitly captured shared declarations. No event samples or lookup rows are read.</SmallText>
                                 </CollapsiblePanel>
                             </section> : null}
                             {displayedScan && displayedScan.warnings.length > 0 ? (

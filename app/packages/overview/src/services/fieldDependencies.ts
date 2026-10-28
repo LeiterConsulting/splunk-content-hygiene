@@ -1,14 +1,15 @@
 /* eslint-disable no-restricted-syntax, no-continue -- Indexed matching exits at explicit build, per-source and whole-scan budgets. */
 import { ContentObject, FieldDependencyProvenance, FieldLineageFacts, FieldPhase, FieldScope, ProducerOutputDeclaration } from '../types';
 import { ParsedReference, ParsedSource, ReferenceTarget } from './dependencyParser';
-import { createPropsPatternIndex, matchPropsPattern, PROPS_PATTERN_SCAN_WORK, PROPS_PATTERN_SOURCE_WORK } from './propsPatterns';
+import { compilePropsPattern, createPropsPatternIndex, matchPropsPattern, PROPS_PATTERN_SCAN_WORK, PROPS_PATTERN_SOURCE_WORK } from './propsPatterns';
+import { comparePropsDomains, PROPS_DOMAIN_SCAN_WORK, PROPS_DOMAIN_SOURCE_WORK, propsDomainLabel } from './propsDomains';
 
 export const FIELD_MATCH_LIMIT = 250;
 export const FIELD_SCAN_EDGE_LIMIT = 50000;
 export const FIELD_INDEX_ENTRY_LIMIT = 50000;
 export const FIELD_CANDIDATE_VISIT_LIMIT = 100000;
 export const FIELD_SOURCE_VISIT_LIMIT = 5000;
-export const FIELD_LINEAGE_LIMITATION = 'Declared field paths are potential search-time dependencies, not proof a regex matched, a field exists, a declaration executes or a particular props override wins. Caller matching includes bounded * / ... patterns and captured default fallbacks; unsupported patterns, full effective precedence, private/system inheritance and external consumers remain unverified. Pattern/default field-producer joins are not inferred.';
+export const FIELD_LINEAGE_LIMITATION = 'Declared field paths are potential search-time dependencies, not proof a regex matched, a field exists, a declaration executes or a particular props override wins. Caller and producer matching include bounded * / ... domains and captured shared defaults. Cross-dimension field joins, unsupported patterns, full effective precedence, private/system inheritance and external consumers remain unverified.';
 export const FIELD_SOURCE_CONTEXT_LIMITATION = 'Invoking-app context cannot establish this source declaration because local, private or omitted field configuration may override it. No shared binding is guessed for that context.';
 export const FIELD_TARGETS: ReferenceTarget[] = ['field_extraction', 'field_alias', 'calculated_field', 'field_transform'];
 export interface FieldVisibility {
@@ -20,7 +21,7 @@ interface Candidate { object: ContentObject; facts: FieldLineageFacts }
 interface Binding { name: string; positions: number[]; target?: Candidate; contextApp: string }
 interface Producer extends Candidate { phase: FieldPhase; via?: Candidate }
 type ScopedIndex<T> = Map<string, Map<string, T[]>>;
-const scopeKey = (scope: FieldScope): string => `${scope.field}\0${scope.value.toLowerCase()}`;
+const scopeKey = (scope: FieldScope): string => `${scope.field}\0${scope.field === 'host' ? scope.value.toLowerCase() : scope.value}`;
 const phase = (facts: FieldLineageFacts): FieldPhase => {
     if (facts.operation === 'alias') { return 'alias'; }
     if (facts.operation === 'eval') { return 'calculated'; }
@@ -45,14 +46,18 @@ function* candidates<T>(index: ScopedIndex<T>, key: string, app: string, reusabl
     yield* scopes?.get('exported') ?? [];
 }
 
-/** One compact index per scan. No field-name join across unrelated event scopes,
- * regex evaluation, alias chaining, EVAL chaining or estate scan per source. */
+/** One compact index per scan. Exact consumer scopes retain direct lookups;
+ * pattern consumers inspect only same-field/output/namespace buckets, bounded
+ * before intersection. No regex execution or unsupported phase chaining. */
 export function buildFieldDependencyMatcher(objects: ContentObject[], catalogComplete: boolean, visibility?: FieldVisibility):
     (object: ContentObject, parsed: ParsedSource) => ParsedSource {
     const transforms: ScopedIndex<Candidate> = new Map();
     const scoped = createPropsPatternIndex<Candidate>();
     const patternWork = { remaining: PROPS_PATTERN_SCAN_WORK };
+    const domainWork = { remaining: PROPS_DOMAIN_SCAN_WORK };
     const producers: ScopedIndex<Producer> = new Map();
+    const patternProducers: ScopedIndex<Producer> = new Map();
+    const domainProducers: ScopedIndex<Producer> = new Map();
     const localIdentities = new Set<string>();
     const bindings = new Map<string, Binding[]>();
     const buildGaps = new Map<string, string[]>();
@@ -91,10 +96,28 @@ export function buildFieldDependencyMatcher(objects: ContentObject[], catalogCom
     };
     let bindingBudget = FIELD_SCAN_EDGE_LIMIT; let indexBudget = FIELD_INDEX_ENTRY_LIMIT; let buildVisits = FIELD_CANDIDATE_VISIT_LIMIT;
     const addProducer = (producer: Producer, output: string): void => {
+        const scope = producer.facts.scope!; const pattern = compilePropsPattern(scope);
+        if (pattern.kind === 'unsupported') { return; }
         if (indexBudget <= 0) { gapDuringBuild(producer.object, `Field producer index reached its ${FIELD_INDEX_ENTRY_LIMIT}-entry budget; additional declared outputs remain unverified.`); return; }
-        const key = `${scopeKey(producer.facts.scope!)}\0${output}`;
-        addIndex(producers, key, producer.object.app, producer.object.sharing === 'global', producer); indexBudget -= 1;
+        const exported = producer.object.sharing === 'global';
+        const key = `${pattern.kind === 'default' ? 'default' : scope.field}\0${output}`;
+        addIndex(domainProducers, key, producer.object.app, exported, producer);
+        if (pattern.kind === 'literal') { addIndex(producers, `${scopeKey(scope)}\0${output}`, producer.object.app, exported, producer); }
+        else { addIndex(patternProducers, key, producer.object.app, exported, producer); }
+        indexBudget -= 1;
     };
+    function* producerCandidates(scope: FieldScope, input: string, app: string, reusable: boolean): Generator<Producer> {
+        const pattern = compilePropsPattern(scope);
+        if (pattern.kind === 'unsupported') { return; }
+        if (pattern.kind === 'literal') {
+            yield* candidates(producers, `${scopeKey(scope)}\0${input}`, app, reusable);
+            yield* candidates(patternProducers, `${scope.field}\0${input}`, app, reusable);
+        } else {
+            const dimensions = pattern.kind === 'default' ? ['source', 'host', 'sourcetype'] : [scope.field];
+            for (const dimension of dimensions) { yield* candidates(domainProducers, `${dimension}\0${input}`, app, reusable); }
+        }
+        yield* candidates(domainProducers, `default\0${input}`, app, reusable);
+    }
     fields.forEach(item => {
         const { object, facts } = item;
         if (facts.operation === 'report') {
@@ -113,7 +136,7 @@ export function buildFieldDependencyMatcher(objects: ContentObject[], catalogCom
                     if (visible.length !== 1 || visible[0].object.objectId !== target.object.objectId || seen.has(target.object.objectId)) { continue; }
                     if (rows.length >= FIELD_MATCH_LIMIT || bindingBudget <= 0) { break; }
                     rows.push({ name, positions, target, contextApp: app }); seen.add(target.object.objectId); added = true; bindingBudget -= 1;
-                    if (facts.scope?.exact) {
+                    if (facts.scope) {
                         // New partial declarations need explicit output attribution.
                         // Legacy complete literal facts remain readable; ambiguous
                         // FORMAT/FIELDS names are investigation facts, not producers.
@@ -129,7 +152,7 @@ export function buildFieldDependencyMatcher(objects: ContentObject[], catalogCom
                 }
             }
             bindings.set(object.objectId, rows);
-        } else if (facts.scope?.exact && ['inline', 'alias', 'eval'].includes(facts.operation)) {
+        } else if (facts.scope && ['inline', 'alias', 'eval'].includes(facts.operation)) {
             facts.outputs.forEach(output => addProducer({ ...item, phase: phase(facts) }, output));
         }
     });
@@ -140,6 +163,7 @@ export function buildFieldDependencyMatcher(objects: ContentObject[], catalogCom
         const own = parsed.fieldLineage;
         let count = 0; let visits = 0;
         const sourceWork = { remaining: PROPS_PATTERN_SOURCE_WORK };
+        const sourceDomainWork = { remaining: PROPS_DOMAIN_SOURCE_WORK };
         const gap = (message: string, targets = FIELD_TARGETS): void => {
             if (!result.warnings.includes(message)) { result.warnings.push(message); }
             if (!result.gaps!.some(row => row.message === message)) { result.gaps!.push({ targets, message, sourceLocation: own?.sourceLocation ?? 'field-scope matching' }); }
@@ -180,14 +204,20 @@ export function buildFieldDependencyMatcher(objects: ContentObject[], catalogCom
                         evidence: `Declared REPORT target ${binding.name} at native position(s) ${binding.positions.join(', ')}; ordered configuration is retained, not proof of execution or effective precedence.${own.enabled === false ? ' Declaration is disabled.' : ''}` })) { break; }
                 }
             }
-            if (own.scope?.exact && ['alias', 'eval', 'lookup'].includes(own.operation) && own.inputs.length) {
+            if (own.scope && ['alias', 'eval', 'lookup'].includes(own.operation) && own.inputs.length) {
                 const matches = new Map<string, ParsedReference>();
                 for (const input of own.inputs) {
-                    const possible = candidates(producers, `${scopeKey(own.scope)}\0${input}`, object.app, reusable);
+                    const possible = producerCandidates(own.scope, input, object.app, reusable);
+                    const inspected = new Set<string>();
                     for (const producer of possible) {
                         if (!visit()) { break; }
+                        const identity = `${producer.object.objectId}\0${producer.via?.object.objectId ?? ''}`;
+                        if (inspected.has(identity)) { continue; } inspected.add(identity);
                         const consumer = phase(own);
                         if (producer.object.objectId === object.objectId || producer.phase === 'calculated' && consumer !== 'lookup' || producer.phase === 'alias' && consumer === 'alias') { continue; }
+                        const basis = comparePropsDomains(own.scope, producer.facts.scope!, [sourceDomainWork, domainWork]);
+                        if (basis === 'budget') { gap('Props producer-domain work budget reached; additional compatible field paths remain unverified.'); break; }
+                        if (!['same_literal', 'bounded_intersection', 'captured_default'].includes(basis)) { continue; }
                         const app = reusable ? producer.via?.object.app ?? producer.object.app : object.app;
                         if (!sourceContextAvailable(object, app)) { gap(FIELD_SOURCE_CONTEXT_LIMITATION); continue; }
                         if (privateTarget(collectorFor(producer.object), producer.object.canonicalName, app)) {
@@ -217,6 +247,8 @@ export function buildFieldDependencyMatcher(objects: ContentObject[], catalogCom
                         if (matches.size >= FIELD_MATCH_LIMIT || matches.size >= remaining) { gap('Declared field-input fan-out reached the matching safety budget; additional producer paths remain unverified.'); break; }
                         const proof = provenance('field_input', own.scope, consumer, producer.phase, reusable);
                         proof.fields = [input]; proof.viaObjectIds = producer.via ? [producer.via.object.objectId] : []; proof.contextApps = [app];
+                        proof.scopeCompatibility = { version: 1, consumer: { ...own.scope }, producer: { ...producer.facts.scope! },
+                            basis: basis as NonNullable<FieldDependencyProvenance['scopeCompatibility']>['basis'] };
                         if (declared.length) { proof.outputDeclarations = declared; }
                         let relation = 'may_read_extracted_field';
                         if (producer.phase === 'alias') { relation = 'may_read_aliased_field'; }
@@ -224,7 +256,7 @@ export function buildFieldDependencyMatcher(objects: ContentObject[], catalogCom
                         matches.set(key, { targetType: targetType(producer.object), targetName: producer.object.canonicalName,
                             targetObjectId: producer.object.objectId, contextApp: app, relation, confidence: 'medium', fieldProvenance: proof,
                             sourceLocation: own.sourceLocation,
-                            evidence: `Declared ${consumer} input may be supplied by this earlier ${producer.phase} definition in the same exact ${own.scope.field} scope. Field names and transform provenance are retained separately; no value availability or winning assignment is inferred.` });
+                            evidence: `Declared ${consumer} input may be supplied by this earlier ${producer.phase} definition. ${propsDomainLabel(proof.scopeCompatibility.basis)} establishes a static possibility only, not observed events, field availability or a winning assignment. Both scopes and transform provenance are retained separately.` });
                     }
                     if (matches.size >= FIELD_MATCH_LIMIT || matches.size >= remaining || visits >= FIELD_SOURCE_VISIT_LIMIT || remainingVisits <= 0) { break; }
                 }

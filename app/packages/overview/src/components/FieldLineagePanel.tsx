@@ -5,6 +5,7 @@ import { ContentObject, ExtractionOutputProvenance, FieldDependencyProvenance } 
 import { PropsContextPanel } from './PropsContextPanel';
 import { CrossStanzaPropsPanel } from './CrossStanzaPropsPanel';
 import { propsScopeLabel } from '../services/propsPatterns';
+import { propsDomainLabel } from '../services/propsDomains';
 
 const outputMethods: Record<ExtractionOutputProvenance['method'], string> = {
     inline_named_captures: 'Inline named captures', transform_named_captures: 'Transform named captures',
@@ -96,6 +97,14 @@ export function FieldProvenanceDetails({ provenance }: { provenance?: FieldDepen
             <dt>Declared fields</dt><dd>{provenance.fields.join(', ') || 'Scope/configuration binding only—not proven field consumption'}</dd>
             <dt>Dependency phases</dt><dd>{phases}</dd>
             <dt>Scope</dt><dd>{propsScopeLabel(provenance.scope)}</dd>
+            {provenance.scopeCompatibility ? <>
+                <dt>Scope compatibility</dt><dd>{propsDomainLabel(provenance.scopeCompatibility.basis)}
+                    <SmallText>Consumer: {propsScopeLabel(provenance.scopeCompatibility.consumer)}</SmallText>
+                    <SmallText>Producer: {propsScopeLabel(provenance.scopeCompatibility.producer)}</SmallText>
+                    <SmallText>Declaration-domain compatibility only—not an observed event, effective assignment, field value or execution.</SmallText>
+                </dd>
+            </> : null}
+            {!provenance.scopeCompatibility && provenance.kind === 'field_input' ? <><dt>Scope compatibility</dt><dd>Not recorded by this older snapshot. Run a complete scan; the saved review is unchanged.</dd></> : null}
             {provenance.transformPositions.length ? <><dt>REPORT positions</dt><dd>{provenance.transformPositions.join(', ')} (one-based)</dd></> : null}
             {provenance.viaObjectIds.length ? <><dt>Transform provenance</dt><dd>{provenance.viaObjectIds.join('; ')}</dd></> : null}
             <dt>Namespace</dt><dd>{provenance.contextApps.join(', ')} · {provenance.invocation === 'fixed_app' ? 'fixed caller app' : 'possible invoking app, unverified at runtime'}</dd>

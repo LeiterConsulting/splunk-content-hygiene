@@ -721,6 +721,10 @@ export function analyzeInventory(
         });
     });
 
+    edges.forEach(edge => {
+        const basis = edge.fieldProvenance?.scopeCompatibility?.basis;
+        if (basis) { const key = `props_domain_${basis}`; parserCounts[key] = (parserCounts[key] ?? 0) + 1; }
+    });
     return {
         objects,
         edges,

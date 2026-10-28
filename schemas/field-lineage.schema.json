@@ -137,6 +137,12 @@
         "crossStanzaProps": { "$ref": "#/$defs/crossStanzaProps" }, "crossStanzaPropsTruncated": { "type": "boolean" }
       }
     },
+    "scopeCompatibility": {
+      "type": "object", "additionalProperties": false, "required": ["version", "consumer", "producer", "basis"],
+      "properties": { "version": { "const": 1 }, "consumer": { "$ref": "#/$defs/scope", "type": "object" },
+        "producer": { "$ref": "#/$defs/scope", "type": "object" },
+        "basis": { "enum": ["same_literal", "bounded_intersection", "captured_default"] } }
+    },
     "provenance": {
       "type": "object", "additionalProperties": false,
       "required": ["version", "kind", "fields", "scope", "consumerPhase", "producerPhase", "transformPositions", "viaObjectIds", "contextApps", "invocation"],
@@ -148,6 +154,7 @@
         "viaObjectIds": { "type": "array", "maxItems": 250, "items": { "type": "string", "minLength": 1, "maxLength": 16384 } }, "contextApps": { "$ref": "#/$defs/names" },
         "invocation": { "enum": ["fixed_app", "invoking_app_unverified"] },
         "outputDeclarations": { "type": "array", "maxItems": 250, "items": { "$ref": "#/$defs/producerDeclaration" } },
+        "scopeCompatibility": { "$ref": "#/$defs/scopeCompatibility" },
         "contexts": { "type": "array", "maxItems": 250, "items": { "$ref": "#/$defs/context" } },
         "propsContexts": { "$ref": "#/$defs/propsContexts" }, "propsContextsTruncated": { "type": "boolean" },
         "crossStanzaProps": { "$ref": "#/$defs/crossStanzaProps" }, "crossStanzaPropsTruncated": { "type": "boolean" }

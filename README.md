@@ -17,6 +17,43 @@ The app keeps customer content read-only:
   app-local KV Store collections.
 - Every finding carries reasons, evidence, and a suggested investigation step.
 
+## Version 1.10.0 — declared producer-domain compatibility
+
+[Release 1.10.0, build 95](https://github.com/LeiterConsulting/splunk-content-hygiene/releases/tag/v1.10.0)
+completes the [bounded shared-static contract for #8](docs/STATIC_COVERAGE_ACCEPTANCE.md).
+It connects declared field
+producers across compatible literal, bounded `*` / `...` and explicitly captured
+default scopes. Relationships explain both scopes and the static compatibility
+basis. They do not represent observed events or execution. Source/sourcetype
+domains are case-sensitive; host domains are case-insensitive. Unrelated scope
+dimensions and unsupported patterns are not guessed.
+
+Indexed candidates, bounded product-state work, phase/namespace/shadow checks and
+original output provenance keep investigations conservative and scalable.
+Explorer and relationship details retain native Splunk controls, wrapping and
+Light/Dark support; compact evidence reaches required-content, impact and exports.
+`shared-static-v9` preserves decisions, journals and v1–v8 baselines unchanged.
+
+See the [#8 acceptance ledger](docs/STATIC_COVERAGE_ACCEPTANCE.md) for the finite
+source-family contract and deliberate limits. Completing that contract is not
+full effective-props, runtime/private/external dependency closure or removal
+approval. [Investigation guide](docs/USER_GUIDE.md#declared-producer-domain-compatibility-110).
+
+The exact archive passes 1,065 automated checks and pre-cert AppInspect with zero
+errors/failures. Native/cache/schema comparisons, all seven pages in Light/Dark,
+106 accepted captures and 34 JSON / 32 paired CSV downloads cover Enterprise
+10.2.5, 10.2.8 and 10.4.4. Decisions, policy history and native preferences are
+preserved. Native producer witnesses are 46 literal-scope links; positive
+pattern/default semantics and props-specific Library cases remain automated
+contracts, not manufactured native content. Recovered collector/pagination and
+emulated readiness checks are disclosed in the
+[qualification notes](docs/COMPATIBILITY.md#1100-producer-domain-qualification).
+
+![Native Dark-mode producer-domain diagnostics](docs/images/props-producer-diagnostics-dark.jpg)
+
+[Light-mode diagnostics](docs/images/props-producer-diagnostics-light.jpg).
+These are captured counts, not demonstration values; zero is not proof of absence.
+
 ## Version 1.9.0 — bounded props patterns and default fallbacks
 
 [Release 1.9.0, build 94](https://github.com/LeiterConsulting/splunk-content-hygiene/releases/tag/v1.9.0)

@@ -59,7 +59,7 @@ test('inline producers expose exact named-capture evidence, not a same-phase ext
     expect(readFieldProvenance({ ...proof, outputDeclarations: [{ ...proof.outputDeclarations![0], secret: 'not projected' }] })).toEqual(proof);
 });
 
-test.each(['other:events', 'source::example:events', 'example:*'])('inline capture names do not join unrelated or pattern scopes: %s', scope => {
+test.each(['other:events', 'source::example:events', 'other:*'])('inline capture names do not join unrelated scopes: %s', scope => {
     const inline = field('field_extractions', 'EXTRACT-actor', '(?<actor>.+)', 'example', 'app', scope);
     const consumer = field('field_aliases', 'FIELDALIAS-user', 'actor AS user');
     expect(analyze(inline, consumer).edges).toEqual([]);
@@ -135,17 +135,18 @@ test('constant calculated output has no invented input; opaque expressions and P
     expect(result.coverageGaps.some(row => row.sourceId === constant.item.objectId && row.targets.includes('lookup'))).toBe(false);
 });
 
-test.each(['other:events', 'source::example:events', 'host::example:events', 'example:*', 'default'])('field names do not join unrelated or pattern scopes: %s', scope => {
+test.each(['other:events', 'source::example:events', 'host::example:events', 'other:*', '(?i)example:*'])('field names do not join unrelated or unsupported scopes: %s', scope => {
     const producer = field('field_aliases', 'FIELDALIAS-source', 'actor AS principal');
     const consumer = field('calculated_fields', 'EVAL-user', 'principal', 'example', 'app', scope);
     expect(analyze(producer, consumer).edges).toEqual([]);
 });
 
-test('field names remain case-sensitive values; same event-scope case variants are potential witnesses', () => {
+test('field names and sourcetype producer domains remain case-sensitive', () => {
     const alias = field('field_aliases', 'FIELDALIAS-source', 'Actor AS Principal', 'example', 'app', 'Example:Events');
     const wrong = field('calculated_fields', 'EVAL-wrong', 'principal');
-    const right = field('calculated_fields', 'EVAL-right', 'Principal');
-    const result = analyze(alias, wrong, right);
+    const right = field('calculated_fields', 'EVAL-right', 'Principal', 'example', 'app', 'Example:Events');
+    const wrongScope = field('calculated_fields', 'EVAL-case-scope', 'Principal');
+    const result = analyze(alias, wrong, right, wrongScope);
     expect(result.edges.filter(row => row.relation === 'may_read_aliased_field')).toEqual([
         expect.objectContaining({ sourceId: right.item.objectId, targetId: alias.item.objectId, fieldProvenance: expect.objectContaining({ fields: ['Principal'] }) }),
     ]);
@@ -256,11 +257,11 @@ test.each([
     expect(automaticLookupInputs(String(value))).toEqual({ inputs, complete: valid });
 });
 
-test('automatic lookup input phase can depend on a calculated output, never the reverse', () => {
+test.each(['example:events', 'example:*', 'default'])('automatic lookup %s input can depend on a calculated output, never the reverse', stanza => {
     const calc = field('calculated_fields', 'EVAL-normalized', 'lower(actor)');
-    const lookup = { ...object('example:events : LOOKUP-example', 'Automatic Lookup'), app: 'example', sharing: 'app' };
+    const lookup = { ...object(`${stanza} : LOOKUP-example`, 'Automatic Lookup'), app: 'example', sharing: 'app' };
     const source: RawAnalysisSource = { objectId: lookup.objectId, kind: 'automatic_lookup', sourceLocation: 'props.conf', text: JSON.stringify({
-        stanza: 'example:events', attribute: 'LOOKUP-example', type: 'LOOKUP', transform: 'named', value: 'named key AS normalized OUTPUT user' }) };
+        stanza, attribute: 'LOOKUP-example', type: 'LOOKUP', transform: 'named', value: 'named key AS normalized OUTPUT user' }) };
     const result = analyzeInventory([calc.item, lookup], [calc.source, source], complete);
     expect(result.edges).toEqual(expect.arrayContaining([expect.objectContaining({ sourceId: lookup.objectId, targetId: calc.item.objectId,
         relation: 'may_read_calculated_field', fieldProvenance: expect.objectContaining({ consumerPhase: 'lookup', producerPhase: 'calculated', fields: ['normalized'] }) })]));
