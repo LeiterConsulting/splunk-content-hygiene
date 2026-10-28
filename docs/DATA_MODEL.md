@@ -133,6 +133,26 @@ without rewriting v1–v7 baselines, stages, notes, assignees or journals.
 
 ## Edges
 
+Version 1.11 adds `captured_conjunction` to the optional compatibility basis.
+It requires `callerWitnesses`: bounded original-event receipts with
+`callerObjectId`, `app`, `sourceLocation` and two or three distinct literal
+`selectors` (field, value, sourceLocation). The declarations must have different
+non-default dimensions, with both matched by one strict original query in that
+app. `invocation=fixed_app` identifies the captured caller context, not execution.
+Independent queries/selectors are never unioned. Readers validate compact shape,
+scope/app consistency and caps without re-parsing searches on page load; unknown
+receipt properties are dropped. No full query, expression, regex or sampled event value
+is cached in a receipt. Old receipts remain readable.
+
+Caller indexes cap 50,000 declarations, scopes and projections, 5,000 candidate
+visits per query / 100,000 per scan and 2 million / 20 million pattern-work cells.
+Each declaration/edge retains at most 32 receipts / 32 KiB; separate 16 MiB scan
+ceilings bound index and edge receipts. Rejected candidates count as visits;
+deduplication does not bypass budgets. Diagnostic byte counts are charged receipt
+work, not the total size of the KV collections. Exhaustion propagates as gaps.
+New scans record `field_lineage=1.4.0`, `props_callers=1.0.0` and
+`shared-static-v10`; v1–v9 decisions/baselines/journals are not rewritten.
+
 Version 1.10 adds optional `fieldProvenance.scopeCompatibility` to `field_input`
 edges: version 1, exact `consumer` and `producer` scope projections and `basis`
 (`same_literal`, `bounded_intersection`, `captured_default`). It contains no

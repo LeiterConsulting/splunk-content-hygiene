@@ -177,6 +177,11 @@ export interface PropsEventScope {
     sourceLocation: string;
     selectors: Array<{ field: FieldScope['field']; value: string; sourceLocation: string }>;
 }
+/** One captured query conjunction, never the union of independent selectors. */
+export interface PropsCallerWitness extends PropsEventScope {
+    callerObjectId: string;
+    app: string;
+}
 /** Conditional order among captured supported stanzas, never an effective winner. */
 export interface CrossStanzaPropsEvidence extends PropsEventScope {
     version: 1;
@@ -197,7 +202,8 @@ export interface PropsDomainEvidence {
     version: 1;
     consumer: FieldScope;
     producer: FieldScope;
-    basis: 'same_literal' | 'bounded_intersection' | 'captured_default';
+    basis: 'same_literal' | 'bounded_intersection' | 'captured_default' | 'captured_conjunction';
+    callerWitnesses?: PropsCallerWitness[];
 }
 export interface FieldDependencyProvenance {
     version: 1;
@@ -236,7 +242,7 @@ export interface EvidenceCoverageDimension {
     digest: string;
 }
 export interface ReviewCoverage {
-    policy: 'shared-static-v1' | 'shared-static-v2' | 'shared-static-v3' | 'shared-static-v4' | 'shared-static-v5' | 'shared-static-v6' | 'shared-static-v7' | 'shared-static-v8' | 'shared-static-v9';
+    policy: 'shared-static-v1' | 'shared-static-v2' | 'shared-static-v3' | 'shared-static-v4' | 'shared-static-v5' | 'shared-static-v6' | 'shared-static-v7' | 'shared-static-v8' | 'shared-static-v9' | 'shared-static-v10';
     configuration: EvidenceCoverageDimension;
     access: EvidenceCoverageDimension;
     outbound: EvidenceCoverageDimension;

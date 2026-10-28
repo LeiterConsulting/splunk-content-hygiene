@@ -153,7 +153,7 @@ test('v7 baseline/decision bytes are preserved; new policy requests review and r
     const legacy = JSON.parse(JSON.stringify(current.reviewEvidence)); legacy.coverage.policy = 'shared-static-v7';
     const baseline = { capturedAt: new Date(now).toISOString(), capturedBy: 'reviewer', evidence: legacy }; expect(parseReviewBaseline(baseline)).toEqual(baseline);
     const saved = review(current.objectId, { stage: 'retain', note: 'Keep original decision', evidenceBaseline: baseline }); const bytes = JSON.stringify(saved);
-    expect(current.reviewEvidence?.coverage?.policy).toBe('shared-static-v9');
+    expect(current.reviewEvidence?.coverage?.policy).toBe('shared-static-v10');
     expect(compareReviewEvidence(saved, current, data.scan, now).status).toBe('needs_review');
     const report = buildInUseReport(data, [], { selectedIds: [result.caller.objectId], activity: 'none', includeRetained: false, successfulOnly: false }, now);
     expect(report.relationships).toHaveLength(3); expect(report.rows.filter(row => row.objectId !== result.caller.objectId).every(row => row.via?.conditional)).toBe(true);

@@ -27,9 +27,62 @@ the minimum is not a recommendation to downgrade or remain on an old patch.
 
 | Runtime | Purpose | Current evidence |
 | --- | --- | --- |
-| 10.2.5 | Exact minimum; classic navigation; coordinator and reported regressions | App 1.10.0 build 95: isolated Linux VM at 1280 × 720; fresh bounded/full scans, native/cache/schema and caller/producer replay, all seven pages in Light/Dark, keyboard/context checks, actual exports and empty Library checks; emulated readiness recovery documented below |
-| 10.2.8 | Representative 10.2 maintenance release and real-estate regression | App 1.10.0 build 95 at 1434 × 940: fresh scans and replay, all seven pages in Light/Dark, 46 real literal producer links, pattern-declaration details, keyboard/context checks and preserved Library evidence/exports |
-| 10.4.4 | Modern navigation, current theme host, and newer bundled runtime | App 1.10.0 build 95 at 1434 × 940: fresh scans and replay, all seven pages in Light/Dark, keyboard/context checks, actual exports and empty Library checks; original decisions unchanged |
+| 10.2.5 | Exact minimum; classic navigation; coordinator and reported regressions | App 1.11.0 build 96: isolated Linux VM at 1280 × 720; fresh bounded/full scans, native/cache/schema and caller/producer comparisons, all seven pages in Light/Dark, keyboard/context checks, real exports and empty Library; owned-VM/control recoveries documented below |
+| 10.2.8 | Representative 10.2 maintenance release and real-estate regression | App 1.11.0 build 96 at 1434 × 940: fresh scans/comparisons, all seven pages in Light/Dark, retained literal producer paths and pattern-declaration details, keyboard/context checks and preserved Library evidence/exports |
+| 10.4.4 | Modern navigation, current theme host, and newer bundled runtime | App 1.11.0 build 96 at 1434 × 940: fresh scans/comparisons, all seven pages in Light/Dark, new diagnostics, keyboard/context checks, real exports and empty Library; original decisions unchanged |
+
+### 1.11.0 caller-supported qualification
+
+The exact build 96 archive passes 1,107 automated checks, lint/style/types/build
+and portable-package gates. Pre-cert AppInspect 4.3.1 reports zero errors,
+failures and future failures, with three existing reviewed advisories and one
+manifest skip. Trusted-library updates use the existing cache. The main bundle
+retains its size advisory (approximately 1.51 MiB).
+
+The same archive was installed on all three runtimes without shared restarts.
+Fresh native catalogs, merged props reads, source-hashed offline replay, cached
+facts/provenance/counters and all 21 app-owned page definitions agree. All 11
+schemas pass validation over 21,104 current object/edge/scan records and the
+preserved exported review baseline. Additional synthetic schema contracts check
+one positive and seven malformed/oversized receipt cases; these are not native
+content. Sequential reads are not atomic snapshots or runtime field evidence.
+
+The captured catalogs contain 16 strict multi-dimension queries across the
+representative runtimes, but no qualifying cross-dimension producer/consumer
+pair. The new index withholds field-name-only joins and reports zero such links.
+Positive cross-dimension semantics, filtering/pagination/drill-through of
+supporting callers and props-specific Library cases are automated-only contracts.
+No native source fixtures or new review/policy records were created to manufacture
+positive evidence. Existing 46 literal producer paths and 24 bounded pattern
+declarations remain inspectable; pattern/default/runtime closure is not inferred.
+
+All seven pages pass in Light/Dark with 108 accepted native captures. Native
+controls/underlined links, context filtering/pagination, keyboard caller selection,
+rapid Escape dismissal/focus restoration and real producer details retain their
+qualification. No measured horizontal overflow, graph-label overlap or modal
+scope clipping occurs in these captures; minimum sampled active text/link contrast
+is 5.78:1. Actual 34 JSON / 32 paired CSV downloads match cached facts, provenance,
+required-content witnesses, impact blockers, scan diagnostics and review baselines.
+The corrected attribution banner and new caller diagnostics match current cache
+versions/counts in both themes on all three runtimes.
+
+Original stages, notes, assignees, captured baselines, review/revision and policy
+journals retain their hashes. Original native appearance settings are restored
+and read back; captured app browser errors are zero. No customer objects,
+source permissions, new accounts, reviews or policies were changed. The owned
+minimum-version guest retains its disk, authentication and original read-only
+seed and is shut down after qualification.
+
+Qualification retains recovery evidence. The owned emulated guest's 180-second
+startup wrapper expired after starting the daemon while waiting for Web; fresh
+KV-ready health and native sign-in verified readiness without reset/reseed or
+repeating startup. Two multi-action browser-control batches reached their
+45/30-second limits during VM navigation. Complete captures/downloads were kept,
+the same tab was reconnected, and interrupted/transient steps were freshly
+verified with navigation separated from readiness checks. No frozen production
+source, application timeout, assertion or source permission was changed. These
+representative checks are not zero-timeout, production-latency or full runtime
+dependency certification.
 
 ### 1.10.0 producer-domain qualification
 

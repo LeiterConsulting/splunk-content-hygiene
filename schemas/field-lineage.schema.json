@@ -137,11 +137,28 @@
         "crossStanzaProps": { "$ref": "#/$defs/crossStanzaProps" }, "crossStanzaPropsTruncated": { "type": "boolean" }
       }
     },
+    "callerWitness": {
+      "type": "object", "additionalProperties": false, "required": ["callerObjectId", "app", "sourceLocation", "selectors"],
+      "properties": {
+        "callerObjectId": { "type": "string", "minLength": 1, "maxLength": 16384 },
+        "app": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "sourceLocation": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "selectors": { "type": "array", "minItems": 2, "maxItems": 3, "items": {
+          "type": "object", "additionalProperties": false, "required": ["field", "value", "sourceLocation"],
+          "properties": { "field": { "enum": ["sourcetype", "host", "source"] },
+            "value": { "type": "string", "minLength": 1, "maxLength": 1024 },
+            "sourceLocation": { "type": "string", "minLength": 1, "maxLength": 4096 } }
+        } }
+      }
+    },
     "scopeCompatibility": {
       "type": "object", "additionalProperties": false, "required": ["version", "consumer", "producer", "basis"],
       "properties": { "version": { "const": 1 }, "consumer": { "$ref": "#/$defs/scope", "type": "object" },
         "producer": { "$ref": "#/$defs/scope", "type": "object" },
-        "basis": { "enum": ["same_literal", "bounded_intersection", "captured_default"] } }
+        "basis": { "enum": ["same_literal", "bounded_intersection", "captured_default", "captured_conjunction"] },
+        "callerWitnesses": { "type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true, "items": { "$ref": "#/$defs/callerWitness" } } },
+      "allOf": [{ "if": { "properties": { "basis": { "const": "captured_conjunction" } } },
+        "then": { "required": ["callerWitnesses"] }, "else": { "not": { "required": ["callerWitnesses"] } } }]
     },
     "provenance": {
       "type": "object", "additionalProperties": false,

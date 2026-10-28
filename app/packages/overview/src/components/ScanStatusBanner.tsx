@@ -60,7 +60,7 @@ export function ScanStatusBanner({
         let fieldNotice: string | null = null;
         if (!['field_extractions', 'field_aliases', 'calculated_fields', 'field_transforms'].every(collector => Object.prototype.hasOwnProperty.call(scan.collectorCounts, collector))) {
             fieldNotice = 'This snapshot predates field-lineage coverage. Run a new complete scan from Settings; existing decisions and baselines are unchanged.';
-        } else if (scan.collectorVersions?.field_lineage !== '1.2.0') {
+        } else if (!['1.2.0', '1.3.0', '1.4.0'].includes(scan.collectorVersions?.field_lineage ?? '')) {
             if (scan.collectorVersions?.field_lineage === '1.1.0') {
                 fieldNotice = 'This snapshot lacks current lookup-output and configuration-context evidence. Run a new complete scan; existing decisions and captured baselines are preserved.';
             } else {
@@ -90,6 +90,7 @@ export function ScanStatusBanner({
                     {scan.collectorVersions?.props_cross_stanza !== '1.0.0' ? <div>This snapshot lacks current conditional cross-stanza props comparisons. Run a new complete scan; existing decisions and baselines are unchanged.</div> : null}
                     {scan.collectorVersions?.props_patterns !== '1.0.0' ? <div>This snapshot predates bounded props pattern/default caller coverage. Run a new complete scan; existing decisions and baselines are unchanged.</div> : null}
                     {scan.collectorVersions?.props_domains !== '1.0.0' ? <div>This snapshot predates bounded props producer-domain compatibility. Run a new complete scan; existing decisions and baselines are unchanged.</div> : null}
+                    {scan.collectorVersions?.props_callers !== '1.0.0' ? <div>This snapshot predates caller-scoped cross-dimension producer evidence. Run a new complete scan; existing decisions and baselines are unchanged.</div> : null}
                     {!['workflow_actions', 'navigation'].every(collector => Object.prototype.hasOwnProperty.call(scan.collectorCounts, collector)) || scan.collectorVersions?.interaction_dependencies !== '1.0.1' ? (
                         <div>
                             This snapshot predates current workflow/navigation coverage. Run a new complete scan from Settings; individual decisions, policy history and captured baselines are unchanged.

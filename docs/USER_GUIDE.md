@@ -198,6 +198,42 @@ Review Library stage. Select a resolved related object to continue the
 investigation as a multi-step drill-through. Cross-view links preserve the
 selected object context.
 
+### Caller-supported cross-dimension paths (1.11)
+
+A consumer scoped to a sourcetype can potentially use an earlier producer scoped
+to a host or source. That relationship is now recorded only if one captured
+Saved Search, Report, Alert or Dashboard query has a supported strict initial
+conjunction selecting both scopes. Separate panels, OR/NOT/IN, grouping, macros,
+subsearches, generated/rewritten fields and post-pipe filters cannot supply this
+evidence. Source/sourcetype matches are case-sensitive; host matches are not.
+
+In a producer relationship's details, **Scope compatibility** names the captured
+conjunction basis and both declarations. Expand **Inspect supporting callers**
+to filter or page through independent receipts. Each underlined caller link
+opens that exact cached object in Dependency Explorer. The receipt includes its
+app, original query location, declared selectors and selector locations—not the
+full query, event data or a claim that the caller executed.
+
+Existing extraction → alias → parallel calculated field → lookup restrictions
+still apply. The caller app must see both declarations and the exact REPORT
+transform binding; private or local shadows withhold guessed shared paths.
+All links remain potential; precedence, field availability, activation, runtime
+execution and hidden/external consumers remain unverified. No supporting caller
+is not evidence that an object is unused.
+
+CSV/JSON investigations and required-content/impact witnesses carry the same
+compact receipts. Review Library keeps the original decision and captured
+baseline; explore current relationships separately and re-review explicitly if
+evidence changed. A new complete scan records `shared-static-v10` and
+`props_callers=1.0.0`; older caches and v1–v9 reviews stay readable unchanged.
+Settings explains work/visit/size ceilings and captured counts. Capped evidence
+remains partial; zero counts are not a completeness claim.
+
+The phase restriction follows Splunk's
+[search-time operation sequence](https://help.splunk.com/en/splunk-enterprise/manage-knowledge-objects/knowledge-management-manual/10.2/get-started-with-knowledge-objects/the-sequence-of-search-time-operations).
+The application records a conservative static possibility, not the outcome of
+those operations on real events.
+
 ### Declared producer-domain compatibility (1.10)
 
 A declared alias, calculated field or automatic lookup input may have an

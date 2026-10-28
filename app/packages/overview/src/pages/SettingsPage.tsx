@@ -307,6 +307,15 @@ export function SettingsPage({
                                     <DefinitionList>
                                         <dt>Pattern/default coverage</dt><dd>{displayedScan.collectorVersions?.props_patterns === '1.0.0' ? 'Bounded caller matching recorded' : 'Not recorded; run a complete scan'}</dd>
                                         <dt>Producer-domain coverage</dt><dd>{displayedScan.collectorVersions?.props_domains === '1.0.0' ? 'Bounded same-dimension/default compatibility recorded' : 'Not recorded; run a complete scan'}</dd>
+                                        <dt>Cross-dimension caller evidence</dt><dd>{displayedScan.collectorVersions?.props_callers === '1.0.0' ? 'Strict captured-conjunction matching recorded' : 'Not recorded; run a complete scan'}</dd>
+                                        {displayedScan.collectorVersions?.props_callers === '1.0.0' ? <>
+                                            <dt>Caller-supported producer links</dt><dd>{displayedScan.parserCounts?.props_domain_captured_conjunction ?? 0} potential links · not observed execution</dd>
+                                            <dt>Caller conjunctions / retained projections</dt><dd>{displayedScan.parserCounts?.props_caller_scopes ?? 0} / {displayedScan.parserCounts?.props_caller_projections ?? 0}</dd>
+                                            <dt>Caller candidate visits / pattern work</dt><dd>{displayedScan.parserCounts?.props_caller_visits ?? 0} / {displayedScan.parserCounts?.props_caller_work ?? 0}</dd>
+                                            <dt>Caller index ceilings</dt><dd>{displayedScan.parserCounts?.props_caller_index_limited ? 'Reached; additional paths unverified' : 'Not reached in this scan; not complete runtime coverage'}</dd>
+                                            <dt>Caller receipt bytes: index / edges</dt><dd>{displayedScan.parserCounts?.props_caller_index_bytes ?? 0} / {displayedScan.parserCounts?.props_caller_edge_bytes ?? 0}</dd>
+                                            <dt>Caller evidence budgets</dt><dd>50,000 declarations / scopes / projections · 5,000 visits per query / 100,000 per scan · 2,000,000 pattern-work cells per query / 20,000,000 per scan · 32 receipts / 32 KiB per declaration or edge · separate 16 MiB index / edge receipt ceilings</dd>
+                                        </> : null}
                                         {displayedScan.collectorVersions?.props_domains === '1.0.0' ? <>
                                             <dt>Literal / overlapping / default producer links</dt><dd>{displayedScan.parserCounts?.props_domain_same_literal ?? 0} / {displayedScan.parserCounts?.props_domain_bounded_intersection ?? 0} / {displayedScan.parserCounts?.props_domain_captured_default ?? 0}</dd>
                                         </> : null}

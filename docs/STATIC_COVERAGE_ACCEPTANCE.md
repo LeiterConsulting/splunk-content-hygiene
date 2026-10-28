@@ -36,7 +36,7 @@ family being supported does not make its entire catalog or parser complete.
 | Collection, parsing and resolution remain separate | Native page counts/caps, per-source gaps, exact target resolution and coverage dimensions remain independent; denied/unstable/unsupported/budget-limited states are not absence |
 | Exact identity, namespace and provenance | Qualified native identities, private/local shadow checks, declaration locations, REPORT positions and both producer/consumer scopes; app containment is never closure |
 | Partial/unresolved propagates | Potential/unknown paths and coverage limitations reach Explorer, required-content witnesses, removal-impact blockers and actual CSV/JSON exports |
-| Preserve decisions and explicit freshness | New scans use `shared-static-v9`; v1–v8 baselines remain readable; stages, notes, assignees, reviews and policy journals are not rewritten or silently reaffirmed |
+| Preserve decisions and explicit freshness | The 1.10 qualifying scans use `shared-static-v9`; v1–v8 baselines remain readable; stages, notes, assignees, reviews and policy journals are not rewritten or silently reaffirmed |
 | Adversarial and scalable qualification | Automated namespace/private/cycle/phase/scale/pattern/budget/schema/UI contracts, followed by exact-archive native/cache checks and Light/Dark flows on representative supported runtimes |
 | Customer content stays read-only | No customer searches/regex/expressions/actions executed for inference; no source writes, permission expansion or hidden-content collection; only existing app-local scan/cache workflow writes |
 
@@ -48,6 +48,9 @@ available catalogs.
 ## Deliberate limits after #8
 
 These remain visible uncertainty, not unfinished promises of complete closure:
+
+The separately scoped 1.11 increment adds strict captured-caller support for
+different dimensions; it does not reopen #8 or remove the unwitnessed-join limit.
 
 - Arbitrary PCRE/modifiers, escaped Windows paths, encoded/non-ASCII and
   oversized props patterns. Unsupported is not disjoint or unused.

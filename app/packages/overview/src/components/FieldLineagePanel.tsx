@@ -6,6 +6,7 @@ import { PropsContextPanel } from './PropsContextPanel';
 import { CrossStanzaPropsPanel } from './CrossStanzaPropsPanel';
 import { propsScopeLabel } from '../services/propsPatterns';
 import { propsDomainLabel } from '../services/propsDomains';
+import { PropsCallerPanel } from './PropsCallerPanel';
 
 const outputMethods: Record<ExtractionOutputProvenance['method'], string> = {
     inline_named_captures: 'Inline named captures', transform_named_captures: 'Transform named captures',
@@ -102,6 +103,7 @@ export function FieldProvenanceDetails({ provenance }: { provenance?: FieldDepen
                     <SmallText>Consumer: {propsScopeLabel(provenance.scopeCompatibility.consumer)}</SmallText>
                     <SmallText>Producer: {propsScopeLabel(provenance.scopeCompatibility.producer)}</SmallText>
                     <SmallText>Declaration-domain compatibility only—not an observed event, effective assignment, field value or execution.</SmallText>
+                    {provenance.scopeCompatibility.callerWitnesses?.length ? <PropsCallerPanel rows={provenance.scopeCompatibility.callerWitnesses} /> : null}
                 </dd>
             </> : null}
             {!provenance.scopeCompatibility && provenance.kind === 'field_input' ? <><dt>Scope compatibility</dt><dd>Not recorded by this older snapshot. Run a complete scan; the saved review is unchanged.</dd></> : null}

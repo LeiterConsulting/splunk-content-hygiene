@@ -17,6 +17,42 @@ The app keeps customer content read-only:
   app-local KV Store collections.
 - Every finding carries reasons, evidence, and a suggested investigation step.
 
+## Version 1.11.0 — caller-supported cross-dimension paths
+
+[Release 1.11.0, build 96](https://github.com/LeiterConsulting/splunk-content-hygiene/releases/tag/v1.11.0)
+connects an earlier field producer under
+one props dimension to a consumer under another **only when one captured search
+explicitly selects both scopes in the same app context**. Common field names,
+separate searches, dashboard panels and case-only source/sourcetype possibilities
+are not co-applicability evidence.
+
+Supporting caller receipts retain the exact object, app, query and selector
+locations. Relationship details provide wrapping, filterable, paginated caller
+links; the same evidence reaches required-content, impact and CSV/JSON exports.
+Indexed work and evidence-size ceilings remain visible uncertainty.
+`shared-static-v10` reads v1–v9 baselines without changing decisions or journals.
+Customer content remains read-only; no searches, regexes, expressions, events or
+lookup data are executed or sampled to manufacture a link.
+
+The stale extraction-attribution notice is also corrected for newer supported
+snapshots. See the [investigation guide](docs/USER_GUIDE.md#caller-supported-cross-dimension-paths-111).
+
+The exact archive passes 1,107 automated checks and pre-cert AppInspect with zero
+errors/failures. All seven pages in Light/Dark, native/cache/schema comparisons,
+108 accepted captures and 34 JSON / 32 paired CSV comparisons cover Enterprise
+10.2.5, 10.2.8 and 10.4.4. Existing decisions, journals and native preferences
+are preserved. The available native catalogs contain no qualifying
+cross-dimension pair: positive semantics and supporting-caller UI remain
+automated contracts, not manufactured native content. See
+[qualification and recovered VM-control limits](docs/COMPATIBILITY.md#1110-caller-supported-qualification).
+
+![Native Dark-mode caller-coverage diagnostics](docs/images/props-caller-diagnostics-dark.jpg)
+
+[Light-mode diagnostics](docs/images/props-caller-diagnostics-light.jpg).
+These are real captured counts; zero is not proof of absence or complete coverage.
+Issue #8 remains complete against its finite static-coverage contract; this is
+a separately bounded accuracy extension, not a claim of runtime closure.
+
 ## Version 1.10.0 — declared producer-domain compatibility
 
 [Release 1.10.0, build 95](https://github.com/LeiterConsulting/splunk-content-hygiene/releases/tag/v1.10.0)

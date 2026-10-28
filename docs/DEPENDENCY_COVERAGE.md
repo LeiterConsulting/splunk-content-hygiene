@@ -9,9 +9,12 @@ No missing edge, usage gap or review stage authorizes removal.
 The final #8 static source-family contract is recorded in the
 [#8 acceptance ledger](STATIC_COVERAGE_ACCEPTANCE.md). Version 1.10 adds bounded
 declared producer-domain compatibility, not runtime closure.
-See the [current qualification](COMPATIBILITY.md#1100-producer-domain-qualification).
+Version 1.11 adds separately scoped caller-supported cross-dimension paths, not
+field-name-only joins or complete co-applicability/effective configuration.
+See the [current qualification](COMPATIBILITY.md#1110-caller-supported-qualification)
+and the [1.10 contract baseline](COMPATIBILITY.md#1100-producer-domain-qualification).
 The earlier bounded props pattern/default extension was qualified in 1.9.0 build 94;
-see the [current qualification](COMPATIBILITY.md#190-bounded-patterndefault-qualification).
+see its [qualification](COMPATIBILITY.md#190-bounded-patterndefault-qualification).
 Earlier shared props observations are documented separately below that section.
 Workflow/navigation rows were introduced in 1.6.0 build 85, whose
 [interaction qualification](COMPATIBILITY.md#160-interaction-qualification)
@@ -27,6 +30,7 @@ remains separately documented. Neither increment establishes runtime execution.
 | Conditional cross-stanza props order (1.8) | Same-attribute ordering among captured shared literal stanzas in one supported initial-search conjunction; category before within-category numeric priority/ASCII | Full effective winners, patterns/defaults, separate Boolean/query branches, source-file origin, private/system layers, sourcetype rewrites or runtime execution; possible fallback edges remain |
 | Bounded props pattern/default extension (1.9) | Whole-name ASCII literal / `*` / `...` potential caller paths and captured shared default fallbacks; native stanza cross-checks and conditional same-attribute ordering, retaining all fallbacks | Arbitrary PCRE/modifiers, escaped Windows paths, encoded/non-ASCII or oversized patterns, cross-pattern field-producer joins, uncaptured defaults, full effective props or actual matching/execution |
 | Declared producer-domain compatibility (1.10) | Same-dimension bounded language intersection and captured shared default fallback paths, both scopes, exact phase/namespace/shadow/output provenance; source/sourcetype strict case, host insensitive | Observed events, cross-dimension field-name joins, arbitrary PCRE, uncaptured defaults, full effective assignment, runtime values or execution |
+| Caller-supported cross-dimension producers (1.11) | Earlier-phase producer/consumer scopes both selected by one strict captured original-event conjunction in a fixed caller app; exact caller/query/selector provenance, bounded supported patterns and existing namespace/shadow/REPORT checks | Unwitnessed field-name joins, separate queries/panels, OR/NOT/IN/macros/subsearches, runtime field availability, effective precedence, actual events or execution |
 | Workflow actions | Literal internal app/view destinations and supported static search references with explicit namespace qualifications | Field-token substitution, invoking-app defaults, event-menu applicability, clicks or execution; external/POST actions are never followed |
 | Navigation menus | Literal named views/reports, explicit rendering/search views and supported root-relative internal app/view routes | Dynamic lists/matches, custom XML, inherited built-ins, query/fragment bodies, embedded/external callers or clicks |
 | App containment | Native metadata places a shared object in an app | Runtime use, ownership approval or deployment/removal completeness |
@@ -82,7 +86,7 @@ any customer-content change through a separate approved administration process.
 
 ## Existing decisions and later scans
 
-Version 1.10 scans use `shared-static-v9`. Policies v1–v8 remain readable, with
+Version 1.11 scans use `shared-static-v10`. Policies v1–v9 remain readable, with
 stages, notes, assignees, captured baselines and revision history unchanged.
 Expanded evidence can request **Needs re-review**; only an explicit review action
 can reaffirm a decision. Inventory scans never migrate or rewrite saved choices.

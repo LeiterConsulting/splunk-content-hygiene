@@ -1,5 +1,22 @@
 # Troubleshooting
 
+## A cross-dimension producer link is missing
+
+Run a complete scan with caller-scoped coverage (`props_callers=1.0.0`), then
+inspect the producer and consumer scopes and the caller's captured app context.
+One supported initial search must independently select both dimensions. Separate
+searches/panels, OR/NOT/IN, macros, generated fields, post-pipe selectors and
+case-only source/sourcetype matches cannot witness the join. Namespace/private
+shadows, unsupported patterns, later phases or budget ceilings can also withhold
+it. Check shared props diagnostics and coverage gaps; do not broaden permissions,
+run customer expressions, read events/lookups or create test customer objects to
+make the indicator green. Absence of a receipt is not absence of a dependency.
+
+The supporting-caller list is filterable and paginated. Clear its filter before
+assuming receipts disappeared. A caller link selects that exact cached object;
+if a later snapshot no longer contains it, use the exported receipt and original
+scan identity rather than treating the stale identity as a current target.
+
 ## Producer-domain links are missing or newly visible
 
 Run a new complete scan if the snapshot predates `props_domains: 1.0.0`. Existing

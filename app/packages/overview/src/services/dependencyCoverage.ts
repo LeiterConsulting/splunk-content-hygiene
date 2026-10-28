@@ -3,7 +3,7 @@ import { ParserCoverageGap, ReferenceTarget } from './dependencyParser';
 import { evidenceDigest } from './evidenceDigest';
 import { tagBindingIdentity } from './knowledgeReferences';
 
-export const SHARED_STATIC_POLICY = 'shared-static-v9' as const;
+export const SHARED_STATIC_POLICY = 'shared-static-v10' as const;
 
 export interface SourceCoverageGap extends ParserCoverageGap {
     sourceId: string;

@@ -1,15 +1,16 @@
 /* eslint-disable no-restricted-syntax, no-continue -- Indexed matching exits at explicit build, per-source and whole-scan budgets. */
-import { ContentObject, FieldDependencyProvenance, FieldLineageFacts, FieldPhase, FieldScope, ProducerOutputDeclaration } from '../types';
+import { ContentObject, FieldDependencyProvenance, FieldLineageFacts, FieldPhase, FieldScope, ProducerOutputDeclaration, PropsCallerWitness } from '../types';
 import { ParsedReference, ParsedSource, ReferenceTarget } from './dependencyParser';
 import { compilePropsPattern, createPropsPatternIndex, matchPropsPattern, PROPS_PATTERN_SCAN_WORK, PROPS_PATTERN_SOURCE_WORK } from './propsPatterns';
 import { comparePropsDomains, PROPS_DOMAIN_SCAN_WORK, PROPS_DOMAIN_SOURCE_WORK, propsDomainLabel } from './propsDomains';
+import { buildPropsCallerIndex, mergePropsCallerWitnesses, propsCallerBytes, propsCallerKey, PROPS_CALLER_LIMITATION, PROPS_CALLER_SCAN_BYTES } from './propsCallerScopes';
 
 export const FIELD_MATCH_LIMIT = 250;
 export const FIELD_SCAN_EDGE_LIMIT = 50000;
 export const FIELD_INDEX_ENTRY_LIMIT = 50000;
 export const FIELD_CANDIDATE_VISIT_LIMIT = 100000;
 export const FIELD_SOURCE_VISIT_LIMIT = 5000;
-export const FIELD_LINEAGE_LIMITATION = 'Declared field paths are potential search-time dependencies, not proof a regex matched, a field exists, a declaration executes or a particular props override wins. Caller and producer matching include bounded * / ... domains and captured shared defaults. Cross-dimension field joins, unsupported patterns, full effective precedence, private/system inheritance and external consumers remain unverified.';
+export const FIELD_LINEAGE_LIMITATION = 'Declared field paths are potential search-time dependencies, not proof a regex matched, a field exists, a declaration executes or a particular props override wins. Caller and producer matching include bounded * / ... domains and captured shared defaults. Cross-dimension paths require one captured strict caller conjunction selecting both scopes in the same app. Unwitnessed joins, unsupported patterns, full effective precedence, private/system inheritance and external consumers remain unverified.';
 export const FIELD_SOURCE_CONTEXT_LIMITATION = 'Invoking-app context cannot establish this source declaration because local, private or omitted field configuration may override it. No shared binding is guessed for that context.';
 export const FIELD_TARGETS: ReferenceTarget[] = ['field_extraction', 'field_alias', 'calculated_field', 'field_transform'];
 export interface FieldVisibility {
@@ -49,8 +50,8 @@ function* candidates<T>(index: ScopedIndex<T>, key: string, app: string, reusabl
 /** One compact index per scan. Exact consumer scopes retain direct lookups;
  * pattern consumers inspect only same-field/output/namespace buckets, bounded
  * before intersection. No regex execution or unsupported phase chaining. */
-export function buildFieldDependencyMatcher(objects: ContentObject[], catalogComplete: boolean, visibility?: FieldVisibility):
-    (object: ContentObject, parsed: ParsedSource) => ParsedSource {
+export function buildFieldDependencyMatcher(objects: ContentObject[], catalogComplete: boolean, visibility?: FieldVisibility, callers: PropsCallerWitness[] = [], callersTruncated = false):
+    ((object: ContentObject, parsed: ParsedSource) => ParsedSource) & { callerDiagnostics: Record<string, number> } {
     const transforms: ScopedIndex<Candidate> = new Map();
     const scoped = createPropsPatternIndex<Candidate>();
     const patternWork = { remaining: PROPS_PATTERN_SCAN_WORK };
@@ -89,6 +90,8 @@ export function buildFieldDependencyMatcher(objects: ContentObject[], catalogCom
     const sourceContextAvailable = (object: ContentObject, app: string): boolean =>
         !privateTarget(collectorFor(object), object.canonicalName, app) &&
         (object.app === app || !localIdentities.has(`${app}\0${object.objectType}\0${object.canonicalName}`));
+    const callerIndex = buildPropsCallerIndex(objects, fields, callers, sourceContextAvailable);
+    if (callersTruncated) { callerIndex.limited = true; callerIndex.counts.props_caller_index_limited = 1; }
     const visibleTransforms = (name: string, app: string): Candidate[] => {
         if (privateTarget('field_transforms', name, app)) { return []; }
         const scopes = transforms.get(name); const local = scopes?.get(`app:${app}`) ?? [];
@@ -117,6 +120,18 @@ export function buildFieldDependencyMatcher(objects: ContentObject[], catalogCom
             for (const dimension of dimensions) { yield* candidates(domainProducers, `${dimension}\0${input}`, app, reusable); }
         }
         yield* candidates(domainProducers, `default\0${input}`, app, reusable);
+    }
+    function* inputCandidates(object: ContentObject, scope: FieldScope, input: string, reusable: boolean): Generator<{ producer: Producer; caller?: PropsCallerWitness }> {
+        for (const producer of producerCandidates(scope, input, object.app, reusable)) { yield { producer }; }
+        for (const caller of callerIndex.byObject.get(object.objectId) ?? []) {
+            for (const selector of caller.selectors) {
+                if (selector.field === scope.field) { continue; }
+                for (const producer of producerCandidates({ field: selector.field, value: selector.value, exact: true }, input, caller.app, false)) {
+                    // Yield before rejection so every candidate consumes visits.
+                    yield { producer, caller };
+                }
+            }
+        }
     }
     fields.forEach(item => {
         const { object, facts } = item;
@@ -157,7 +172,8 @@ export function buildFieldDependencyMatcher(objects: ContentObject[], catalogCom
         }
     });
     let remaining = FIELD_SCAN_EDGE_LIMIT; let remainingVisits = FIELD_CANDIDATE_VISIT_LIMIT;
-    return (object, parsed) => {
+    let remainingCallerBytes = PROPS_CALLER_SCAN_BYTES;
+    const match = (object: ContentObject, parsed: ParsedSource): ParsedSource => {
         if (!parsed.fieldLineage && !parsed.hasEventSearch) { return parsed; }
         const result: ParsedSource = { ...parsed, references: [...parsed.references], warnings: [...parsed.warnings], gaps: [...(parsed.gaps ?? [])] };
         const own = parsed.fieldLineage;
@@ -205,20 +221,29 @@ export function buildFieldDependencyMatcher(objects: ContentObject[], catalogCom
                 }
             }
             if (own.scope && ['alias', 'eval', 'lookup'].includes(own.operation) && own.inputs.length) {
+                if (callerIndex.limited || callerIndex.limitedObjects.has(object.objectId)) { gap(PROPS_CALLER_LIMITATION); }
                 const matches = new Map<string, ParsedReference>();
                 for (const input of own.inputs) {
-                    const possible = producerCandidates(own.scope, input, object.app, reusable);
+                    const possible = inputCandidates(object, own.scope, input, reusable);
                     const inspected = new Set<string>();
-                    for (const producer of possible) {
+                    for (const { producer, caller } of possible) {
                         if (!visit()) { break; }
-                        const identity = `${producer.object.objectId}\0${producer.via?.object.objectId ?? ''}`;
+                        const identity = `${producer.object.objectId}\0${producer.via?.object.objectId ?? ''}\0${caller ? propsCallerKey(caller) : ''}`;
                         if (inspected.has(identity)) { continue; } inspected.add(identity);
                         const consumer = phase(own);
                         if (producer.object.objectId === object.objectId || producer.phase === 'calculated' && consumer !== 'lookup' || producer.phase === 'alias' && consumer === 'alias') { continue; }
-                        const basis = comparePropsDomains(own.scope, producer.facts.scope!, [sourceDomainWork, domainWork]);
+                        let basis = comparePropsDomains(own.scope, producer.facts.scope!, [sourceDomainWork, domainWork]);
                         if (basis === 'budget') { gap('Props producer-domain work budget reached; additional compatible field paths remain unverified.'); break; }
-                        if (!['same_literal', 'bounded_intersection', 'captured_default'].includes(basis)) { continue; }
-                        const app = reusable ? producer.via?.object.app ?? producer.object.app : object.app;
+                        if (caller) {
+                            if (basis !== 'different_field') { continue; }
+                            const selected = caller.selectors.find(row => row.field === producer.facts.scope!.field);
+                            if (!selected) { continue; }
+                            const matched = matchPropsPattern(compilePropsPattern(producer.facts.scope!), selected, [sourceDomainWork, domainWork]);
+                            if (matched === 'budget') { gap('Caller-scoped producer matching reached its pattern-work budget; additional paths remain unverified.'); break; }
+                            if (matched !== 'match') { continue; } basis = 'captured_conjunction';
+                        }
+                        if (!['same_literal', 'bounded_intersection', 'captured_default', 'captured_conjunction'].includes(basis)) { continue; }
+                        const app = caller?.app ?? (reusable ? producer.via?.object.app ?? producer.object.app : object.app);
                         if (!sourceContextAvailable(object, app)) { gap(FIELD_SOURCE_CONTEXT_LIMITATION); continue; }
                         if (privateTarget(collectorFor(producer.object), producer.object.canonicalName, app)) {
                             gap('Private or omitted field declarations can change the producer binding; no shared output path is guessed for that context.'); continue;
@@ -235,6 +260,15 @@ export function buildFieldDependencyMatcher(objects: ContentObject[], catalogCom
                             .filter(item => item.field === input).map(item => ({ ...item, objectId: origin.object.objectId, method: origin.facts.outputProvenance!.method }));
                         const existing = matches.get(key);
                         if (existing) {
+                            if (caller && existing.fieldProvenance!.scopeCompatibility) {
+                                const combined = mergePropsCallerWitnesses(existing.fieldProvenance!.scopeCompatibility.callerWitnesses, [caller]);
+                                const extra = propsCallerBytes(combined.rows) - propsCallerBytes(existing.fieldProvenance!.scopeCompatibility.callerWitnesses);
+                                if (extra <= remainingCallerBytes) {
+                                    remainingCallerBytes -= extra; callerIndex.counts.props_caller_edge_bytes += extra;
+                                    existing.fieldProvenance!.scopeCompatibility.callerWitnesses = combined.rows;
+                                } else { gap(PROPS_CALLER_LIMITATION); }
+                                if (combined.truncated) { gap(PROPS_CALLER_LIMITATION); }
+                            }
                             if (!existing.fieldProvenance!.fields.includes(input)) { existing.fieldProvenance!.fields.push(input); }
                             if (producer.via && !existing.fieldProvenance!.viaObjectIds.includes(producer.via.object.objectId)) { existing.fieldProvenance!.viaObjectIds.push(producer.via.object.objectId); }
                             if (declared.length) {
@@ -245,10 +279,17 @@ export function buildFieldDependencyMatcher(objects: ContentObject[], catalogCom
                             continue;
                         }
                         if (matches.size >= FIELD_MATCH_LIMIT || matches.size >= remaining) { gap('Declared field-input fan-out reached the matching safety budget; additional producer paths remain unverified.'); break; }
+                        if (caller) {
+                            const extra = propsCallerBytes([caller]);
+                            if (extra > remainingCallerBytes) { gap(PROPS_CALLER_LIMITATION); continue; }
+                            remainingCallerBytes -= extra; callerIndex.counts.props_caller_edge_bytes += extra;
+                        }
                         const proof = provenance('field_input', own.scope, consumer, producer.phase, reusable);
                         proof.fields = [input]; proof.viaObjectIds = producer.via ? [producer.via.object.objectId] : []; proof.contextApps = [app];
                         proof.scopeCompatibility = { version: 1, consumer: { ...own.scope }, producer: { ...producer.facts.scope! },
-                            basis: basis as NonNullable<FieldDependencyProvenance['scopeCompatibility']>['basis'] };
+                            basis: basis as NonNullable<FieldDependencyProvenance['scopeCompatibility']>['basis'],
+                            ...(caller ? { callerWitnesses: [caller] } : {}) };
+                        if (caller) { proof.invocation = 'fixed_app'; }
                         if (declared.length) { proof.outputDeclarations = declared; }
                         let relation = 'may_read_extracted_field';
                         if (producer.phase === 'alias') { relation = 'may_read_aliased_field'; }
@@ -300,4 +341,5 @@ export function buildFieldDependencyMatcher(objects: ContentObject[], catalogCom
         }
         return result;
     };
+    return Object.assign(match, { callerDiagnostics: callerIndex.counts });
 }

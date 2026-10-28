@@ -4,6 +4,7 @@ import { ExtractionOutputProvenance, FieldAliasMapping, FieldContextEvidence, Fi
 import { inlineExtractionDeclarations, namedCaptureDeclarations } from './extractionDeclarations';
 import { readPropsContexts } from './propsEvidence';
 import { readCrossStanzaProps } from './crossStanzaEvidence';
+import { readPropsCallerWitnesses } from './propsCallerScopes';
 import { compilePropsPattern, propsScopeLabel } from './propsPatterns';
 
 export type { FieldAliasMapping, FieldScope } from '../types';
@@ -150,15 +151,20 @@ export function readFieldProvenance(value: unknown): FieldDependencyProvenance |
         !domain.consumer || !domain.producer || [domain.consumer, domain.producer].some(scope =>
             !['sourcetype', 'host', 'source'].includes(scope.field) || !identifier(scope.value) || typeof scope.exact !== 'boolean') ||
         domain.consumer.field !== row.scope.field || domain.consumer.value !== row.scope.value || domain.consumer.exact !== row.scope.exact ||
-        !['same_literal', 'bounded_intersection', 'captured_default'].includes(domain.basis))) { return undefined; }
+        !['same_literal', 'bounded_intersection', 'captured_default', 'captured_conjunction'].includes(domain.basis))) { return undefined; }
+    const callerWitnesses = domain?.callerWitnesses === undefined ? undefined : readPropsCallerWitnesses(domain.callerWitnesses);
+    if (domain?.callerWitnesses !== undefined && !callerWitnesses || domain?.basis === 'captured_conjunction' && (!callerWitnesses || row.invocation !== 'fixed_app' ||
+        callerWitnesses.some(witness => !row.contextApps.includes(witness.app) || !witness.selectors.some(item => item.field === domain.consumer.field) ||
+            !witness.selectors.some(item => item.field === domain.producer.field))) || domain?.basis !== 'captured_conjunction' && callerWitnesses) { return undefined; }
     if (domain) {
         // Validate the compact scan receipt, not the product automaton again on
         // every cached page load. Runtime readers do not reconstruct the graph.
         const left = compilePropsPattern(domain.consumer); const right = compilePropsPattern(domain.producer);
         if (left.kind === 'unsupported' || right.kind === 'unsupported') { return undefined; }
         const fallback = left.kind === 'default' || right.kind === 'default';
-        if (fallback !== (domain.basis === 'captured_default') || !fallback && left.field !== right.field ||
-            !fallback && (left.kind === 'literal' && right.kind === 'literal') !== (domain.basis === 'same_literal') ||
+        const conjunction = domain.basis === 'captured_conjunction';
+        if (fallback !== (domain.basis === 'captured_default') || conjunction && left.field === right.field || !fallback && !conjunction && left.field !== right.field ||
+            !fallback && !conjunction && (left.kind === 'literal' && right.kind === 'literal') !== (domain.basis === 'same_literal') ||
             domain.basis === 'same_literal' && (left.field === 'host' ? left.value.toLowerCase() !== right.value.toLowerCase() : left.value !== right.value)) { return undefined; }
     }
     const propsContexts = row.propsContexts === undefined ? undefined : readPropsContexts(row.propsContexts);
@@ -183,7 +189,8 @@ export function readFieldProvenance(value: unknown): FieldDependencyProvenance |
         viaObjectIds: row.viaObjectIds, contextApps: row.contextApps, invocation: row.invocation,
         ...(outputDeclarations ? { outputDeclarations } : {}), ...(contexts ? { contexts: contexts as FieldContextEvidence[] } : {}),
         ...(domain ? { scopeCompatibility: { version: 1 as const, consumer: { field: domain.consumer.field, value: domain.consumer.value, exact: domain.consumer.exact },
-            producer: { field: domain.producer.field, value: domain.producer.value, exact: domain.producer.exact }, basis: domain.basis } } : {}),
+            producer: { field: domain.producer.field, value: domain.producer.value, exact: domain.producer.exact }, basis: domain.basis,
+            ...(callerWitnesses ? { callerWitnesses } : {}) } } : {}),
         ...(propsContexts ? { propsContexts } : {}), ...(row.propsContextsTruncated !== undefined ? { propsContextsTruncated: row.propsContextsTruncated } : {}),
         ...(crossStanzaProps ? { crossStanzaProps } : {}), ...(row.crossStanzaPropsTruncated !== undefined ? { crossStanzaPropsTruncated: row.crossStanzaPropsTruncated } : {}) };
 }

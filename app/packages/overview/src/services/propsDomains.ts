@@ -70,5 +70,5 @@ export function comparePropsDomains(consumer: FieldScope, producer: FieldScope,
 
 export function propsDomainLabel(basis: PropsDomainEvidence['basis']): string {
     return { same_literal: 'Same literal event scope', bounded_intersection: 'Overlapping bounded declaration patterns',
-        captured_default: 'Captured shared default fallback' }[basis];
+        captured_default: 'Captured shared default fallback', captured_conjunction: 'Both scopes selected by one captured caller conjunction' }[basis];
 }

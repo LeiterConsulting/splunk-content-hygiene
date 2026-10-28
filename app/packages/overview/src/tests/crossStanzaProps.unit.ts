@@ -121,7 +121,7 @@ test('new evidence changes freshness while preserving a v6 baseline/decision byt
     const saved = review(before.objectId, { stage: 'retain', note: 'Preserve review', evidenceBaseline: baseline });
     const preserved = JSON.stringify(saved); const compared = await compare(data);
     const after = (await attachReviewEvidence(compared.objects, compared.edges, scope)).find(item => item.objectId === before.objectId)!;
-    expect(after.reviewEvidence?.coverage?.policy).toBe('shared-static-v9'); expect(JSON.stringify(saved)).toBe(preserved);
+    expect(after.reviewEvidence?.coverage?.policy).toBe('shared-static-v10'); expect(JSON.stringify(saved)).toBe(preserved);
     expect(after.reviewEvidence?.coverage?.outbound.digest).not.toBe(before.reviewEvidence?.coverage?.outbound.digest);
     expect(compareReviewEvidence(saved, after, snapshot(compared.objects, compared.edges).scan, now).status).toBe('needs_review');
 });

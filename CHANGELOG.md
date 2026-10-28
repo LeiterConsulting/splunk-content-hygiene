@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.11.0 — 2026-10-28 (build 96)
+
+- Connect potential cross-dimension props field producers only through one
+  captured strict original-event caller conjunction and its fixed app context.
+  Never combine unrelated searches/panels or join on field names alone.
+- Retain strict scope case, earlier phases, namespace/private/local shadows and
+  exact REPORT output attribution. Unsupported, capped and unwitnessed paths
+  remain unverified, not unused or safe to remove.
+- Cache bounded caller identities, app, query/selector locations and both scopes.
+  Expose wrapping/filterable/paginated caller drill-through and carry receipts
+  through required-content, removal-impact and actual CSV/JSON exports.
+- Bound indexed candidates, rejected visits, pattern work, projections and
+  evidence bytes. Record diagnostics and explicit cache-refresh guidance.
+- Add `shared-static-v10` with unchanged v1–v9 readers and decision journals.
+  No customer-content writes, execution, event/lookup sampling or new privileges.
+- Correct the stale attribution notice for newer supported field-lineage
+  snapshots; expanded coverage still requires explicit scan-version evidence.
+- Qualify the exact archive with 1,107 automated checks, zero AppInspect
+  errors/failures, all seven pages in Light/Dark on Enterprise 10.2.5, 10.2.8
+  and 10.4.4, 108 accepted captures and 34 JSON / 32 paired CSV comparisons.
+- Preserve all decisions/policy journals and original native preferences. No
+  customer writes, source execution/sampling, new reviews/accounts/policies or
+  shared restarts. Native cross-dimension positives were absent; positive
+  semantics and supporting-caller presentation remain automated-only contracts.
+- Disclose owned-VM cold-start and browser-control batch recoveries. No frozen
+  production source, assertion or application timeout changed during validation.
+
 ## 1.10.0 — 2026-10-27 (build 95)
 
 - Add bounded same-dimension literal/pattern domain intersection and explicitly

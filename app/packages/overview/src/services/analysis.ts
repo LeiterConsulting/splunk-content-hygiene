@@ -16,6 +16,7 @@ import { buildKnowledgeReferenceMatcher, parseTagBinding } from './knowledgeRefe
 import { buildFieldDependencyMatcher, FIELD_TARGETS } from './fieldDependencies';
 import { createInteractionParser } from './interactiveSources';
 import { compilePropsPattern, propsScopeLabel } from './propsPatterns';
+import { mergePropsCallerWitnesses, PROPS_CALLER_LIMITATION } from './propsCallerScopes';
 
 export { extractSplReferences, extractDashboardReferences } from './dependencyParser';
 export type { ParsedReference } from './dependencyParser';
@@ -358,8 +359,20 @@ export function analyzeInventory(
         visibility,
     });
     const knowledgeReferences = buildKnowledgeReferenceMatcher(objects, visibility);
+    const propsEventScopes: InventoryAnalysis['propsEventScopes'] = [];
+    let propsScopesTruncated = false;
+    sources.forEach(source => {
+        const caller = objectById.get(source.objectId);
+        if (caller && ['Saved Search', 'Report', 'Alert', 'Dashboard'].includes(caller.objectType)) {
+            const originalScopes = sourceParses.get(source)?.propsEventScopes ?? [];
+            const capacity = Math.min(250, 50000 - propsEventScopes.length);
+            if (originalScopes.length > capacity) { propsScopesTruncated = true; }
+            propsEventScopes.push(...originalScopes.slice(0, capacity)
+                .map(scope => ({ ...scope, callerObjectId: caller.objectId, app: caller.app })));
+        }
+    });
     const fieldReferences = buildFieldDependencyMatcher(objects,
-        [completeness.field_extractions, completeness.field_aliases, completeness.calculated_fields, completeness.field_transforms].every(value => value === true), visibility);
+        [completeness.field_extractions, completeness.field_aliases, completeness.calculated_fields, completeness.field_transforms].every(value => value === true), visibility, propsEventScopes, propsScopesTruncated);
     const parserCounts: Record<string, number> = {
         spl: 0,
         dashboard: 0,
@@ -370,18 +383,12 @@ export function analyzeInventory(
         const key = `props_scope_${compilePropsPattern(item.fieldLineage.scope).kind}`;
         parserCounts[key] = (parserCounts[key] ?? 0) + 1;
     });
-    const propsEventScopes: InventoryAnalysis['propsEventScopes'] = [];
-
     sources.forEach((source) => {
         const sourceObject = objectById.get(source.objectId);
         if (!sourceObject || (!source.text.trim() && !source.failure && !source.fieldLineage)) {
             return;
         }
         const original = sourceParses.get(source)!;
-        if (['Saved Search', 'Report', 'Alert', 'Dashboard'].includes(sourceObject.objectType) && propsEventScopes.length < 50000) {
-            propsEventScopes.push(...(original.propsEventScopes ?? []).slice(0, Math.min(250, 50000 - propsEventScopes.length))
-                .map(scope => ({ ...scope, callerObjectId: source.objectId, app: sourceObject.app })));
-        }
         const parsed = fieldReferences(sourceObject, knowledgeReferences(sourceObject, source.kind === 'automatic_lookup'
             ? automatic.bindings(sourceObject, original) : automatic.callers(sourceObject, original)));
         if (parsed.automaticLookup) {
@@ -511,6 +518,10 @@ export function analyzeInventory(
                     const before = previous.fieldProvenance; const current = edge.fieldProvenance;
                     const declarations = [...new Map([...(before.outputDeclarations ?? []), ...(current.outputDeclarations ?? [])].map(item => [JSON.stringify(item), item])).values()];
                     const contexts = [...new Map([...(before.contexts ?? []), ...(current.contexts ?? [])].map(item => [JSON.stringify(item), item])).values()];
+                    const callerWitnesses = mergePropsCallerWitnesses(before.scopeCompatibility?.callerWitnesses, current.scopeCompatibility?.callerWitnesses);
+                    if (callerWitnesses.truncated) {
+                        coverageGaps.push({ sourceId: source.objectId, app: sourceObject.app, targets: [reference.targetType], sourceLocation: reference.sourceLocation, message: PROPS_CALLER_LIMITATION });
+                    }
                     if (declarations.length > 250) {
                         coverageGaps.push({ sourceId: source.objectId, app: sourceObject.app, targets: [reference.targetType], sourceLocation: reference.sourceLocation,
                             message: 'Merged output-declaration evidence reached its 250-position budget; additional positions remain unverified.' });
@@ -520,6 +531,7 @@ export function analyzeInventory(
                             message: 'Merged configuration-context evidence reached its 250-context budget; additional possibilities remain unverified.' });
                     }
                     edge.fieldProvenance = { ...current,
+                        ...(current.scopeCompatibility?.basis === 'captured_conjunction' ? { scopeCompatibility: { ...current.scopeCompatibility, callerWitnesses: callerWitnesses.rows } } : {}),
                         fields: uniqueEvidence([...before.fields, ...current.fields]).sort().slice(0, 250),
                         transformPositions: [...new Set([...before.transformPositions, ...current.transformPositions])].sort((a, b) => a - b).slice(0, 250),
                         viaObjectIds: uniqueEvidence([...before.viaObjectIds, ...current.viaObjectIds]).sort().slice(0, 250),
@@ -725,6 +737,7 @@ export function analyzeInventory(
         const basis = edge.fieldProvenance?.scopeCompatibility?.basis;
         if (basis) { const key = `props_domain_${basis}`; parserCounts[key] = (parserCounts[key] ?? 0) + 1; }
     });
+    Object.assign(parserCounts, fieldReferences.callerDiagnostics);
     return {
         objects,
         edges,
