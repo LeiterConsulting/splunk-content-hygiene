@@ -29,6 +29,8 @@ import { useEvidenceClock } from '../components/useEvidenceClock';
 import { useReviewNavigation } from '../components/ReviewNavigationContext';
 import { useSelectionFocus } from '../components/useSelectionFocus';
 import { PathContextDetails } from '../components/PathContextDetails';
+import { AlternativePathPanel } from '../components/AlternativePathPanel';
+import { buildDependencyIndex } from '../services/dependencyGraph';
 import {
     buildInUseReport,
     InUseOptions,
@@ -168,6 +170,7 @@ export function InUseContentPage({
     const [page, setPage] = useState(0);
     const [inspectedId, setInspectedId] = useState('');
     const [requestedScanId] = useState(() => readQueryParam('scan'));
+    const pathIndex = useMemo(() => snapshot ? buildDependencyIndex(snapshot.objects, snapshot.edges) : null, [snapshot]);
     const report = useMemo(
         () =>
             snapshot
@@ -595,6 +598,8 @@ export function InUseContentPage({
                                 <>
                                     <h3>One supported witness path</h3>
                                     {inspected.via ? <PathContextDetails context={inspected.via.pathContext} /> : null}
+                                    {inspected.via && pathIndex ? <AlternativePathPanel index={pathIndex} sourceId={inspected.via.rootId} targetId={inspected.objectId}
+                                        baselineEdgeIds={path.ids.slice(1).map(id => rows.get(id)?.via?.edgeId ?? '')} onInspect={setInspectedId} /> : null}
                                     {path.truncated ? (
                                         <InlineNotice>
                                             Only the last 100 identities are shown. Root:{' '}

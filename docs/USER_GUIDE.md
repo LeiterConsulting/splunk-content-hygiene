@@ -198,6 +198,51 @@ Review Library stage. Select a resolved related object to continue the
 investigation as a multi-step drill-through. Cross-view links preserve the
 selected object context.
 
+### Alternative-path investigations (1.14)
+
+Use **Compare alternative paths** on an object's chosen graph witness, a captured
+relationship, an In-use Content witness, or an affected-object witness in Removal
+Impact. Select **Find alternative paths** to compare the same ordered endpoints
+using the full cached adjacency, independently of relationship display filters.
+The original witness is retained separately; it is never silently replaced.
+
+Review Library adds a **Dependency paths** tab. Choose the direction and an exact
+other endpoint from the paginated, searchable visible catalog. This is a new
+investigation, not a change to the saved stage, note, assignee or evidence baseline.
+Historical/missing identities cannot establish a current path.
+
+The comparison displays the original witness (if reconstructible within 32 hops)
+and up to three alternatives. Each path preserves exact directed edge IDs, the
+weakest captured relationship confidence, potential applicability, source
+locations and its own caller/app/query/conjunction context. Alternatives prefer
+shared captured callers, then static/app-only context, then uncertain categories;
+within a category they use hop count and exact edge-ID order. This is a display
+preference, not a universal strength ranking or proof of runtime execution.
+
+The **Path to inspect** buttons keep the original and up to three alternatives
+visible together. The selected button has a pressed state for keyboard and
+screen-reader use. Inspect readable ordered hops and endpoint drill-through;
+raw edge-sequence identity is available under **Inspect exact path identity**.
+In Explorer, **Focus selected path in map** isolates its exact objects and
+connectors without changing the center or filters. **Return to map** restores
+the preceding pages, expansion and camera. Wider paths may require horizontal
+panning; the ordered hop list remains available before focusing.
+
+Search is bounded to six hops, 20,000 edge preparation/visits, 2,048 queued states
+and 64 completed candidate paths. Within-path cycles and outbound app containment
+are not searched. Parallel references remain separate by exact identity. Missing,
+unresolved or ambiguous identities and depth/work/state/candidate/context limits
+are explicit uncertainty. These are not every possible path or a globally best
+path. No returned alternative does not prove absence or safe removal.
+
+**Export path investigation JSON/CSV** exports every displayed path, exact hop
+evidence and all search ceilings/diagnostics, regardless of which path is selected.
+Zero-path exports retain scope and limitations. These dedicated files are bounded
+investigations, not the full dependency report. Existing full relationship,
+required-content and impact exports keep their original membership and semantics.
+No new scan, customer expression execution or source permissions are required.
+Decisions, baselines, coverage policy, scores and removal blockers are unchanged.
+
 ### Context-aware witness paths (1.12)
 
 Individual relationships may be supported by different apps, searches or

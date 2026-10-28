@@ -17,6 +17,35 @@ The app keeps customer content read-only:
   app-local KV Store collections.
 - Every finding carries reasons, evidence, and a suggested investigation step.
 
+## Version 1.14.0 — context-aware alternative paths
+
+Compare a chosen witness with up to three bounded alternatives, using the existing
+cached graph. Explorer, In-use Content and Removal Impact keep the original path
+and check every alternative's caller/app/query context independently. Review Library
+adds an exact-endpoint **Dependency paths** investigation without changing decisions.
+
+Inspect readable ordered hops and provenance, focus the selected path in Explorer,
+then return to the previous map. Dedicated CSV/JSON files preserve every displayed
+path and its search limits; existing full reports keep their original scope.
+No new scan, customer-content write or broader source permissions are required.
+Search is bounded, not exhaustive, and no missing path establishes safe removal.
+See [the investigation guide](docs/USER_GUIDE.md#alternative-path-investigations-114).
+
+[Release 1.14.0, build 111](https://github.com/LeiterConsulting/splunk-content-hygiene/releases/tag/v1.14.0)
+passes 1,230 automated checks and pre-cert AppInspect with zero errors/failures.
+All seven pages pass desktop Light/Dark checks on Enterprise 10.2.5, 10.2.8 and
+10.4.4: 84 accepted native captures and 32 JSON / 32 CSV download comparisons.
+Review Library loads and integrity-checks cached edges before investigating.
+Original decisions, journals, baselines and appearance settings are preserved.
+See [qualification and bounded-search limits](docs/COMPATIBILITY.md#1140-alternative-path-qualification).
+
+![Selected alternative path in Light mode](docs/images/alternative-path-light.jpg)
+
+Built-in Monitoring Console metadata: one selected dashboard → macro → lookup
+path, with both exact connectors and all three objects emphasized. This is
+captured static evidence, not observed execution.
+[View the Dark-mode example](docs/images/alternative-path-dark.jpg).
+
 ## Version 1.13.0 — navigable dependency maps
 
 [Release 1.13.0, build 107](https://github.com/LeiterConsulting/splunk-content-hygiene/releases/tag/v1.13.0)

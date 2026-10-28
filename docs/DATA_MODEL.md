@@ -133,6 +133,16 @@ without rewriting v1–v7 baselines, stages, notes, assignees or journals.
 
 ## Edges
 
+Version 1.14 adds an on-demand, client-derived
+[`PathInvestigation`](../schemas/path-investigation.schema.json) export. It records
+one ordered endpoint pair, the original witness and up to three alternatives,
+exact ordered object/edge identities, per-path context, relationship provenance,
+search ceilings, diagnostics and uncertainty. It is not saved to KV Store and
+does not change any review baseline, confidence, blocker or coverage version.
+Review Library now reads and integrity-checks cached edges as well as objects;
+summary-only pages still omit graph downloads. A missing or incomplete graph is
+a load error, not a verified empty investigation.
+
 Version 1.12 derives `pathContext` in investigation outputs, not KV/review records.
 It contains `version`, `status`, directed/scoped hop counts, intersected `apps`,
 common exact `callerWitnesses`, reason codes and up to eight uncertain-hop

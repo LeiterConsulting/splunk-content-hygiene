@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.14.0 — 2026-10-28 (build 111)
+
+- Compare bounded alternatives for exact directed endpoint pairs on demand,
+  preserving the existing witness and every conservative dependency/blocker.
+  Check each path's app/caller/query/conjunction evidence independently.
+- Keep six-hop, edge/state/candidate/context ceilings explicit. Preserve
+  uncertain original witnesses; never infer a stronger relationship from
+  independent callers, app containment or missing results.
+- Share readable comparison, selection, exact hop/provenance details and
+  dedicated full-displayed-path CSV/JSON exports across Explorer, In-use Content,
+  Removal Impact and a new exact-endpoint picker in Review Library.
+- Keep the small path choice set visible as native pressed-state buttons;
+  disclose raw path IDs separately so useful hop explanations stay primary.
+- Load and integrity-check the full cached graph in Review Library, preventing
+  a page-specific summary load from producing a false empty investigation.
+- Focus the selected path's exact objects/connectors in Explorer; return to the
+  same center, filters, expansion, pages and camera. Customer content, cached
+  source evidence, saved review/policy decisions and coverage versions are unchanged.
+- Qualify the exact archive with 1,230 checks, zero AppInspect errors/failures,
+  all seven pages in desktop Light/Dark on Enterprise 10.2.5, 10.2.8 and 10.4.4,
+  84 accepted native captures and 32 JSON / 32 CSV download comparisons.
+  Keep full direct reports complete while focusing only the selected path.
+- Preserve caches, decisions, baselines, journals and native preferences without
+  source writes, new scans/reviews/policies/accounts or shared restarts. Document
+  search/identity limits, automated-only positive shared-caller cases, the
+  corrected Library loader and recovered test-environment readiness checks.
+
 ## 1.13.0 — 2026-10-28 (build 107)
 
 - Associate relationship boxes with their exact rendered connection and both

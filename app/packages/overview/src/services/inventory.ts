@@ -1724,7 +1724,7 @@ async function loadSnapshot(
     usageRecordOverride?: KvScanRecord,
     page?: AppPage,
 ): Promise<InventorySnapshot> {
-    const includeEdges = !page || ['dependency-explorer', 'in-use-content'].includes(page);
+    const includeEdges = !page || ['dependency-explorer', 'in-use-content', 'review-library'].includes(page);
     const includeOwners = !page || page === 'ownership';
     const includeReviewEvidence = !page || ['cleanup-candidates', 'dependency-explorer', 'review-library', 'in-use-content'].includes(page);
     const usageRecord = usageRecordOverride ?? (await getLatestUsageScanRecord());

@@ -27,8 +27,11 @@ import { ContentObject } from '../types';
 import { PathContextDetails } from './PathContextDetails';
 import { PATH_CONTEXT_LABELS } from '../services/pathContext';
 import { useSelectionFocus } from './useSelectionFocus';
+import { AlternativePathPanel } from './AlternativePathPanel';
+import { DependencyIndex } from '../services/dependencyGraph';
 
 interface RemovalImpactPanelProps {
+    index?: DependencyIndex;
     selected: ContentObject;
     analysis: RemovalImpactAnalysis;
     depth: number;
@@ -75,6 +78,7 @@ function usageMetricAccent(selected: ContentObject): 'warning' | 'positive' | 'n
 }
 
 export function RemovalImpactPanel({
+    index,
     selected,
     analysis,
     depth,
@@ -187,6 +191,7 @@ export function RemovalImpactPanel({
                 <CardBody>
                     <SmallText>{contextItem.pathNames.join(' → ')}</SmallText>
                     <PathContextDetails key={`${analysis.selectedObjectId}:${contextItem.objectId}`} context={contextItem.pathContext} defaultOpen />
+                    {index ? <AlternativePathPanel index={index} sourceId={contextItem.objectId} targetId={analysis.selectedObjectId} baselineEdgeIds={contextItem.pathEdgeIds} onInspect={onDrillTo} /> : null}
                 </CardBody>
             </Card> : null}
             {analysis.affectedObjects.length > 0 ? (

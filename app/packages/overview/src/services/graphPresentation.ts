@@ -173,6 +173,15 @@ export function connectionGraph(edge: DependencyEdge, index: DependencyIndex): G
     return { nodes, links: [link], labels: [], width: 0, height: 0, representedObjects: nodes.length, omittedObjects: 0 };
 }
 
+/** Exact ordered investigation path. It is a view, never a new dependency. */
+export function investigatedPathGraph(edges: DependencyEdge[], index: DependencyIndex): GraphModel {
+    const ids = edges.length ? [edges[0].sourceId, ...edges.map(edge => edge.targetId)] : [];
+    const nodes = ids.map((id, level) => nodeFor(id, level, index, edges[Math.max(0, level - 1)]));
+    const links = edges.map(edge => ({ id: edge.edgeId, source: edge.sourceId, target: edge.targetId,
+        label: edge.relation.replace(/_/g, ' '), confidence: edge.confidence, evidence: edge.evidence, edges: [edge] }));
+    return { nodes, links, labels: [], width: 0, height: 0, representedObjects: nodes.length, omittedObjects: 0 };
+}
+
 /** Highlight only this rendered connection (including its aggregated edges). */
 export function graphAssociation(model: GraphModel, selection: { kind: 'node' | 'link'; id: string } | null): { links: Set<string>; nodes: Set<string> } {
     const links = new Set<string>(); const nodes = new Set<string>();

@@ -88,6 +88,15 @@ traces; a weak chosen witness does not classify all alternative paths. This is
 derived cached evidence, not broader collection or a new coverage policy. See
 [the path-context guide](USER_GUIDE.md#context-aware-witness-paths-112).
 
+Version 1.14 adds explicit bounded comparison of alternative directed witnesses
+for the same endpoint pair. It keeps the original witness, checks each path's
+context independently, and offers up to three alternatives from a six-hop,
+20,000-edge-visit / 2,048-state / 64-candidate search. Display preference is not
+an upgrade to relationship confidence or removal readiness. App containment is
+not traversed as an outbound requirement. No returned path is not absence;
+depth, work, state, context and identity limits remain visible and exportable.
+See [alternative investigations](USER_GUIDE.md#alternative-path-investigations-114).
+
 Removal impact is a read-only simulation, not a cleanup command. New menu/report
 links can expose affected destinations and preparation steps; partial coverage,
 protection, unknown usage or unresolved evidence still blocks readiness. Perform

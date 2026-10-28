@@ -914,6 +914,7 @@ export function DependencyPage({
                                 {impact ? (
                                     <RemovalImpactPanel
                                         key={selected.objectId}
+                                        index={index}
                                         selected={selected}
                                         analysis={impact}
                                         depth={impactDepth}

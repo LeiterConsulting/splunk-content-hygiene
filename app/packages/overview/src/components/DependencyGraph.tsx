@@ -12,7 +12,7 @@ import {
     GraphNode,
     graphLinkPath,
 } from '../services/dependencyGraph';
-import { connectionGraph, fitGraphZoom, graphAssociation, GraphWindow, PresentationNode, viewportGraph } from '../services/graphPresentation';
+import { connectionGraph, fitGraphZoom, graphAssociation, GraphWindow, investigatedPathGraph, PresentationNode, viewportGraph } from '../services/graphPresentation';
 import { ContentObject, DependencyEdge } from '../types';
 import { StatusBadge } from './StatusBadge';
 import { GraphContext, GraphContextDialog } from './GraphContextDialog';
@@ -262,6 +262,7 @@ export function DependencyGraph({
     const [pageOffsets, setPageOffsets] = useState(() => new Map<number, number>());
     const [browseOpen, setBrowseOpen] = useState(false);
     const [focusEdgeId, setFocusEdgeId] = useState<string | null>(null);
+    const [focusPathEdges, setFocusPathEdges] = useState<DependencyEdge[] | null>(null);
     const mapCamera = useRef<{ left: number; top: number; zoom: number } | null>(null);
     const [hovered, setHovered] = useState<{ kind: 'node' | 'link'; id: string } | null>(null);
     const [focused, setFocused] = useState<{ kind: 'node' | 'link'; id: string } | null>(null);
@@ -295,7 +296,10 @@ export function DependencyGraph({
         return allReferences.reduce((weakest, edge) => (rank[edge.confidence] ?? 0) < (rank[weakest] ?? 0) ? edge.confidence : weakest, allReferences[0]?.confidence ?? 'unknown');
     }, [allReferences]);
     const focusedReference = focusEdgeId ? allReferences.find(edge => edge.edgeId === focusEdgeId) : null;
-    const focusModel = useMemo(() => focusedReference ? connectionGraph(focusedReference, index) : null, [focusedReference, index]);
+    const focusModel = useMemo(() => {
+        if (focusPathEdges) { return investigatedPathGraph(focusPathEdges, index); }
+        return focusedReference ? connectionGraph(focusedReference, index) : null;
+    }, [focusPathEdges, focusedReference, index]);
     const model = useMemo(() => viewportGraph(focusModel ?? neighborhood, { ...viewportSize, zoom, offsets: pageOffsets }), [focusModel, neighborhood, viewportSize, zoom, pageOffsets]);
     const { mode, geometry } = model;
     const nodeById = useMemo(() => new Map(model.nodes.map((node) => [node.id, node])), [model]);
@@ -306,7 +310,7 @@ export function DependencyGraph({
         contextSelection?.kind === 'link' ? linkById.get(contextSelection.id) : null;
     const active = useMemo(() => contextSelection?.open && (contextNode || contextLink) ? contextSelection : hovered ?? focused ??
         (focusedReference ? { kind: 'link' as const, id: model.links[0].id } : null), [contextSelection, contextNode, contextLink, hovered, focused, focusedReference, model.links]);
-    const association = useMemo(() => graphAssociation({ ...model, links: model.labels.map(label => label.link) }, active), [model, active]);
+    const association = useMemo(() => focusPathEdges && !active ? { nodes: new Set(model.nodes.map(node => node.id)), links: new Set(model.links.map(link => link.id)) } : graphAssociation({ ...model, links: model.labels.map(label => label.link) }, active), [model, active, focusPathEdges]);
     const activeLink = active?.kind === 'link' ? linkById.get(active.id) : null;
     const activeNode = active?.kind === 'node' ? nodeById.get(active.id) : null;
     let context: GraphContext | null = null;
@@ -362,19 +366,33 @@ export function DependencyGraph({
     useEffect(() => {
         if (focusEdgeId && !focusedReference) { setFocusEdgeId(null); mapCamera.current = null; }
     }, [focusEdgeId, focusedReference]);
+    useEffect(() => {
+        if (focusPathEdges?.some(edge => index.edgeById.get(edge.edgeId) !== edge)) { setFocusPathEdges(null); mapCamera.current = null; }
+    }, [focusPathEdges, index]);
     const focusConnection = (edge: DependencyEdge): void => {
         const element = viewport.current;
-        if (!focusedReference) { mapCamera.current = { left: element?.scrollLeft ?? 0, top: element?.scrollTop ?? 0, zoom }; }
+        if (!focusedReference && !focusPathEdges) { mapCamera.current = { left: element?.scrollLeft ?? 0, top: element?.scrollTop ?? 0, zoom }; }
         setContextSelection(null); setBrowseOpen(false); setPreviewId(null); setHovered(null); setFocused(null);
         camera.current = { kind: 'relative', x: 0.5, y: 0.5 };
         setZoom(Math.min(1, fitGraphZoom(connectionGraph(edge, index), element?.clientWidth || 1000, element?.clientHeight || 620)));
         setFocusEdgeId(edge.edgeId);
+        setFocusPathEdges(null);
+        element?.focus();
+    };
+    const focusPath = (path: DependencyEdge[]): void => {
+        if (!path.length || path.length > 32) { return; }
+        const element = viewport.current;
+        if (!focusedReference && !focusPathEdges) { mapCamera.current = { left: element?.scrollLeft ?? 0, top: element?.scrollTop ?? 0, zoom }; }
+        setContextSelection(null); setBrowseOpen(false); setPreviewId(null); setHovered(null); setFocused(null); setFocusEdgeId(null);
+        setFocusPathEdges(path);
+        camera.current = { kind: 'relative', x: 0.5, y: 0.5 };
+        setZoom(Math.min(1, fitGraphZoom(investigatedPathGraph(path, index), element?.clientWidth || 1000, element?.clientHeight || 620)));
         element?.focus();
     };
     const returnToMap = (): void => {
         const saved = mapCamera.current;
         if (saved) { camera.current = { kind: 'scroll', left: saved.left, top: saved.top }; setZoom(saved.zoom); }
-        mapCamera.current = null; setFocusEdgeId(null); setHovered(null); setFocused(null); setPreviewId(null);
+        mapCamera.current = null; setFocusEdgeId(null); setFocusPathEdges(null); setHovered(null); setFocused(null); setPreviewId(null);
         viewport.current?.focus();
     };
     const turnPage = (page: GraphWindow, direction: -1 | 1): void => {
@@ -435,7 +453,7 @@ export function DependencyGraph({
         }
     }, [contextSelection?.open, contextNode, contextLink, returnContextFocus]);
     const fit = (): void => {
-        if (!nodeById.has(inspectedId) && !focusedReference) {
+        if (!nodeById.has(inspectedId) && !focusedReference && !focusPathEdges) {
             const edge = allReferences.find(row => row.sourceId === inspectedId || row.targetId === inspectedId);
             if (edge) { focusConnection(edge); return; }
         }
@@ -444,6 +462,7 @@ export function DependencyGraph({
         if (zoom === 1) { applyCamera(viewport.current); }
     };
     const columnTitle = (level: number): string => {
+        if (focusPathEdges) { return `Selected path · step ${level + 1}`; }
         if (focusedReference) { return level === 0 ? 'From object' : 'To object'; }
         if (level < 0) {
             return `Consumers · ${Math.abs(level)} hop(s)`;
@@ -456,7 +475,7 @@ export function DependencyGraph({
         return 'No further captured relationships in this direction.';
     };
     const branchControl = (node: GraphNode): React.ReactNode => {
-        if (focusedReference || node.level === 0 || !node.resolved) { return null; }
+        if (focusedReference || focusPathEdges || node.level === 0 || !node.resolved) { return null; }
         if (!node.canExpand) { return <SmallText>{Math.abs(node.level) >= GRAPH_MAX_HOPS ? '3-hop display limit · inspect to re-center' : 'End of captured branch'}</SmallText>; }
         return <StyledButton aria-label={`${node.expanded ? 'Collapse' : 'Expand'} branch for ${node.name}`}
             title={branchHint(node)} onClick={() => expandBranch(node.id, Boolean(node.expanded))}>
@@ -510,10 +529,12 @@ export function DependencyGraph({
     } else if (activeNode) {
         connectionSummary = <><strong>Object: </strong>{activeNode.name} · {association.links.size} displayed connection(s)</>;
     }
+    let graphView = focusedReference ? 'connection' : 'map';
+    if (focusPathEdges) { graphView = 'path'; }
     const workspace = (
-        <GraphWorkspace $maximized={maximized} data-graph-workspace="true" data-graph-density={mode} data-graph-view={focusedReference ? 'connection' : 'map'}>
+        <GraphWorkspace $maximized={maximized} data-graph-workspace="true" data-graph-density={mode} data-graph-view={graphView}>
             <ButtonRow>
-                {focusedReference ? <StyledButton $primary onClick={returnToMap}>Return to map</StyledButton> : <FilterField>
+                {focusedReference || focusPathEdges ? <StyledButton $primary onClick={returnToMap}>Return to map</StyledButton> : <FilterField>
                     Group high-degree relationships
                     <Select
                         value={grouping}
@@ -553,13 +574,13 @@ export function DependencyGraph({
                     const value = fitGraphZoom(model, element.clientWidth, element.clientHeight);
                     setZoom(value); if (value === zoom) { applyCamera(element); }
                 }}>Fit graph</StyledButton>
-                {focusedReference ? null : <StyledButton onClick={() => {
+                {focusedReference || focusPathEdges ? null : <StyledButton onClick={() => {
                     camera.current = { kind: 'node', id: center.objectId };
                     const groups = new Map(expandedGroups);
                     neighborhood.nodes.forEach(node => { if (node.groupKey) { groups.set(node.groupKey, GRAPH_NODE_BUDGET); } });
                     setExpandedGroups(groups); setCollapsedNodes(new Set()); setPageOffsets(new Map()); setExpandAll(true);
                 }}>Expand all</StyledButton>}
-                {focusedReference ? null : <StyledButton
+                {focusedReference || focusPathEdges ? null : <StyledButton
                     onClick={() => {
                         camera.current = { kind: 'node', id: center.objectId };
                         setExpandedGroups(new Map());
@@ -574,7 +595,8 @@ export function DependencyGraph({
             </ButtonRow>
             <SmallText role="status">
                 {focusedReference ? <>Connection focus · exact captured reference. Map center remains {center.name}. </> : null}
-                {model.representedObjects} objects represented ·{' '}
+                {focusPathEdges ? <>Path focus · {focusPathEdges.length} ordered captured hop(s). Map center remains {center.name}; wider paths may require horizontal panning. </> : null}
+                {focusPathEdges ? 'Only this selected path is drawn; other dependencies remain in the cached graph and full reports. ' : <>{model.representedObjects} objects represented ·{' '}
                 {model.nodes.filter((node) => node.memberIds).length} groups ·{' '}
                 {model.omittedObjects} omitted by the {GRAPH_NODE_BUDGET}-card budget. Expansion stops at {GRAPH_MAX_HOPS} hops;
                 {model.expansionLimited ? ' expansion work limit reached; use filters or center on a branch.' : ''}
@@ -583,7 +605,7 @@ export function DependencyGraph({
                 {maximized ? ' Hover or focus a connection to highlight its endpoints.' : <>
                     Grouped or deeper objects remain in the relationship reports. {mode === 'overview' ? 'Overview cards adapt to crowding, viewport size and zoom. ' : 'Detailed cards in this viewport. '}
                     Consumers are left; dependencies are right. Hover or focus a box to highlight its exact connection and endpoints. Scroll or use arrow keys to pan.
-                </>}
+                </>}</>}
             </SmallText>
             <ConnectionSummary aria-label="Highlighted graph context">
                 {connectionSummary}
@@ -774,13 +796,14 @@ export function DependencyGraph({
                 }
                 onInspect={onInspect}
                 onFocusConnection={focusConnection}
+                onFocusPath={focusPath}
                 returnFocus={returnContextFocus}
             /> : null}
             {browseOpen ? <GraphContextDialog
                 context={{ link: { id: 'captured-map-references', source: center.objectId, target: center.objectId,
                     label: 'Captured references in this expanded map scope', confidence: referenceConfidence, evidence: '', edges: allReferences } }}
                 title="Browse captured connections" open index={index} onClose={() => setBrowseOpen(false)}
-                onInspect={onInspect} onFocusConnection={focusConnection} returnFocus={returnContextFocus}
+                onInspect={onInspect} onFocusConnection={focusConnection} onFocusPath={focusPath} returnFocus={returnContextFocus}
             /> : null}
         </GraphWorkspace>
     );

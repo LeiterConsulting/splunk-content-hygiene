@@ -11,6 +11,7 @@ import { FieldLineagePanel, FieldProvenanceDetails } from './FieldLineagePanel';
 import { PathContextDetails } from './PathContextDetails';
 import { createPathContextTracker } from '../services/pathContext';
 import { DependencyEdge } from '../types';
+import { AlternativePathPanel } from './AlternativePathPanel';
 
 const ContextFacts = styled(DefinitionList)`
     grid-template-columns: minmax(90px, 0.3fr) minmax(0, 1fr);
@@ -45,6 +46,7 @@ export function GraphContextDialog({
     onInspect,
     returnFocus,
     onFocusConnection,
+    onFocusPath,
     title,
 }: {
     context: GraphContext | null;
@@ -54,6 +56,7 @@ export function GraphContextDialog({
     onInspect: (id: string) => void;
     returnFocus: () => void;
     onFocusConnection?: (edge: DependencyEdge) => void;
+    onFocusPath?: (edges: DependencyEdge[]) => void;
     title?: string;
 }): React.ReactElement {
     const [page, setPage] = useState(0);
@@ -122,6 +125,9 @@ export function GraphContextDialog({
                             <SmallText>{node.witness.objectIds.map(name).join(' → ')}</SmallText>
                             <SmallText>{node.witness.direction === 'inbound' ? 'Inbound witness ends at' : 'Outbound witness starts at'} {name(node.witness.centerId)}. Other arrows can represent different paths.</SmallText>
                             <PathContextDetails context={node.witness.context} />
+                            <AlternativePathPanel index={index} sourceId={node.witness.objectIds[0]} targetId={node.witness.objectIds[node.witness.objectIds.length - 1]}
+                                baselineEdgeIds={node.witness.edgeIds} onInspect={inspect}
+                                onFocusPath={onFocusPath ? edges => { onClose(); onFocusPath(edges); } : undefined} />
                         </> : null}
                         {!node.memberIds && index.objects.get(node.id) ? <FieldLineagePanel object={index.objects.get(node.id)!} /> : null}
                         {!node.resolved && !node.memberIds ? (
@@ -238,6 +244,8 @@ export function GraphContextDialog({
                                         </ContextFacts>
                                         <FieldProvenanceDetails provenance={edge.fieldProvenance} />
                                         {referenceContexts.get(edge.edgeId) ? <PathContextDetails context={referenceContexts.get(edge.edgeId)!} /> : null}
+                                        <AlternativePathPanel index={index} sourceId={edge.sourceId} targetId={edge.targetId} baselineEdgeIds={[edge.edgeId]} onInspect={inspect}
+                                            onFocusPath={onFocusPath ? edges => { onClose(); onFocusPath(edges); } : undefined} />
                                     </li>
                                 ))}
                         </ContextList>

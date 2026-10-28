@@ -563,7 +563,10 @@ test('reads reject a corrupted published snapshot and summary pages skip graph a
     expect(requests.find((request) => /ch_objects$/.test(request.path))?.fields)
         .toBe('source:0,configuration_fingerprint:0,review_evidence:0');
     requests = [];
-    await splunkInventoryClient.getLatestSnapshot('review-library');
+    const library = await splunkInventoryClient.getLatestSnapshot('review-library');
+    expect(library?.edges).toEqual(first.edges);
+    expect(requests.some((request) => /ch_edges$/.test(request.path))).toBe(true);
+    expect(requests.some((request) => /ch_owners$/.test(request.path))).toBe(false);
     expect(requests.find((request) => /ch_objects$/.test(request.path))?.fields)
         .toBe('source:0,configuration_fingerprint:0');
     requests = [];
@@ -575,6 +578,31 @@ test('reads reject a corrupted published snapshot and summary pages skip graph a
     await expect(splunkInventoryClient.getLatestSnapshot()).rejects.toThrow(
         'integrity verification',
     );
+});
+
+test('Review Library reads the complete verified cached graph without source or workflow writes', async () => {
+    const first = await splunkInventoryClient.runFullScan();
+    const saved = { _key: 'original', stage: 'retain', note: 'Preserve this decision' };
+    collections.set('ch_reviews', new Map([['original', saved]]));
+    const before = JSON.stringify([...collections.entries()].map(([name, rows]) => [name, [...rows.entries()]]));
+    requests = [];
+    const library = await splunkInventoryClient.getLatestSnapshot('review-library');
+    expect(first.edges.length).toBeGreaterThan(0);
+    expect(library?.edges).toEqual(first.edges);
+    expect(library?.objects.map(object => object.objectId)).toEqual(first.objects.map(object => object.objectId));
+    expect(requests.every(request => request.method === 'GET' && request.path.includes('/storage/collections/data/'))).toBe(true);
+    expect(JSON.stringify([...collections.entries()].map(([name, rows]) => [name, [...rows.entries()]]))).toBe(before);
+});
+
+test('Review Library rejects an incomplete graph rather than reporting a false empty path', async () => {
+    const first = await splunkInventoryClient.runFullScan();
+    expect(first.edges.length).toBeGreaterThan(0);
+    const edges = collections.get('ch_edges')!;
+    edges.delete([...edges.keys()][0]);
+    requests = [];
+    await expect(splunkInventoryClient.getLatestSnapshot('review-library')).rejects.toThrow('integrity verification');
+    expect(requests.some(request => /ch_edges$/.test(request.path))).toBe(true);
+    expect(requests.every(request => request.method === 'GET')).toBe(true);
 });
 
 test('retention after cancellation and telemetry never issues an empty deletion filter', async () => {

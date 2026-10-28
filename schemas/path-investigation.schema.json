@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/splunk-content-hygiene/path-investigation.schema.json",
+  "title": "Content Hygiene bounded cached path investigation export",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "sourceId", "targetId", "scanId", "paths", "relationships", "limits", "ceilings", "diagnostics", "limitation"],
+  "properties": {
+    "version": { "const": 1 },
+    "sourceId": { "type": "string" },
+    "targetId": { "type": "string" },
+    "scanId": { "type": ["string", "null"] },
+    "paths": { "type": "array", "maxItems": 4, "items": { "$ref": "#/$defs/path" } },
+    "relationships": { "type": "array", "maxItems": 50, "items": { "$ref": "#/$defs/edge" } },
+    "limits": { "type": "array", "uniqueItems": true, "items": { "enum": ["depth", "edge_visits", "states", "candidates", "context", "baseline", "identity"] } },
+    "ceilings": {
+      "type": "object", "additionalProperties": false,
+      "required": ["hops", "edgeVisits", "states", "candidates", "alternatives", "baselineHops"],
+      "properties": { "hops": { "const": 6 }, "edgeVisits": { "const": 20000 }, "states": { "const": 2048 }, "candidates": { "const": 64 }, "alternatives": { "const": 3 }, "baselineHops": { "const": 32 } }
+    },
+    "diagnostics": {
+      "type": "object", "additionalProperties": false,
+      "required": ["edgeVisits", "states", "completedCandidates", "contextWork", "contextBytes"],
+      "properties": {
+        "edgeVisits": { "type": "integer", "minimum": 0, "maximum": 20000 },
+        "states": { "type": "integer", "minimum": 0, "maximum": 2048 },
+        "completedCandidates": { "type": "integer", "minimum": 0, "maximum": 64 },
+        "contextWork": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+        "contextBytes": { "type": "integer", "minimum": 0, "maximum": 8388608 }
+      }
+    },
+    "limitation": { "type": "string", "minLength": 1 }
+  },
+  "$defs": {
+    "path": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "baseline", "objectIds", "edgeIds", "confidence", "conditional", "context"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "baseline": { "type": "boolean" },
+        "objectIds": { "type": "array", "minItems": 2, "maxItems": 33, "uniqueItems": true, "items": { "type": "string" } },
+        "edgeIds": { "type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true, "items": { "type": "string" } },
+        "confidence": { "enum": ["high", "medium", "low", "unknown"] },
+        "conditional": { "type": "boolean" },
+        "context": { "$ref": "#/$defs/context" }
+      },
+      "allOf": [{ "if": { "properties": { "baseline": { "const": false } } }, "then": { "properties": { "objectIds": { "maxItems": 7 }, "edgeIds": { "maxItems": 6 } } } }]
+    },
+    "context": {
+      "type": "object", "additionalProperties": false,
+      "required": ["version", "status", "hopCount", "scopedHopCount", "apps", "callerWitnesses", "reasons", "issues"],
+      "properties": {
+        "version": { "const": 1 },
+        "status": { "enum": ["static_only", "app_only", "shared_caller", "mixed", "unverified", "bounded"] },
+        "hopCount": { "type": "integer", "minimum": 1, "maximum": 32 },
+        "scopedHopCount": { "type": "integer", "minimum": 0, "maximum": 32 },
+        "apps": { "type": "array", "maxItems": 32, "uniqueItems": true, "items": { "type": "string" } },
+        "callerWitnesses": { "type": "array", "maxItems": 32, "items": { "$ref": "field-lineage.schema.json#/$defs/callerWitness" } },
+        "reasons": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/reason" } },
+        "issues": { "type": "array", "maxItems": 8, "items": {
+          "type": "object", "additionalProperties": false, "required": ["edgeId", "sourceId", "targetId", "reason"],
+          "properties": { "edgeId": { "type": "string" }, "sourceId": { "type": "string" }, "targetId": { "type": "string" }, "reason": { "$ref": "#/$defs/reason" } }
+        } }
+      }
+    },
+    "reason": { "enum": ["different_apps", "different_callers", "caller_entry", "missing_context", "invoking_app", "scope_unverified", "disconnected", "unresolved", "budget"] },
+    "edge": {
+      "type": "object", "additionalProperties": false,
+      "required": ["edgeId", "sourceId", "targetId", "relation", "confidence", "evidence", "resolved", "sourceLocation"],
+      "properties": {
+        "edgeId": { "type": "string" }, "sourceId": { "type": "string" }, "targetId": { "type": "string" },
+        "relation": { "type": "string" }, "confidence": { "enum": ["high", "medium", "low", "unknown"] },
+        "evidence": { "type": "string" }, "resolved": { "type": "boolean" }, "sourceLocation": { "type": ["string", "null"] },
+        "fieldProvenance": { "$ref": "field-lineage.schema.json#/$defs/provenance" }
+      }
+    }
+  }
+}

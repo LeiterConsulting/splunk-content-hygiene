@@ -27,9 +27,67 @@ the minimum is not a recommendation to downgrade or remain on an old patch.
 
 | Runtime | Purpose | Current evidence |
 | --- | --- | --- |
-| 10.2.5 | Exact minimum; classic navigation; coordinator and reported regressions | App 1.13.0 build 107 at 1280 × 720 in the isolated Linux VM: preserved real cache, bounded graph pages, exact-endpoint focus/fullscreen, all seven pages in Light/Dark, real exports and empty Library |
-| 10.2.8 | Representative 10.2 maintenance release and real-estate regression | Same archive at 1280 × 720: high-degree application cases, all graph controls and seven pages in Light/Dark, existing Library evidence/exports and unchanged review/policy journals |
-| 10.4.4 | Modern navigation, current theme host, and newer bundled runtime | Same archive at 1280 × 720: all seven pages in Light/Dark, native modern navigation, bounded graph/focus/fullscreen, real exports and empty Library; original decisions unchanged |
+| 10.2.5 | Exact minimum; classic navigation; coordinator and reported regressions | App 1.14.0 build 111 at 1280 × 720 in the isolated Linux VM: preserved real cache, original/alternative path selection, exact path focus/fullscreen/return, all seven pages in Light/Dark, real exports and empty Library |
+| 10.2.8 | Representative 10.2 maintenance release and real-estate regression | Same archive at 1280 × 720: all seven pages and investigation entry points in Light/Dark, existing Library exact-endpoint investigation/exports and unchanged review/policy journals |
+| 10.4.4 | Modern navigation, current theme host, and newer bundled runtime | Same archive at 1280 × 720: all seven pages in Light/Dark, native modern navigation, path comparison/focus/fullscreen/return, real exports and empty Library; original decisions unchanged |
+
+### 1.14.0 alternative-path qualification
+
+The exact build 111 archive passes 1,230 automated checks, lint/style/types,
+build and portable-package gates. Pre-cert AppInspect 4.3.1 reports zero errors,
+failures and future failures, with three existing reviewed advisories and one
+manifest skip. Trusted-library updates use the existing cache. The main bundle
+retains its size advisory (approximately 1.52 MiB).
+
+The same archive was installed on all three runtimes without shared restarts.
+All 21 app-owned page definitions match it. Original real catalogs, manifests,
+review/revision and policy journals retain their published-baseline hashes.
+All 12 public schemas pass over 21,104 object/edge/scan records and the original
+exported review baseline. The additional investigation export is client-derived,
+not a KV migration or a new coverage claim. Review Library now loads and
+integrity-checks the full cached graph rather than a summary-only snapshot.
+
+All seven pages pass desktop Light/Dark checks with 84 accepted native captures.
+Real built-in direct and two-hop alternatives retain exact ordered identities,
+source facts, provenance and independent static context. Original witness and
+alternative choices are wrapping native pressed-state buttons. Exact-path map
+focus emphasizes every selected connector and object, supports full-window mode
+and returns to the original map, filters, pages and camera. No measured page,
+fact or control overflow, or card/label overlap, occurs in qualified captures;
+sampled active text/link/path-choice contrast is at least 4.5:1.
+
+Actual 32 JSON / 32 CSV downloads match cached facts, provenance, per-path context,
+search diagnostics and limits. Full direct relationship reports stay complete
+while the map shows only the selected two-hop path. The existing Library review
+tests an exact-endpoint zero-path result, including unresolved-identity uncertainty;
+its decision, note, assignee and baseline remain unchanged. Empty Libraries on
+the other runtimes remain empty. Positive Library path selection and positive
+shared-caller alternatives are automated contracts, not manufactured native data.
+
+Alternative search is explicitly bounded to six hops, 20,000 edge preparation/
+visits, 2,048 queued states, 64 completed candidates and three displayed alternatives.
+An original witness can retain up to 32 hops. Display preference is not a global
+best-path, confidence or execution ranking. Paths never union independent callers,
+queries or branches; an unavailable identity or no result does not establish
+absence or removal eligibility. Wider paths can require horizontal panning.
+Qualification is representative 1280 × 720 desktop testing, not mobile/narrow-pane,
+Cloud, clustered/Windows-write, production-latency or runtime-closure certification.
+
+Pre-publication comparison rejected an earlier candidate's Library export because
+the page loader omitted cached edges. The corrected loader and incomplete-graph
+rejection have regression tests; all final gates use the corrected archive.
+Earlier type-fixture, emulated guest startup/load, native menu/readiness and
+test-environment timeout recoveries are retained privately. No application test
+deadline or evidence assertion was relaxed. An earlier guest host-bootstrap error
+originated in Splunk chrome before the app started and recovered in a fresh tab;
+its underlying cause is not established. Final candidate app console errors are
+zero. These are not zero-timeout or production-performance claims.
+
+Native appearance preferences are restored and read back. No customer object,
+source permission, review, policy or account is created/changed; no new scan or
+customer SPL/PCRE/EVAL execution, event sampling or lookup-content sampling is
+performed. The owned minimum-version guest retains its original disk,
+authentication and read-only seed, and is gracefully stopped after qualification.
 
 ### 1.13.0 navigable-map qualification
 

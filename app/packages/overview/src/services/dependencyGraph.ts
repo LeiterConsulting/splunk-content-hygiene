@@ -3,6 +3,8 @@ import { createPathContextTracker, PathContextEvidence } from './pathContext';
 
 export interface DependencyIndex {
     objects: Map<string, ContentObject>;
+    edgeById: Map<string, DependencyEdge>;
+    ambiguousEdgeIds: Set<string>;
     inbound: Map<string, DependencyEdge[]>;
     outbound: Map<string, DependencyEdge[]>;
     inboundSources: Map<string, Set<string>>;
@@ -13,11 +15,18 @@ export function buildDependencyIndex(
 ): DependencyIndex {
     const index: DependencyIndex = {
         objects: new Map(objects.map((item) => [item.objectId, item])),
+        edgeById: new Map(),
+        ambiguousEdgeIds: new Set(),
         inbound: new Map(),
         outbound: new Map(),
         inboundSources: new Map(),
     };
     edges.forEach((edge) => {
+        const previous = index.edgeById.get(edge.edgeId);
+        if (previous && JSON.stringify(previous) !== JSON.stringify(edge)) {
+            index.ambiguousEdgeIds.add(edge.edgeId);
+        }
+        index.edgeById.set(edge.edgeId, edge);
         const inbound = index.inbound.get(edge.targetId) ?? [];
         inbound.push(edge);
         index.inbound.set(edge.targetId, inbound);

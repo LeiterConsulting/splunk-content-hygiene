@@ -1,5 +1,36 @@
 # Troubleshooting
 
+For Review Library dependency-path investigations, the app must load the verified
+cached edges as well as the object catalog. If inventory integrity verification
+fails, refresh the page and inspect scan status; do not interpret that failure as
+an empty graph or a missing dependency. Version 1.14 includes this graph load in
+the Library workflow. No new review or customer-content change is needed.
+
+## An alternative path is missing or differs from the original witness
+
+The original witness is kept separately. **Compare alternative paths** searches
+one ordered source/target pair on demand, not every path or every possible root.
+The search uses full cached adjacency rather than relationship display filters.
+It displays up to three alternatives and discloses depth, edge/state/candidate,
+context and identity limits. A longer original witness may remain visible even
+when it exceeds the six-hop alternative search. Originals over 32 hops or with
+missing/ambiguous edge identities are not reconstructed in this comparison;
+the existing report/decision is not rewritten.
+
+App containment is not an outbound requirement, unresolved identities are not
+guessed, and cycles are not enumerated. Independent callers, query locations and
+branches are never merged into a stronger context. Alternatives' display order
+does not upgrade confidence or removal readiness. A failed or empty bounded
+comparison never establishes absence, incompatibility or safe removal.
+
+Select a path for ordered hop evidence. In Explorer, **Focus selected path in map**
+isolates the exact objects/connectors; wide paths may need horizontal panning.
+**Return to map** restores the previous map position and expansion. Dedicated path
+CSV/JSON exports contain all displayed paths and limitations, not the full estate.
+Existing full relationship, required-content and impact reports remain unchanged.
+Review Library's **Dependency paths** tab requires a currently visible identity;
+a historical review is not substituted for current inventory.
+
 ## Dependency boxes are difficult to associate
 
 In 1.13 and later, hover or keyboard-focus a relationship

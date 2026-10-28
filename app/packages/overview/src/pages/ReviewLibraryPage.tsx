@@ -41,6 +41,8 @@ import { ReviewFreshnessBadge, ReviewFreshnessPanel } from '../components/Review
 import { useEvidenceClock } from '../components/useEvidenceClock';
 import { StatusBadge } from '../components/StatusBadge';
 import { SummaryMetric } from '../components/SummaryMetric';
+import { PathPairPicker } from '../components/PathPairPicker';
+import { buildDependencyIndex } from '../services/dependencyGraph';
 import { UsageEvidencePanel } from '../components/UsageEvidencePanel';
 import { reviewStageOptions } from '../services/reviews';
 import { compareReviewEvidence, ReviewFreshness, reviewValidityLabels } from '../services/reviewEvidence';
@@ -255,6 +257,7 @@ export function ReviewLibraryPage({
     const currentPage = Math.min(page, totalPages - 1);
     const pageStart = currentPage * PAGE_SIZE;
     const pageReviews = filteredReviews.slice(pageStart, pageStart + PAGE_SIZE);
+    const pathIndex = useMemo(() => snapshot ? buildDependencyIndex(snapshot.objects, snapshot.edges) : null, [snapshot]);
     const selectedReview = reviews.find((review) => review.objectId === selectedId) ?? null;
     const selectedIndex = filteredReviews.findIndex((review) => review.objectId === selectedId);
     const { detailTitle, listTitle } = useSelectionFocus(selectedReview?.objectId);
@@ -660,6 +663,11 @@ export function ReviewLibraryPage({
                             </FactGrid>
                             <FieldLineagePanel object={selectedObject} />
                             <UsageEvidencePanel contentObject={selectedObject} />
+                        </WorkspaceTabs.Panel>
+                        <WorkspaceTabs.Panel panelId="paths" label="Dependency paths">
+                            {pathIndex && selectedIsPresent ? <PathPairPicker key={selectedReview.objectId} index={pathIndex} objectId={selectedReview.objectId}
+                                onInspect={id => navigate(() => navigateToView('dependencies', { object: id, scan: snapshot?.scan.scanId }))} /> :
+                                <InlineNotice>Current inventory is unavailable for this identity. The saved decision remains unchanged; no current path can be inferred from the historical review.</InlineNotice>}
                         </WorkspaceTabs.Panel>
                         <WorkspaceTabs.Panel panelId="history" label="Revision history">
                             <ReviewHistoryPanel objectId={selectedReview.objectId} />
