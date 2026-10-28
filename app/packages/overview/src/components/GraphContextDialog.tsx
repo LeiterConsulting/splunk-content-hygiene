@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import Modal from '@splunk/react-ui/Modal';
 import styled from 'styled-components';
 import { variables } from '@splunk/themes';
@@ -8,6 +8,8 @@ import { isPotentialRelation } from '../utils/dependencySemantics';
 import { ResultPagination } from './ResultPagination';
 import { StatusBadge } from './StatusBadge';
 import { FieldLineagePanel, FieldProvenanceDetails } from './FieldLineagePanel';
+import { PathContextDetails } from './PathContextDetails';
+import { createPathContextTracker } from '../services/pathContext';
 
 const ContextFacts = styled(DefinitionList)`
     grid-template-columns: minmax(90px, 0.3fr) minmax(0, 1fr);
@@ -54,6 +56,10 @@ export function GraphContextDialog({
     const link = context && 'link' in context ? context.link : null;
     const ids = node?.memberIds ?? [];
     const references = link?.edges ?? [];
+    const referenceContexts = useMemo(() => {
+        const tracker = createPathContextTracker(index.objects);
+        return new Map((context && 'link' in context ? context.link.edges : []).map(edge => [edge.edgeId, tracker.path(edge.sourceId, [edge])]));
+    }, [context, index]);
     const total = link ? references.length : ids.length;
     const currentPage = Math.min(page, Math.max(0, Math.ceil(total / 25) - 1));
     const inspect = (id: string): void => {
@@ -94,6 +100,12 @@ export function GraphContextDialog({
                                 </>
                             ) : null}
                         </ContextFacts>
+                        {node.witness && !node.memberIds ? <>
+                            <h3>One graph witness from the center</h3>
+                            <SmallText>{node.witness.objectIds.map(name).join(' → ')}</SmallText>
+                            <SmallText>{node.witness.direction === 'inbound' ? 'Inbound witness ends at' : 'Outbound witness starts at'} {name(node.witness.centerId)}. Other arrows can represent different paths.</SmallText>
+                            <PathContextDetails context={node.witness.context} />
+                        </> : null}
                         {!node.memberIds && index.objects.get(node.id) ? <FieldLineagePanel object={index.objects.get(node.id)!} /> : null}
                         {!node.resolved && !node.memberIds ? (
                             <InlineNotice>
@@ -205,6 +217,7 @@ export function GraphContextDialog({
                                             </dd>
                                         </ContextFacts>
                                         <FieldProvenanceDetails provenance={edge.fieldProvenance} />
+                                        {referenceContexts.get(edge.edgeId) ? <PathContextDetails context={referenceContexts.get(edge.edgeId)!} /> : null}
                                     </li>
                                 ))}
                         </ContextList>

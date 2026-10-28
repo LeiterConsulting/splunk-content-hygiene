@@ -1,5 +1,35 @@
 # Changelog
 
+## 1.12.0 — 2026-10-28 (build 100)
+
+- Check the captured app and exact caller/query/conjunction context across one
+  chosen witness instead of treating independent edge receipts as a single
+  coherent query. Keep roots, branches, panels and alternative paths separate.
+- Distinguish shared-caller, app-only, mixed, unverified, bounded and static-only
+  witnesses in Explorer graph context, required-content and removal impact.
+  Link uncertain hops to their exact cached endpoints; retain full adjacency.
+- Preserve the same context meaning and compact evidence in actual CSV/JSON
+  exports, with explicit work, scoped-hop, app/receipt and evidence-size limits.
+- Keep dependency membership, confidence, impact scores, readiness blockers,
+  existing review/policy journals, baselines and collection coverage unchanged.
+  No new scan, permission or customer-content execution/write is required.
+- Treat unverified reusable invocation as unknown, never as a fixed constraint
+  derived from the definition's owning app or as a proven app mismatch.
+- Keep impact-detail close controls and result pagination visible when keyboard
+  focus moves between the full-width witness section and affected-object list.
+- Qualify the exact candidate with 1,153 automated checks, zero AppInspect
+  errors/failures, all seven pages in Light/Dark on Enterprise 10.2.5, 10.2.8
+  and 10.4.4, 72 accepted captures and 28 JSON / 32 CSV comparisons. Compare
+  104 real cached roots with the prior release without changing membership,
+  witness selection, confidence, scores, readiness or graph geometry.
+- Preserve all cached manifests, decisions, baselines, policy journals and
+  native appearance preferences. No rescans, new reviews/accounts/policies,
+  customer writes or shared restarts. Positive shared-caller path semantics
+  remain automated-only; native catalogs contain no qualifying examples.
+- Disclose owned-VM readiness/control recoveries and one startup error sourced
+  to Splunk host chrome, absent on fresh Home/app checks. Qualification is not
+  a zero-timeout, production-latency or runtime-dependency certification.
+
 ## 1.11.0 — 2026-10-28 (build 96)
 
 - Connect potential cross-dimension props field producers only through one

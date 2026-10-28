@@ -59,23 +59,28 @@ test.each(['light', 'dark'] as const)('supporting callers wrap, filter, paginate
     await user.type(panel.getByRole('textbox', { name: 'Find supporting caller' }), 'absent'); expect(panel.getByText('No supporting callers match this filter.')).toBeVisible();
 });
 
-test.each(['light', 'dark'] as const)('Explorer exports carry independent receipts and Library preserves v9 decisions in %s', async scheme => {
+// Keep independent page contracts below the unchanged per-test deadline.
+// The native qualification separately exercises cross-view navigation/motion.
+test.each(['light', 'dark'] as const)('Explorer exports carry independent receipts without changing v9 decisions in %s', async scheme => {
     const { data, current, saved, proof } = await fixture(); const user = userEvent.setup(); const bytes = JSON.stringify(saved);
     window.history.replaceState(null, '', `/?object=${encodeURIComponent(current.objectId)}`);
-    const { unmount } = render(frame(scheme, <DependencyPage {...actions} snapshot={data} isLoading={false} reviews={[saved]} />));
+    render(frame(scheme, <DependencyPage {...actions} snapshot={data} isLoading={false} reviews={[saved]} />));
     await user.click(screen.getByRole('button', { name: 'Export investigation' })); await user.click(screen.getByRole('menuitem', { name: 'Filtered relationships JSON' }));
     expect(downloadJson).toHaveBeenCalledWith('content-hygiene-dependencies.json', expect.objectContaining({ relationships: expect.arrayContaining([
         expect.objectContaining({ edge: expect.objectContaining({ fieldProvenance: proof }) })]) }));
     await user.click(screen.getByRole('button', { name: 'Export investigation' })); await user.click(screen.getByRole('menuitem', { name: 'Filtered relationships CSV' }));
     const [, columns, rows] = jest.mocked(downloadCsv).mock.calls[0];
     expect(rows.map(row => JSON.parse(String(row[columns.indexOf('Field relationship provenance')]) || 'null'))).toContainEqual(proof);
-    unmount(); jest.clearAllMocks(); window.history.replaceState(null, '', '/');
+    expect(JSON.stringify(saved)).toBe(bytes); expect(actions.onSaveReview).not.toHaveBeenCalled(); expect(actions.onDeleteReview).not.toHaveBeenCalled();
+});
+test.each(['light', 'dark'] as const)('Library exports preserve the captured v9 decision and baseline in %s', async scheme => {
+    const { data, current, saved } = await fixture(); const user = userEvent.setup(); const bytes = JSON.stringify(saved);
     render(frame(scheme, <ReviewLibraryPage {...actions} snapshot={data} isLoading={false} loadError={null} reviews={[saved]} />));
     await user.click(screen.getByRole('button', { name: current.name })); await user.click(screen.getByRole('button', { name: 'Export this review' }));
     await user.click(screen.getByRole('menuitem', { name: 'Selected review JSON' }));
     expect(downloadJson).toHaveBeenCalledWith('content-hygiene-review.json', expect.objectContaining({ review: saved, currentObject: current }));
     expect(parseReviewBaseline(saved.evidenceBaseline)).not.toBeNull(); expect(compareReviewEvidence(saved, current, data.scan, now).status).toBe('needs_review');
-    expect(JSON.stringify(saved)).toBe(bytes); expect(actions.onSaveReview).not.toHaveBeenCalled();
+    expect(JSON.stringify(saved)).toBe(bytes); expect(actions.onSaveReview).not.toHaveBeenCalled(); expect(actions.onDeleteReview).not.toHaveBeenCalled();
 });
 
 test('required-content witnesses retain caller receipts, removal remains blocked and old caches request explicit rescanning', async () => {

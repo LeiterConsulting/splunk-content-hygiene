@@ -43,6 +43,7 @@ import { useEvidenceClock } from '../components/useEvidenceClock';
 import { StatusBadge } from '../components/StatusBadge';
 import { UsageEvidencePanel } from '../components/UsageEvidencePanel';
 import { buildDependencyIndex } from '../services/dependencyGraph';
+import { createPathContextTracker, PathContextEvidence, PATH_CONTEXT_LABELS } from '../services/pathContext';
 import { RemovalImpactAnalysis, analyzeRemovalImpact } from '../services/removalImpact';
 import { reviewStageOptions } from '../services/reviews';
 import { compareReviewEvidence, ReviewFreshness } from '../services/reviewEvidence';
@@ -156,6 +157,7 @@ function exportRelationships(
     rows: RelatedNode[],
     reviewByObject: Map<string, ReviewRecord>,
     protection: ReadonlyMap<string, PolicyProtection>,
+    contexts: ReadonlyMap<string, PathContextEvidence>,
 ): void {
     downloadCsv(
         `content-hygiene-dependencies-${selected.name}.csv`,
@@ -182,6 +184,7 @@ function exportRelationships(
             'Source location',
             'Field relationship provenance', 'Center declared field facts', 'Related declared field facts',
             'Center app policy protection', 'Related app policy protection',
+            'Directed relationship context (one hop)',
         ],
         rows.map((row) => [
             selected.objectId,
@@ -208,6 +211,7 @@ function exportRelationships(
             selected.fieldLineage ? JSON.stringify(selected.fieldLineage) : '',
             row.contentObject?.fieldLineage ? JSON.stringify(row.contentObject.fieldLineage) : '',
             JSON.stringify(protection.get(selected.objectId) ?? null), JSON.stringify(protection.get(row.objectId) ?? null),
+            JSON.stringify(contexts.get(row.edge.edgeId) ?? null),
         ]),
     );
 }
@@ -243,6 +247,7 @@ function exportRemovalImpact(selected: ContentObject, analysis: RemovalImpactAna
             'Evidence',
             'Field relationship provenance', 'Selected declared field facts', 'Affected declared field facts',
             'Selected app policy protection', 'Affected app policy protection',
+            'Chosen witness path context', 'Chosen witness edge IDs',
         ],
         rows.map((affected) => [
             selected.objectId,
@@ -273,6 +278,8 @@ function exportRemovalImpact(selected: ContentObject, analysis: RemovalImpactAna
             selected.fieldLineage ? JSON.stringify(selected.fieldLineage) : '',
             affected?.fieldLineage ? JSON.stringify(affected.fieldLineage) : '',
             JSON.stringify(analysis.policyProtection ?? null), JSON.stringify(affected?.policyProtection ?? null),
+            affected ? JSON.stringify(affected.pathContext) : '',
+            affected ? JSON.stringify(affected.pathEdgeIds) : '',
         ]),
     );
 }
@@ -435,6 +442,10 @@ export function DependencyPage({
             );
     }, [selected, index, direction, allows]);
     const graphEdges = useMemo(() => relatedRows.map((row) => row.edge), [relatedRows]);
+    const relationshipContexts = useMemo(() => {
+        const tracker = createPathContextTracker(index.objects);
+        return new Map(relatedRows.map(row => [row.edge.edgeId, tracker.path(row.edge.sourceId, [row.edge])]));
+    }, [index, relatedRows]);
     const scan = snapshot?.scan;
     let emptyTitle = 'No verified inventory is cached';
     let emptyExplanation = 'Run a complete live scan from Settings to establish a verified baseline.';
@@ -571,7 +582,7 @@ export function DependencyPage({
                     selected && impact ? (
                         <ExportMenu label="Export investigation" items={[
                             { label: 'Filtered relationships CSV', disabled: !relatedRows.length,
-                                onClick: () => exportRelationships(selected, relatedRows, reviewByObject, policies.protection) },
+                                onClick: () => exportRelationships(selected, relatedRows, reviewByObject, policies.protection, relationshipContexts) },
                             { label: 'Filtered relationships JSON', disabled: !relatedRows.length,
                                 onClick: () =>
                                     downloadJson('content-hygiene-dependencies.json', {
@@ -581,6 +592,7 @@ export function DependencyPage({
                                         centerAppPolicyProtection: policies.protection.get(selected.objectId) ?? null,
                                         relationships: relatedRows.map((row) => ({
                                             ...row,
+                                            pathContext: relationshipContexts.get(row.edge.edgeId),
                                             appPolicyProtection: policies.protection.get(row.objectId) ?? null,
                                             usageValidity: row.contentObject
                                                 ? usageValidity(row.contentObject)
@@ -875,6 +887,7 @@ export function DependencyPage({
                                                                     <SmallText>
                                                                         {row.edge.sourceLocation}
                                                                     </SmallText>
+                                                                    {relationshipContexts.get(row.edge.edgeId) ? <SmallText>{PATH_CONTEXT_LABELS[relationshipContexts.get(row.edge.edgeId)!.status]}</SmallText> : null}
                                                                 </td>
                                                                 <td>
                                                                     <StyledButton

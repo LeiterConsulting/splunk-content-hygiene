@@ -198,6 +198,53 @@ Review Library stage. Select a resolved related object to continue the
 investigation as a multi-step drill-through. Cross-view links preserve the
 selected object context.
 
+### Context-aware witness paths (1.12)
+
+Individual relationships may be supported by different apps, searches or
+dashboard panels. The new **Inspect path context** details check whether one
+chosen directed witness shares their captured context; they do not treat the
+union of independent receipts as one query.
+
+| Label | Meaning |
+| --- | --- |
+| Shared captured caller across scoped hops | At least one identical caller/app/query/conjunction receipt survives all supported scoped-hop constraints in this witness. It does not prove execution or full query semantics. |
+| App context only | Scoped hops share a captured invoking app, but one consistent query is not established. |
+| No shared captured context | The captured app/query evidence does not share one context along this witness. A context switch or other unverified path may still exist; the dependency is not declared impossible. |
+| Path context unverified | Old, missing, unresolved, reusable-invocation or unsupported scope evidence prevents a stronger annotation. |
+| Path context check bounded | An explicit annotation ceiling was reached. Dependencies and blockers remain included. |
+| Static path — no scoped caller check | This witness contains no scoped field/props evidence to reconcile. Ordinary lexical links are not runtime traces. |
+
+In **Dependency Explorer**, expand a branch, then open an object's **Full
+context** to inspect its one ordered inbound/outbound witness relative to the
+graph center. Relationship details and filtered relationship exports annotate
+one directed edge at a time; grouped arrows never combine callers. In **In-use
+Content**, select an included object and inspect its shortest chosen witness.
+**Removal impact** annotates each chosen affected-object path in source-to-target
+order, independently of relationship-view filters. Choose **Inspect witness
+context** on an affected row for full-width details; closing returns keyboard
+focus to the affected-object list. CSV and JSON retain the same
+context, uncertain-hop endpoint links/IDs and common caller receipts.
+
+Only explicitly fixed-app evidence constrains the app intersection. Owning-app
+metadata on an unverified reusable invocation is not a fixed runtime app and
+cannot establish an app mismatch. App-only evidence is not promoted to one query. Reusable/unknown invocation,
+unsupported pattern/default interpretation and unresolved identities remain
+unverified. Scope checks use existing receipts and supported literal metadata;
+they never re-parse or execute customer searches, regexes or expressions on page
+load. Exact selector locations keep separate searches/panels independent.
+
+Checks cap 32 scoped hops, 32 apps and the existing 32 receipts per relationship,
+with 32 KiB of detailed evidence per annotation, 1,000,000 bounded work units and
+8 MiB of detailed annotation evidence per investigation. Up to eight uncertain
+hop examples are presented. Reaching a limit bounds only the annotation, not
+dependency membership. Full adjacency and other possible paths remain available;
+a weaker first witness does not establish that every alternative is weak.
+
+These annotations are derived from the cached graph. No new scan is required,
+and no facts, coverage policy, review stage, note, assignee, baseline, retention
+policy or journal is rewritten. Existing collection/freshness warnings still
+apply. Neither shared context nor missing context establishes cleanup eligibility.
+
 ### Caller-supported cross-dimension paths (1.11)
 
 A consumer scoped to a sourcetype can potentially use an earlier producer scoped

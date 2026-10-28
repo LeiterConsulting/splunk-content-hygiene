@@ -79,6 +79,15 @@ Full JSON retains the supported closure, witness relationships and limitations;
 filtered CSV is explicitly narrower. App containment is not traversed as an
 outbound requirement.
 
+Version 1.12 adds a separate, bounded **chosen-witness context** annotation.
+Captured invoking apps and exact caller/query/conjunction receipts are
+intersected along scoped hops, not unioned across searches/panels/branches.
+Shared-caller, app-only, mixed, unverified and bounded states preserve the same
+conservative closure and removal blockers. Ordinary static links are not runtime
+traces; a weak chosen witness does not classify all alternative paths. This is
+derived cached evidence, not broader collection or a new coverage policy. See
+[the path-context guide](USER_GUIDE.md#context-aware-witness-paths-112).
+
 Removal impact is a read-only simulation, not a cleanup command. New menu/report
 links can expose affected destinations and preparation steps; partial coverage,
 protection, unknown usage or unresolved evidence still blocks readiness. Perform

@@ -27,9 +27,65 @@ the minimum is not a recommendation to downgrade or remain on an old patch.
 
 | Runtime | Purpose | Current evidence |
 | --- | --- | --- |
-| 10.2.5 | Exact minimum; classic navigation; coordinator and reported regressions | App 1.11.0 build 96: isolated Linux VM at 1280 × 720; fresh bounded/full scans, native/cache/schema and caller/producer comparisons, all seven pages in Light/Dark, keyboard/context checks, real exports and empty Library; owned-VM/control recoveries documented below |
-| 10.2.8 | Representative 10.2 maintenance release and real-estate regression | App 1.11.0 build 96 at 1434 × 940: fresh scans/comparisons, all seven pages in Light/Dark, retained literal producer paths and pattern-declaration details, keyboard/context checks and preserved Library evidence/exports |
-| 10.4.4 | Modern navigation, current theme host, and newer bundled runtime | App 1.11.0 build 96 at 1434 × 940: fresh scans/comparisons, all seven pages in Light/Dark, new diagnostics, keyboard/context checks, real exports and empty Library; original decisions unchanged |
+| 10.2.5 | Exact minimum; classic navigation; coordinator and reported regressions | App 1.12.0 build 100 at 1280 × 720 in the isolated Linux VM: preserved real cache, prior-release path comparisons, all seven pages in Light/Dark, full-width impact/context keyboard flows, real exports and empty Library |
+| 10.2.8 | Representative 10.2 maintenance release and real-estate regression | Same archive at 1280 × 720: all seven pages in Light/Dark, exact uncertain-hop links, existing Library decision/drill-through, real exports and unchanged review/policy journals |
+| 10.4.4 | Modern navigation, current theme host, and newer bundled runtime | Same archive at 1280 × 720: all seven pages in Light/Dark, native modern navigation, graph/impact/required-content context, real exports and empty Library; original decisions unchanged |
+
+### 1.12.0 context-aware witness qualification
+
+The exact build 100 archive passes 1,153 automated checks, lint/style/types,
+build and portable-package gates. Pre-cert AppInspect 4.3.1 reports zero errors,
+failures and future failures, with three existing reviewed advisories and one
+manifest skip. Trusted-library updates use the existing cache. The main bundle
+retains its size advisory (approximately 1.52 MiB).
+
+The same archive was installed on all three runtimes without shared restarts.
+All 21 app-owned page definitions match the archive. This increment derives
+annotations from the preserved real 1.11.0 catalogs; it does not require or claim
+a fresh collection, broader coverage or an atomic effective-configuration view.
+All 11 schemas pass validation over 21,104 current object/edge/scan records and
+the preserved exported review baseline. Comparisons across 104 representative
+roots retain exact dependency membership, chosen parent/edge/confidence,
+conditional status, impact scores/readiness/plan and graph geometry.
+
+All seven pages pass in Light/Dark with 72 accepted native captures. Keyboard
+selection, modal dismissal/focus restoration, full-width impact details and
+visible close/result-pagination controls pass on every runtime/theme. Existing
+Library evidence drills through without saving or reaffirming a decision. Exact
+uncertain-hop links retain their origin, scan and cached object identity. No
+measured horizontal overflow, graph-label overlap or card-control overflow
+occurs in these captures; minimum sampled active fact/link contrast is 5.78:1.
+Actual 28 JSON / 32 CSV downloads match frozen source facts, provenance, direct
+context, ordered impact witnesses, full/filtered required-content and review
+baselines. Counts describe the captured checks, not all possible layouts.
+
+The native catalogs contain app-only, static-only and unverified paths, including
+a reusable cross-app invocation that correctly remains unknown rather than a
+proven app mismatch. They contain no positive shared-caller path. Positive
+shared/mixed/bounded semantics, alternative receipt compatibility and supporting
+caller presentation remain adversarial automated contracts, not manufactured
+native customer objects. A shared receipt is not execution evidence; lack of
+one never removes a dependency or permits cleanup.
+
+Original cached manifests, stages, notes, assignees, captured baselines,
+review/revision and policy journals retain their original hashes. Original
+native appearance settings are restored and read back. No new scan, review,
+policy, account, source permission or customer object was created/changed; no
+customer SPL, regex, EVAL, event or lookup contents were executed or sampled.
+The owned minimum-version guest retains its disk/authentication/read-only seed
+and is gracefully stopped after qualification.
+
+Recovery evidence is retained. The emulated guest's initial cold-start wrapper
+expired after daemon startup while waiting for Web; later KV-ready health and
+native sign-in established readiness without reset/reseed or repeated startup.
+Its loopback SSH forward was recreated after a task-owned suspension. Three
+native page-readiness deadlines required fresh settled-state checks; all final
+captures and downloads completed without changing frozen source, application
+timeouts or assertions. One guest startup error originated in Splunk's
+`enterprise/common.js` feature-settings code. It did not recur on a fresh Home
+page or app load; its underlying host cause is not established. No Content
+Hygiene bundle error was captured. These checks are not zero-timeout,
+production-latency or full runtime-dependency certification.
 
 ### 1.11.0 caller-supported qualification
 

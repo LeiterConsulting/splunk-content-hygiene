@@ -28,6 +28,7 @@ import { SummaryMetric } from '../components/SummaryMetric';
 import { useEvidenceClock } from '../components/useEvidenceClock';
 import { useReviewNavigation } from '../components/ReviewNavigationContext';
 import { useSelectionFocus } from '../components/useSelectionFocus';
+import { PathContextDetails } from '../components/PathContextDetails';
 import {
     buildInUseReport,
     InUseOptions,
@@ -92,6 +93,7 @@ function exportRows(report: InUseReport, rows: InUseRow[], scope: string): void 
             'Scope limitations',
             'Declared field facts', 'Field witness provenance',
             'Policy-derived retention (not an individual decision)',
+            'Chosen witness path context',
         ],
         rows.map((row) => {
             const retained = row.reasons.find((reason) => reason.kind === 'retained');
@@ -128,6 +130,7 @@ function exportRows(report: InUseReport, rows: InUseRow[], scope: string): void 
                 row.fieldLineage ? JSON.stringify(row.fieldLineage) : '',
                 row.via?.fieldProvenance ? JSON.stringify(row.via.fieldProvenance) : '',
                 JSON.stringify(row.reasons.filter(reason => reason.kind === 'app_policy')),
+                row.via ? JSON.stringify(row.via.pathContext) : '',
             ];
         }),
     );
@@ -588,15 +591,10 @@ export function InUseContentPage({
                                     </li>
                                 ))}
                             </EvidenceList>
-                            <h3>Declared-outbound coverage</h3>
-                            <EvidenceList>
-                                {inspected.outboundLimitations.map((limitation) => (
-                                    <li key={limitation}>{limitation}</li>
-                                ))}
-                            </EvidenceList>
                             {path ? (
                                 <>
                                     <h3>One supported witness path</h3>
+                                    {inspected.via ? <PathContextDetails context={inspected.via.pathContext} /> : null}
                                     {path.truncated ? (
                                         <InlineNotice>
                                             Only the last 100 identities are shown. Root:{' '}
@@ -619,6 +617,12 @@ export function InUseContentPage({
                                     </EvidenceList>
                                 </>
                             ) : null}
+                            <h3>Declared-outbound coverage</h3>
+                            <EvidenceList>
+                                {inspected.outboundLimitations.map((limitation) => (
+                                    <li key={limitation}>{limitation}</li>
+                                ))}
+                            </EvidenceList>
                         </Card>
                     ) : (
                         <>

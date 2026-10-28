@@ -1,5 +1,20 @@
 # Troubleshooting
 
+## A dependency path has no shared captured context
+
+Open **Inspect path context** on the chosen witness. Different captured apps,
+callers, query locations or conjunctions are not combined into one stronger
+path. The uncertain-hop examples link to the exact cached source and target.
+Inspect those relationships, common caller receipts and other paths. App-only
+evidence, old/missing metadata, reusable invocation and unsupported scope checks
+remain unverified. A bounded annotation can be investigated with a narrower
+starting set or graph branch; it does not reduce dependency/impact membership.
+
+No shared captured context is not proof that a dependency is impossible or an
+object is unused. Shared context is not observed execution or cleanup approval.
+Existing decisions are unchanged; do not widen source permissions, execute
+customer expressions or clear a blocker just to obtain a stronger label.
+
 ## A cross-dimension producer link is missing
 
 Run a complete scan with caller-scoped coverage (`props_callers=1.0.0`), then

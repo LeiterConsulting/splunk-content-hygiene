@@ -12,6 +12,7 @@ import { compareReviewEvidence } from './reviewEvidence';
 import { isPotentialRelation, weakestDependencyConfidence } from '../utils/dependencySemantics';
 import { PolicyProtection } from './appPolicies';
 import { PROPS_CONTEXT_LIMITATION } from './propsEvidence';
+import { createPathContextTracker, PathContextEvidence, PATH_CONTEXT_LIMITATION } from './pathContext';
 
 export type RemovalImpactLevel = 'critical' | 'high' | 'medium' | 'low' | 'unknown';
 
@@ -35,6 +36,8 @@ export interface ImpactedObject {
     sourceLocation: string | null;
     pathObjectIds: string[];
     pathNames: string[];
+    pathEdgeIds: string[];
+    pathContext: PathContextEvidence;
     likelyOutcome: string;
     resolved: boolean;
     protected: boolean;
@@ -87,6 +90,7 @@ export interface RemovalImpactAnalysis {
     potentialConsequences: string[];
     removalPlan: RemovalPlanStep[];
     caveats: string[];
+    pathContextDiagnostics: ReturnType<ReturnType<typeof createPathContextTracker>['diagnostics']>;
     policyProtection?: PolicyProtection;
 }
 
@@ -95,6 +99,7 @@ interface TraversalItem {
     depth: number;
     pathObjectIds: string[];
     pathNames: string[];
+    pathEdges: DependencyEdge[];
     conditional: boolean;
     confidence: ConfidenceLevel;
 }
@@ -270,6 +275,7 @@ export function analyzeRemovalImpact(
         objects.map((contentObject) => [contentObject.objectId, contentObject]),
     );
     const reviewByObject = new Map(reviews.map((review) => [review.objectId, review]));
+    const contextTracker = createPathContextTracker(objectById);
     const inboundByTarget = new Map<string, DependencyEdge[]>();
     const inboundSourceIdsByTarget = new Map<string, Set<string>>();
     const potentialSourceIdsByTarget = new Map<string, Set<string>>();
@@ -293,6 +299,7 @@ export function analyzeRemovalImpact(
             depth: 0,
             pathObjectIds: [selected.objectId],
             pathNames: [selected.name],
+            pathEdges: [],
             conditional: false,
             confidence: 'high',
         },
@@ -329,6 +336,7 @@ export function analyzeRemovalImpact(
                 const name = dependent?.name ?? unresolved.name;
                 const pathObjectIds = [edge.sourceId, ...current.pathObjectIds];
                 const pathNames = [name, ...current.pathNames];
+                const pathEdges = [edge, ...current.pathEdges];
                 const conditional = current.conditional || isPotentialRelation(edge.relation);
                 const confidence = weakestDependencyConfidence(current.confidence, edge.confidence);
                 const impacted: ImpactedObject = {
@@ -348,6 +356,8 @@ export function analyzeRemovalImpact(
                     sourceLocation: edge.sourceLocation,
                     pathObjectIds,
                     pathNames,
+                    pathEdgeIds: pathEdges.map(item => item.edgeId),
+                    pathContext: contextTracker.path(edge.sourceId, pathEdges),
                     likelyOutcome: `${conditional ? 'Potential impact only. ' : ''}${likelyOutcome(
                         dependent,
                         dependency?.name ?? current.pathNames[0],
@@ -367,6 +377,7 @@ export function analyzeRemovalImpact(
                     depth: nextDepth,
                     pathObjectIds,
                     pathNames,
+                    pathEdges,
                     conditional,
                     confidence,
                 });
@@ -611,9 +622,13 @@ export function analyzeRemovalImpact(
 
     const caveats = [
         'This is a read-only simulation from the latest persisted live scan; it does not remove or modify Splunk content.',
+        PATH_CONTEXT_LIMITATION,
         PROPS_CONTEXT_LIMITATION,
         'Supported explicit relationships, literal navigation/workflow targets, event-type/tag filters and labeled potential field/props bindings are included. Dynamic menu lists, runtime namespaces/views, external/embedded links, implicit classification, opaque PCRE, unsupported expressions, effective field availability, props precedence, dynamic SPL, tokens and unobserved usage can add impact.',
     ];
+    const mixedContexts = affectedObjects.filter(item => item.pathContext.status === 'mixed').length;
+    if (mixedContexts) { caveats.push(`${mixedContexts} chosen impact witnesses have no shared captured context. They remain potential impact; check the individual hops and alternative paths.`); }
+    if (contextTracker.diagnostics().bounded) { caveats.push('Path-context annotations reached a ceiling. Impact membership, scoring and removal blockers are unchanged.'); }
     if (potentialAffectedCount > 0 || outboundEdges.some((edge) => isPotentialRelation(edge.relation))) {
         caveats.push('Potential implicit paths are possibilities, not confirmed consumers or observed execution. Verify props precedence, renames, field availability and invoking-app bindings before remediation decisions.');
     }
@@ -751,6 +766,7 @@ export function analyzeRemovalImpact(
         potentialConsequences,
         removalPlan,
         caveats,
+        pathContextDiagnostics: contextTracker.diagnostics(),
         ...(selectedPolicy ? { policyProtection: selectedPolicy } : {}),
     };
 }

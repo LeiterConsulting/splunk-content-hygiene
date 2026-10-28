@@ -5,6 +5,7 @@ import { usageSourceForObject, usageValidity } from './usage';
 import { isPotentialRelation } from '../utils/dependencySemantics';
 import { AppPolicyStore, appPolicyStore, buildPolicyProtection } from './appPolicies';
 import { PROPS_CONTEXT_LIMITATION } from './propsEvidence';
+import { createPathContextTracker, PathContextEvidence, PathContextState, PATH_CONTEXT_LIMITATION } from './pathContext';
 
 export interface InUseOptions {
     activity: 'all' | 'dashboard_view' | 'saved_search_execution' | 'none';
@@ -42,6 +43,7 @@ export interface InUseRow {
         confidence: DependencyEdge['confidence'];
         conditional: boolean;
         fieldProvenance?: DependencyEdge['fieldProvenance'];
+        pathContext: PathContextEvidence;
     };
     usage: ContentObject['usageEvidence'];
     usageValidity: string;
@@ -62,6 +64,7 @@ export interface InUseReport {
     truncated: boolean;
     gaps: string[];
     appPolicies: AppPolicyStore;
+    pathContextDiagnostics: ReturnType<ReturnType<typeof createPathContextTracker>['diagnostics']>;
 }
 const implicitGaps = [
     PROPS_CONTEXT_LIMITATION,
@@ -85,6 +88,8 @@ export function buildInUseReport(
     policies: AppPolicyStore = appPolicyStore([]),
 ): InUseReport {
     const objects = new Map(snapshot.objects.map((object) => [object.objectId, object]));
+    const contextTracker = createPathContextTracker(objects);
+    const contextStates = new Map<string, PathContextState>();
     const rows = new Map<string, InUseRow>();
     const gaps = new Set(implicitGaps);
     if (!policies.verified) { gaps.add('App retention policy history could not be verified. No policy-derived roots are inferred; content is not proven unprotected.'); }
@@ -263,6 +268,7 @@ export function buildInUseReport(
     }
     const roots = [...rows.keys()];
     const queue = [...roots];
+    roots.forEach(id => contextStates.set(id, contextTracker.start(id)));
     const outbound = new Map<string, DependencyEdge[]>();
     snapshot.edges.forEach((edge) => {
         if (['belongs_to', 'owned_by'].includes(edge.relation)) {
@@ -295,6 +301,8 @@ export function buildInUseReport(
                 if (!rows.has(edge.targetId)) {
                     const row = add(edge.targetId);
                     if (row) {
+                        const state = contextTracker.advance(contextStates.get(parent.objectId)!, edge);
+                        contextStates.set(row.objectId, state);
                         row.via = {
                             rootId: parent.via?.rootId ?? parent.objectId,
                             parentId: parent.objectId,
@@ -307,6 +315,7 @@ export function buildInUseReport(
                             ),
                             conditional: parent.via?.conditional === true || isPotentialRelation(edge.relation),
                             ...(edge.fieldProvenance ? { fieldProvenance: edge.fieldProvenance } : {}),
+                            pathContext: contextTracker.evidence(state),
                         };
                         queue.push(row.objectId);
                     }
@@ -323,6 +332,10 @@ export function buildInUseReport(
     if (conditional) {
         gaps.add(`${conditional} included identities have a shortest witness path containing a potential configuration relationship; inclusion is not proof of runtime use or an unconditional requirement.`);
     }
+    const mixedContexts = [...rows.values()].filter(row => row.via?.pathContext.status === 'mixed').length;
+    if (mixedContexts) { gaps.add(`${mixedContexts} chosen witnesses have no shared captured context. Potential dependencies remain included; inspect the individual hops and alternative paths.`); }
+    if (contextTracker.diagnostics().bounded) { gaps.add('Path-context annotation reached a ceiling. Dependency closure and removal blockers are not reduced.'); }
+    gaps.add(PATH_CONTEXT_LIMITATION);
     const missing = [...rows.values()].filter((row) => !row.inInventory).length;
     if (missing) {
         gaps.add(
@@ -366,6 +379,7 @@ export function buildInUseReport(
         truncated,
         gaps: [...gaps],
         appPolicies: policies,
+        pathContextDiagnostics: contextTracker.diagnostics(),
     };
 }
 

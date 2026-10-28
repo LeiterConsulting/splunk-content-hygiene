@@ -133,6 +133,18 @@ without rewriting v1–v7 baselines, stages, notes, assignees or journals.
 
 ## Edges
 
+Version 1.12 derives `pathContext` in investigation outputs, not KV/review records.
+It contains `version`, `status`, directed/scoped hop counts, intersected `apps`,
+common exact `callerWitnesses`, reason codes and up to eight uncertain-hop
+examples (`edgeId`, `sourceId`, `targetId`, `reason`). Required-content stores it
+under the chosen row's `via`; impact stores it beside ordered `pathEdgeIds`;
+graph nodes expose one center-relative witness. Direct relationship exports
+annotate one edge, not a transitive or grouped union. Work/size diagnostics are
+included in required-content and impact JSON. No cached edge, original baseline,
+collector version or coverage-policy migration is performed. Only explicitly
+fixed invocation constrains `apps`; owning-app metadata for unverified reusable
+invocation remains unknown and cannot establish an app mismatch.
+
 Version 1.11 adds `captured_conjunction` to the optional compatibility basis.
 It requires `callerWitnesses`: bounded original-event receipts with
 `callerObjectId`, `app`, `sourceLocation` and two or three distinct literal

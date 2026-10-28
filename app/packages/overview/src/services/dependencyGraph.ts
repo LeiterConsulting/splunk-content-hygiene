@@ -1,4 +1,5 @@
 import { ContentObject, DependencyEdge, HealthStatus } from '../types';
+import { createPathContextTracker, PathContextEvidence } from './pathContext';
 
 export interface DependencyIndex {
     objects: Map<string, ContentObject>;
@@ -41,6 +42,13 @@ export interface GraphNode {
     groupKey?: string;
     memberIds?: string[];
     resolved: boolean;
+    witness?: {
+        centerId: string;
+        direction: 'inbound' | 'outbound';
+        objectIds: string[];
+        edgeIds: string[];
+        context: PathContextEvidence;
+    };
 }
 export interface GraphLink {
     id: string;
@@ -106,10 +114,12 @@ export function buildGraphModel(
     },
 ): GraphModel {
     const neighbors = new Map<string, GraphNode>();
+    const witnesses = new Map<string, DependencyEdge[]>([[centerId, []]]);
     scopedEdges.forEach((edge) => {
         const id = edge.sourceId === centerId ? edge.targetId : edge.sourceId;
         if (id !== centerId && !neighbors.has(id)) {
             neighbors.set(id, nodeFor(id, edge.sourceId === centerId ? 1 : -1, index, edge));
+            witnesses.set(id, [edge]);
         }
     });
     const sorted = Array.from(neighbors.values()).sort(
@@ -181,10 +191,20 @@ export function buildGraphModel(
                 }
                 nodes.push(nodeFor(id, node.level + (node.level < 0 ? -1 : 1), index, edge));
                 renderedId.set(id, id);
+                const parent = witnesses.get(node.id) ?? [];
+                witnesses.set(id, node.level < 0 ? [edge, ...parent] : [...parent, edge]);
             }
             capturedEdges.set(edge.edgeId, edge);
         });
     }
+    const contextTracker = createPathContextTracker(index.objects);
+    nodes.forEach(node => {
+        const path = witnesses.get(node.id);
+        if (node.id === centerId || node.memberIds || !path?.length) { return; }
+        Object.assign(node, { witness: { centerId, direction: node.level < 0 ? 'inbound' : 'outbound',
+            objectIds: [path[0].sourceId, ...path.map(edge => edge.targetId)],
+            edgeIds: path.map(edge => edge.edgeId), context: contextTracker.path(path[0].sourceId, path) } });
+    });
     const links = new Map<string, GraphLink>();
     const confidenceOrder: Record<string, number> = { unknown: 0, low: 1, medium: 2, high: 3 };
     capturedEdges.forEach((edge) => {

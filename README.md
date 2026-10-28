@@ -17,6 +17,26 @@ The app keeps customer content read-only:
   app-local KV Store collections.
 - Every finding carries reasons, evidence, and a suggested investigation step.
 
+## Version 1.12.0 — context-aware witness paths
+
+[Release 1.12.0, build 100](https://github.com/LeiterConsulting/splunk-content-hygiene/releases/tag/v1.12.0)
+annotates chosen multi-hop investigations using
+existing cached evidence. Explorer graph details, required-content witnesses,
+removal impact and CSV/JSON distinguish shared captured caller receipts,
+app-only evidence, mixed contexts and unverified/bounded checks. Independent
+queries, panels and branches cannot be combined into a stronger witness.
+
+All potential dependencies remain included. A shared receipt is not observed
+execution; no shared receipt is not proof a dependency is impossible or an
+object is unused. Decisions, baselines and collector coverage versions remain
+unchanged. See [the investigation guide](docs/USER_GUIDE.md#context-aware-witness-paths-112).
+The exact archive passes 1,153 automated checks and pre-cert AppInspect with
+zero errors/failures. All seven pages pass in Light/Dark on Enterprise 10.2.5,
+10.2.8 and 10.4.4, with 72 accepted captures and 28 JSON / 32 CSV comparisons.
+Existing cached catalogs and decision/policy journals remain unchanged. Positive
+shared-caller paths are automated-only contracts because the native catalogs do
+not contain those cases. See [qualification and recovery limits](docs/COMPATIBILITY.md#1120-context-aware-witness-qualification).
+
 ## Version 1.11.0 — caller-supported cross-dimension paths
 
 [Release 1.11.0, build 96](https://github.com/LeiterConsulting/splunk-content-hygiene/releases/tag/v1.11.0)

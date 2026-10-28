@@ -24,6 +24,9 @@ import { ResultPagination } from './ResultPagination';
 import { usageValidity } from '../services/usage';
 import { RemovalImpactAnalysis, RemovalImpactLevel } from '../services/removalImpact';
 import { ContentObject } from '../types';
+import { PathContextDetails } from './PathContextDetails';
+import { PATH_CONTEXT_LABELS } from '../services/pathContext';
+import { useSelectionFocus } from './useSelectionFocus';
 
 interface RemovalImpactPanelProps {
     selected: ContentObject;
@@ -79,6 +82,10 @@ export function RemovalImpactPanel({
     onDrillTo,
 }: RemovalImpactPanelProps): React.ReactElement {
     const [page, setPage] = useState(0);
+    const [contextId, setContextId] = useState('');
+    const contextItem = analysis.affectedObjects.find(item => item.objectId === contextId);
+    // Preserve the whole result header/paginator when closing the witness.
+    const { detailTitle, listTitle } = useSelectionFocus(contextItem?.objectId, true);
     const currentPage = Math.min(
         page,
         Math.max(0, Math.ceil(analysis.affectedObjects.length / 25) - 1),
@@ -172,10 +179,20 @@ export function RemovalImpactPanel({
                 </CardBody>
             </Card>
 
+            {contextItem ? <Card aria-label="Selected impact witness context" data-investigation-workspace>
+                <CardHeader>
+                    <CardTitle ref={detailTitle} tabIndex={-1}>Witness context for {contextItem.name}</CardTitle>
+                    <StyledButton onClick={() => setContextId('')}>Close witness context</StyledButton>
+                </CardHeader>
+                <CardBody>
+                    <SmallText>{contextItem.pathNames.join(' → ')}</SmallText>
+                    <PathContextDetails key={`${analysis.selectedObjectId}:${contextItem.objectId}`} context={contextItem.pathContext} defaultOpen />
+                </CardBody>
+            </Card> : null}
             {analysis.affectedObjects.length > 0 ? (
-                <Card>
+                <Card data-investigation-workspace>
                     <CardHeader>
-                        <CardTitle>
+                        <CardTitle ref={listTitle} tabIndex={-1}>
                             {analysis.affectedObjects.length} known affected{' '}
                             {plural(analysis.affectedObjects.length, 'object')}
                         </CardTitle>
@@ -218,7 +235,10 @@ export function RemovalImpactPanel({
                                             <div>{affected.confidence} confidence</div>
                                             {affected.conditional ? <SmallText>Potential implicit path</SmallText> : null}
                                         </td>
-                                        <td>{affected.pathNames.join(' → ')}</td>
+                                        <td>{affected.pathNames.join(' → ')}
+                                            <SmallText>{PATH_CONTEXT_LABELS[affected.pathContext.status]}</SmallText>
+                                            <RowButton aria-label={`Inspect witness context for ${affected.name}`} onClick={() => setContextId(affected.objectId)}>Inspect witness context</RowButton>
+                                        </td>
                                         <td>{affected.likelyOutcome}</td>
                                         <td>
                                             {affected.evidence}
