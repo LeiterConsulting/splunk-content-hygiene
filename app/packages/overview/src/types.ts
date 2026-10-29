@@ -94,6 +94,8 @@ export interface ContentObject {
     evidence: string[];
     suggestedAction: string;
     analysisWarnings?: string[];
+    /** Scan-captured explanations only; never dependency or review authority. */
+    callerContext?: CallerContextSummary;
     inventoryScanId?: string;
     configurationFingerprint?: ConfigurationFingerprint;
     reviewEvidence?: ObjectReviewEvidence;
@@ -176,6 +178,32 @@ export interface PropsContextEvidence {
 export interface PropsEventScope {
     sourceLocation: string;
     selectors: Array<{ field: FieldScope['field']; value: string; sourceLocation: string }>;
+}
+export type CallerContextReason = 'malformed_lexical' | 'source_location_limit' | 'no_initial_clause' |
+    'initial_token_limit' | 'escaped_initial_clause' | 'macro_invocation' | 'standalone_quoted_term' |
+    'subsearch' | 'grouping_or_list_punctuation' | 'malformed_conjunction' | 'positive_or' | 'negation' |
+    'in_operator' | 'dynamic_term' | 'bare_or_unsupported_initial_term' | 'invalid_assignment_value' |
+    'pattern_or_nonliteral_selector' | 'contradictory_selector' | 'no_context_selector' | 'source_limit';
+export interface CallerContextQuery {
+    sourceLocation: string;
+    queryDigest: string;
+    outcome: 'retained' | 'withheld' | 'post_process';
+    firstRejection: CallerContextReason | null;
+    /** Zero-based UTF-16 query offset, not a line number or a source excerpt. */
+    offset: number | null;
+    /** Observed syntax features; not an exhaustive independent parser diagnosis. */
+    features: CallerContextReason[];
+    selectorMentioned: boolean;
+}
+export interface CallerContextSummary {
+    version: 1;
+    policy: 'initial-conjunction-v1';
+    state: 'recorded' | 'unavailable' | 'budget';
+    counts: { queries: number; retained: number; withheld: number; postProcess: number };
+    rows: CallerContextQuery[];
+    limited: boolean;
+    /** True when source extraction itself was incomplete, independent of row caps. */
+    sourceIncomplete: boolean;
 }
 /** One captured query conjunction, never the union of independent selectors. */
 export interface PropsCallerWitness extends PropsEventScope {

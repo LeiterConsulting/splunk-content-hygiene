@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.15.0 — 2026-10-29 (build 112)
+
+- Explain retained/withheld initial caller conjunctions at exact query locations,
+  with first-rejection codes, separate overlapping syntax features, query digests
+  and concrete next verification steps. No grammar expansion or new dependencies.
+- Add cache-only Caller context tabs in Dependency Explorer and Review Library,
+  bounded pagination/filtering and dedicated CSV/JSON exports. Keep older,
+  unavailable, post-process and budget-limited evidence explicitly uncertain.
+- Persist compact diagnostic facts only on shared search/dashboard records during
+  explicit scans. Exclude raw SPL, selector values and macro definitions; summary
+  pages omit diagnostic downloads. Preserve decisions, baselines and scoring.
+- Qualify the exact archive with 1,267 automated checks, zero AppInspect
+  errors/failures, and targeted native Explorer/Library Light/Dark workflows on
+  Enterprise 10.2.5, 10.2.8 and 10.4.4. Validate 13 schemas, 2,209 offline caller
+  reports, 2,209 fresh native caller summaries and 25 JSON / 25 CSV downloads.
+- Preserve original review/revision/policy journals and appearance preferences.
+  No customer writes, new reviews/accounts/policies or shared restarts. Keep
+  extraction, detail-budget, private/runtime and targeted desktop limits explicit.
+
 ## 1.14.0 — 2026-10-28 (build 111)
 
 - Compare bounded alternatives for exact directed endpoint pairs on demand,

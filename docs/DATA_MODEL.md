@@ -131,6 +131,31 @@ The scan marker is `props_patterns: 1.0.0`, with `props_scope_*` counters and
 separate bounded character-work limits. `shared-static-v8` expands freshness
 without rewriting v1–v7 baselines, stages, notes, assignees or journals.
 
+## Caller-context diagnostic facts (1.15)
+
+Optional `ch_objects.caller_context` uses the
+[`CallerContextSummary` contract](../schemas/caller-context.schema.json#/$defs/summary).
+Only shared Saved Search/Report/Alert/Dashboard records receive these scan-time
+facts. The independent `caller_context_diagnostics: 1.0.0` scan marker does not
+change `shared-static-v10`, receipt identities or review-baseline protocols.
+
+Each row stores query location, exact-text digest, retained/withheld/excluded
+outcome, first-rejection code/offset, observed syntax feature codes and a selector
+mention flag. Raw SPL, selector values, macro names/bodies and private identities
+are not copied into these facts. Counts describe extracted query occurrences,
+not every potential consumer. `limited` and `sourceIncomplete` distinguish
+detail truncation from extraction uncertainty; `state` distinguishes recorded,
+unavailable and scan-budget omissions. Missing/invalid/unknown-version cached
+facts remain unavailable, never a positive coverage conclusion.
+
+Retention is bounded to 64 rows / 64 KiB UTF-8 per source object and 8 MiB detailed
+facts per scan; after that, small count/limit markers remain. Summary pages omit
+these downloads. Dedicated CSV/JSON exports attach current cached identity,
+scan/configuration provenance and limitations; zero-row/absent data are explicit.
+These diagnostics do not contribute to coverage hashes, scoring, edge resolution,
+readiness or saved decisions. A fresh scan can still detect genuine source edits
+through the unchanged configuration/dependency evidence process.
+
 ## Edges
 
 Version 1.14 adds an on-demand, client-derived

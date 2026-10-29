@@ -31,6 +31,7 @@ import { AppPoliciesPanel } from '../components/AppPoliciesPanel';
 import { AppPolicyContext, AppRetentionLabel } from '../components/AppPolicyContext';
 import { PolicyProtection } from '../services/appPolicies';
 import { WorkspaceTabs } from '../components/WorkspaceTabs';
+import { CallerContextPanel } from '../components/CallerContextPanel';
 import { ReviewHistoryPanel } from '../components/ReviewHistoryPanel';
 import { useReviewNavigation } from '../components/ReviewNavigationContext';
 import { useSelectionFocus } from '../components/useSelectionFocus';
@@ -671,6 +672,10 @@ export function ReviewLibraryPage({
                         </WorkspaceTabs.Panel>
                         <WorkspaceTabs.Panel panelId="history" label="Revision history">
                             <ReviewHistoryPanel objectId={selectedReview.objectId} />
+                        </WorkspaceTabs.Panel>
+                        <WorkspaceTabs.Panel panelId="context" label="Caller context">
+                            {selectedIsPresent ? <CallerContextPanel key={selectedReview.objectId} object={selectedObject} /> :
+                                <InlineNotice>This object is not present in the current inventory. Its saved decision is preserved; current caller diagnostics are unavailable, not inferred from historical review data.</InlineNotice>}
                         </WorkspaceTabs.Panel>
                         </WorkspaceTabs>
                     </DetailPanel>

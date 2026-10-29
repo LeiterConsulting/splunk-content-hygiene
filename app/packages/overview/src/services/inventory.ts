@@ -10,6 +10,7 @@ import { CatalogIssue, decodeEventType, decodeTagBindings, decodeSharedKnowledge
 import { decodeFieldLineage, FieldCatalog, fieldLineageFacts, readFieldLineageFacts, readFieldProvenance } from './fieldLineage';
 import { checkPropsPrecedence, PROPS_READ_BYTES, PropsReadRequest, propsReadPlan } from './propsPrecedence';
 import { compareCrossStanzaProps } from './crossStanzaProps';
+import { readCallerContext } from './callerContextDiagnostics';
 import {
     CollectedUsageSource,
     DASHBOARD_ACCESS_SOURCE_ID,
@@ -1287,6 +1288,7 @@ function objectRecordToContentObject(record: KvObjectRecord): ContentObject {
         configurationFingerprint: record.configuration_fingerprint as ContentObject['configurationFingerprint'],
         reviewEvidence: record.review_evidence as ContentObject['reviewEvidence'],
         fieldLineage: readFieldLineageFacts(record.field_lineage),
+        callerContext: readCallerContext(record.caller_context),
         analysisWarnings: stringArray(record.analysis_warnings),
         healthStatus: isHealthStatus(healthStatus) ? healthStatus : 'unknown',
         abandonmentConfidence: nullableScore(record.abandonment_confidence),
@@ -1443,6 +1445,7 @@ function analyzedObjectToRecord(original: KvObjectRecord, analyzed: ContentObjec
         analysis_warnings: analyzed.analysisWarnings ?? [],
         suggested_action: analyzed.suggestedAction,
         ...(analyzed.fieldLineage ? { field_lineage: analyzed.fieldLineage } : {}),
+        ...(analyzed.callerContext ? { caller_context: analyzed.callerContext } : {}),
     };
 }
 
@@ -1727,13 +1730,14 @@ async function loadSnapshot(
     const includeEdges = !page || ['dependency-explorer', 'in-use-content', 'review-library'].includes(page);
     const includeOwners = !page || page === 'ownership';
     const includeReviewEvidence = !page || ['cleanup-candidates', 'dependency-explorer', 'review-library', 'in-use-content'].includes(page);
+    const includeCallerContext = !page || ['dependency-explorer', 'review-library'].includes(page);
     const usageRecord = usageRecordOverride ?? (await getLatestUsageScanRecord());
     const [objectRecords, edgeRecords, findingRecords, ownerRecords, usageRecords] =
         await Promise.all([
             // The manifest already contains its configuration fingerprint. Do
             // not duplicate those hashes, or send review detail to summary pages.
             getCollectionRecords<KvObjectRecord>('ch_objects', record.scan_id,
-                `source:0,configuration_fingerprint:0${includeReviewEvidence ? '' : ',review_evidence:0'}`,
+                `source:0,configuration_fingerprint:0${includeReviewEvidence ? '' : ',review_evidence:0'}${includeCallerContext ? '' : ',caller_context:0'}`,
                 includeReviewEvidence ? DETAIL_SNAPSHOT_PAGE_SIZE : SNAPSHOT_PAGE_SIZE),
             includeEdges
                 ? getCollectionRecords<KvEdgeRecord>('ch_edges', record.scan_id)
@@ -1904,6 +1908,7 @@ async function runInventoryScan(
             props_patterns: '1.0.0',
             props_domains: '1.0.0',
             props_callers: '1.0.0',
+            caller_context_diagnostics: '1.0.0',
             classification: '1.0.0',
             review_evidence: '1.0.0',
         },

@@ -36,6 +36,7 @@ import { RemovalImpactPanel } from '../components/RemovalImpactPanel';
 import { ReviewEditor } from '../components/ReviewEditor';
 import { ExportMenu } from '../components/ExportMenu';
 import { FieldLineagePanel } from '../components/FieldLineagePanel';
+import { CallerContextPanel } from '../components/CallerContextPanel';
 import { useReviewNavigation } from '../components/ReviewNavigationContext';
 import { ReviewStageBadge } from '../components/ReviewStageBadge';
 import { ReviewFreshnessBadge, ReviewFreshnessPanel } from '../components/ReviewFreshnessPanel';
@@ -127,6 +128,10 @@ function matchesGroup(
     }
     if (group === 'parser_gaps') {
         return Boolean(contentObject.analysisWarnings?.length);
+    }
+    if (group === 'context_gaps') { return Boolean(contentObject.callerContext?.counts.withheld); }
+    if (group === 'context_unrecorded') {
+        return ['Saved Search', 'Report', 'Alert', 'Dashboard'].includes(contentObject.objectType) && !contentObject.callerContext;
     }
     if (group === 'candidates') {
         return candidateIds.has(contentObject.objectId);
@@ -289,6 +294,8 @@ function groupOptions(allLabel: string): React.ReactNode {
         <>
             <option value="all">{allLabel}</option>
             <option value="parser_gaps">Objects with parser/coverage gaps</option>
+            <option value="context_gaps">Caller context: withheld</option>
+            <option value="context_unrecorded">Caller context: not recorded</option>
             <option value="candidates">All cleanup candidates</option>
             {candidateStatuses.map((status) => (
                 <option key={status} value={status}>
@@ -334,7 +341,7 @@ export function DependencyPage({
     const [centerGroup, setCenterGroup] = useState(() => readQueryParam('group') || 'all');
     const [relatedGroup, setRelatedGroup] = useState(() => readQueryParam('related') || 'all');
     const [tab, setTab] = useState(() =>
-        ['impact', 'changes', 'object', 'review'].includes(readQueryParam('tab')) ? readQueryParam('tab') : 'relationships',
+        ['impact', 'changes', 'object', 'review', 'context'].includes(readQueryParam('tab')) ? readQueryParam('tab') : 'relationships',
     );
     const [impactDepth, setImpactDepth] = useState(3);
     const [page, setPage] = useState(0);
@@ -976,6 +983,7 @@ export function DependencyPage({
                                         </StyledButton>
                                     ) : null}
                                     <StyledButton onClick={() => setTab('review')}>Review selected object</StyledButton>
+                                    <StyledButton onClick={() => setTab('context')}>Inspect caller context</StyledButton>
                                     <StyledButton onClick={() => navigate(() => navigateToView('candidates', { object: detail.objectId }))}>View candidate evidence</StyledButton>
                                     {detailReview ? <StyledButton onClick={() => navigate(() => navigateToView('reviews', { object: detail.objectId }))}>Open in review library</StyledButton> : null}
                                 </ButtonRow>
@@ -1044,6 +1052,10 @@ export function DependencyPage({
                             </DetailSection>
                         )}
                     </DetailPanel>
+                            </TabLayout.Panel>
+                            <TabLayout.Panel panelId="context" label="Caller context" inset={false}>
+                                <Card><CardBody>{detail ? <CallerContextPanel key={detail.objectId} object={detail} /> :
+                                    <InlineNotice>Unresolved identities have no captured caller source. Inspect a resolved search or dashboard; no current context is inferred.</InlineNotice>}</CardBody></Card>
                             </TabLayout.Panel>
                             <TabLayout.Panel panelId="review" label="Review decision" inset={false}>
                                 <Card><CardHeader><CardTitle>Review {detail?.name ?? 'unresolved target'}</CardTitle></CardHeader><CardBody>

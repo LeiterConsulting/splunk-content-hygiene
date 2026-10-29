@@ -17,6 +17,7 @@ import { buildFieldDependencyMatcher, FIELD_TARGETS } from './fieldDependencies'
 import { createInteractionParser } from './interactiveSources';
 import { compilePropsPattern, propsScopeLabel } from './propsPatterns';
 import { mergePropsCallerWitnesses, PROPS_CALLER_LIMITATION } from './propsCallerScopes';
+import { CALLER_CONTEXT_SCAN_BYTES, callerContextSize, emptyCallerContext } from './callerContextDiagnostics';
 
 export { extractSplReferences, extractDashboardReferences } from './dependencyParser';
 export type { ParsedReference } from './dependencyParser';
@@ -360,10 +361,18 @@ export function analyzeInventory(
     });
     const knowledgeReferences = buildKnowledgeReferenceMatcher(objects, visibility);
     const propsEventScopes: InventoryAnalysis['propsEventScopes'] = [];
+    let contextBytes = 0;
     let propsScopesTruncated = false;
     sources.forEach(source => {
         const caller = objectById.get(source.objectId);
         if (caller && ['Saved Search', 'Report', 'Alert', 'Dashboard'].includes(caller.objectType)) {
+            const diagnostic = sourceParses.get(source)?.callerContext ?? emptyCallerContext('unavailable');
+            const bytes = callerContextSize(diagnostic);
+            if (contextBytes + bytes <= CALLER_CONTEXT_SCAN_BYTES) {
+                caller.callerContext = diagnostic; contextBytes += bytes;
+            } else {
+                caller.callerContext = { ...diagnostic, state: 'budget', rows: [], limited: true };
+            }
             const originalScopes = sourceParses.get(source)?.propsEventScopes ?? [];
             const capacity = Math.min(250, 50000 - propsEventScopes.length);
             if (originalScopes.length > capacity) { propsScopesTruncated = true; }

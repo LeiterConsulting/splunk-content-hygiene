@@ -97,6 +97,13 @@ not traversed as an outbound requirement. No returned path is not absence;
 depth, work, state, context and identity limits remain visible and exportable.
 See [alternative investigations](USER_GUIDE.md#alternative-path-investigations-114).
 
+Version 1.15's caller-context diagnostic view explains the same narrow
+initial-conjunction grammar; it does not widen it. First rejection and overlapping
+syntax features are distinct, no-selector queries do not prove absent consumers,
+and post-process/chain queries stay excluded. Old/unavailable/budgeted facts remain
+unknown. No new edge, stronger confidence, coverage policy or removal conclusion
+is inferred. See [diagnostics](USER_GUIDE.md#caller-context-diagnostics-115).
+
 Removal impact is a read-only simulation, not a cleanup command. New menu/report
 links can expose affected destinations and preparation steps; partial coverage,
 protection, unknown usage or unresolved evidence still blocks readiness. Perform

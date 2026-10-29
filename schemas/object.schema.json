@@ -8,6 +8,7 @@
     "configuration_fingerprint": { "$ref": "review-evidence.schema.json#/$defs/fingerprint" },
     "review_evidence": { "$ref": "review-evidence.schema.json#/$defs/evidence" },
     "field_lineage": { "$ref": "field-lineage.schema.json#/$defs/facts" },
+    "caller_context": { "$ref": "caller-context.schema.json#/$defs/summary" },
     "analysis_warnings": {
       "type": "array",
       "items": { "type": "string" }

@@ -1,6 +1,7 @@
 /* eslint-disable no-underscore-dangle -- Splunk KV Store defines the _key protocol field. */
 import { splunkInventoryClient } from '../services/inventory';
 import { field as declaredField } from './fieldFixtures';
+import { parseSpl } from '../services/dependencyParser';
 
 jest.mock('@splunk/splunk-utils/config', () => ({ username: 'operator', splunkdPath: '/splunkd' }));
 jest.mock('@splunk/splunk-utils/fetch', () => ({ createFetchInit: (init: RequestInit) => init }));
@@ -287,7 +288,28 @@ test('detail pages bound evidence-heavy KV reads without changing snapshot ident
     await splunkInventoryClient.getLatestSnapshot('overview');
     const summaryReads = requests.filter(row => row.method === 'GET' && row.path.endsWith('/ch_objects'));
     expect(summaryReads).toHaveLength(1);
-    expect(summaryReads[0]).toMatchObject({ limit: '1000', fields: 'source:0,configuration_fingerprint:0,review_evidence:0' });
+    expect(summaryReads[0]).toMatchObject({ limit: '1000', fields: 'source:0,configuration_fingerprint:0,review_evidence:0,caller_context:0' });
+});
+
+test('caller-context diagnostics survive a full scan and cached reads without review or customer writes', async () => {
+    sourceSearch = '`scope` host=$node$ OR sourcetype=x';
+    const originalReview = { _key: 'preserved', object_id: 'saved_search::example::Daily', note: 'Original rationale', revision_id: 'original' };
+    collections.set('ch_reviews', new Map([['preserved', originalReview]]));
+    const result = await splunkInventoryClient.runFullScan();
+    const current = result.objects.find(row => row.name === 'Daily')!;
+    expect(current.callerContext).toEqual(parseSpl(sourceSearch, 'search').callerContext);
+    const stored = [...collections.get('ch_objects')!.values()].find(row => row.object_id === current.objectId)!;
+    expect(stored.caller_context).toEqual(current.callerContext);
+    expect(JSON.stringify(stored.caller_context)).not.toContain('scope');
+    expect(result.scan.collectorVersions?.caller_context_diagnostics).toBe('1.0.0');
+    requests = [];
+    const cached = await splunkInventoryClient.getLatestSnapshot('dependency-explorer');
+    expect(cached?.objects.find(row => row.objectId === current.objectId)?.callerContext).toEqual(current.callerContext);
+    expect(requests.every(row => row.method === 'GET' && row.path.includes('/storage/collections/data/'))).toBe(true);
+    expect([...collections.get('ch_reviews')!.values()]).toEqual([originalReview]);
+    delete stored.caller_context;
+    const oldCache = await splunkInventoryClient.getLatestSnapshot('review-library');
+    expect(oldCache?.objects.find(row => row.objectId === current.objectId)?.callerContext).toBeUndefined();
 });
 
 test('denied interaction catalogs retain the prior baseline and original decisions', async () => {
@@ -561,7 +583,7 @@ test('reads reject a corrupted published snapshot and summary pages skip graph a
     expect(overview?.edges).toHaveLength(0);
     expect(requests.some((request) => /ch_edges|ch_owners/.test(request.path))).toBe(false);
     expect(requests.find((request) => /ch_objects$/.test(request.path))?.fields)
-        .toBe('source:0,configuration_fingerprint:0,review_evidence:0');
+        .toBe('source:0,configuration_fingerprint:0,review_evidence:0,caller_context:0');
     requests = [];
     const library = await splunkInventoryClient.getLatestSnapshot('review-library');
     expect(library?.edges).toEqual(first.edges);

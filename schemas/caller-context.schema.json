@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/splunk-content-hygiene/caller-context.schema.json",
+  "title": "Captured caller-context diagnostic export",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "objectId", "app", "inventoryScanId", "configurationDigest", "state", "diagnostics", "guidance", "limitation"],
+  "properties": {
+    "version": { "const": 1 },
+    "objectId": { "type": "string" },
+    "app": { "type": "string" },
+    "inventoryScanId": { "type": ["string", "null"] },
+    "configurationDigest": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
+    "state": { "enum": ["not_recorded", "recorded", "unavailable", "budget"] },
+    "diagnostics": { "anyOf": [{ "$ref": "#/$defs/summary" }, { "type": "null" }] },
+    "guidance": {
+      "type": "array", "maxItems": 64,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["sourceLocation", "queryDigest", "explanation", "observedFeatures", "nextCheck"],
+        "properties": {
+          "sourceLocation": { "type": "string", "maxLength": 4096 },
+          "queryDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "explanation": { "type": "string" }, "nextCheck": { "type": "string" },
+          "observedFeatures": { "type": "array", "maxItems": 20, "items": { "type": "string" } }
+        }
+      }
+    },
+    "limitation": { "type": "string" }
+  },
+  "$defs": {
+    "reason": { "enum": ["malformed_lexical", "source_location_limit", "no_initial_clause", "initial_token_limit", "escaped_initial_clause", "macro_invocation", "standalone_quoted_term", "subsearch", "grouping_or_list_punctuation", "malformed_conjunction", "positive_or", "negation", "in_operator", "dynamic_term", "bare_or_unsupported_initial_term", "invalid_assignment_value", "pattern_or_nonliteral_selector", "contradictory_selector", "no_context_selector", "source_limit"] },
+    "query": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sourceLocation", "queryDigest", "outcome", "firstRejection", "offset", "features", "selectorMentioned"],
+      "properties": {
+        "sourceLocation": { "type": "string", "maxLength": 4096 },
+        "queryDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "outcome": { "enum": ["retained", "withheld", "post_process"] },
+        "firstRejection": { "anyOf": [{ "$ref": "#/$defs/reason" }, { "type": "null" }] },
+        "offset": { "type": ["integer", "null"], "minimum": 0, "maximum": 1048576 },
+        "features": { "type": "array", "maxItems": 20, "uniqueItems": true, "items": { "$ref": "#/$defs/reason" } },
+        "selectorMentioned": { "type": "boolean" }
+      }
+    },
+    "summary": {
+      "type": "object", "additionalProperties": false,
+      "required": ["version", "policy", "state", "counts", "rows", "limited", "sourceIncomplete"],
+      "properties": {
+        "version": { "const": 1 }, "policy": { "const": "initial-conjunction-v1" },
+        "state": { "enum": ["recorded", "unavailable", "budget"] },
+        "counts": {
+          "type": "object", "additionalProperties": false,
+          "required": ["queries", "retained", "withheld", "postProcess"],
+          "properties": { "queries": { "type": "integer", "minimum": 0 }, "retained": { "type": "integer", "minimum": 0 }, "withheld": { "type": "integer", "minimum": 0 }, "postProcess": { "type": "integer", "minimum": 0 } }
+        },
+        "rows": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/query" } },
+        "limited": { "type": "boolean" }, "sourceIncomplete": { "type": "boolean" }
+      }
+    }
+  }
+}

@@ -27,9 +27,55 @@ the minimum is not a recommendation to downgrade or remain on an old patch.
 
 | Runtime | Purpose | Current evidence |
 | --- | --- | --- |
-| 10.2.5 | Exact minimum; classic navigation; coordinator and reported regressions | App 1.14.0 build 111 at 1280 × 720 in the isolated Linux VM: preserved real cache, original/alternative path selection, exact path focus/fullscreen/return, all seven pages in Light/Dark, real exports and empty Library |
-| 10.2.8 | Representative 10.2 maintenance release and real-estate regression | Same archive at 1280 × 720: all seven pages and investigation entry points in Light/Dark, existing Library exact-endpoint investigation/exports and unchanged review/policy journals |
-| 10.4.4 | Modern navigation, current theme host, and newer bundled runtime | Same archive at 1280 × 720: all seven pages in Light/Dark, native modern navigation, path comparison/focus/fullscreen/return, real exports and empty Library; original decisions unchanged |
+| 10.2.5 | Exact minimum; classic navigation; coordinator and reported regressions | App 1.15.0 build 112 at 1113 × 940 in the isolated Linux VM: fresh real diagnostic scan, targeted Explorer/Library Light/Dark workflows, provenance, filters, pagination, exports, unavailable-source uncertainty and empty Library |
+| 10.2.8 | Representative 10.2 maintenance release and real-estate regression | Same archive; settled diagnostic provenance at 1280 × 720: targeted Explorer/Library Light/Dark workflows, real detail-budget limit, existing Library review investigation/exports and unchanged review/policy journals |
+| 10.4.4 | Modern navigation, current theme host, and newer bundled runtime | Same archive at 1113 × 940: fresh real diagnostic scan, modern-navigation Explorer/Library Light/Dark workflows, object/context filters, provenance, pagination, exports and empty Library; original decisions unchanged |
+
+### 1.15.0 caller-context diagnostic qualification
+
+The exact build 112 archive passes 1,267 automated checks, lint/style/types,
+build and portable-package gates. Pre-cert AppInspect 4.3.1 reports zero errors,
+failures and future failures, with three existing reviewed advisories and one
+manifest skip. Trusted-library checks use the existing cache. The main bundle
+retains its approximately 1.53 MiB size advisory.
+
+The same archive was installed on all three runtimes without shared restarts;
+all 21 app-owned page hosts match it. Fresh explicit scans capture diagnostics
+without changing customer content. Review/revision and policy journals retain
+their original hashes; native appearance preferences are restored. No accounts,
+source fixtures, reviews or policies were created for this qualification.
+
+On identical captured inputs, strict-parser results, analytical outputs and
+review evidence match 1.14.0 for all 2,209 shared caller sources. This proves
+additive diagnostic parity, not broader dependency coverage or native performance.
+All 13 schemas validate, including 2,209 offline reports and 2,209 fresh native
+caller summaries. Actual 25 JSON / 25 CSV downloads match retained facts and
+configuration provenance; display filters do not narrow the exported evidence.
+
+Targeted desktop Light/Dark workflows cover Explorer and Review Library,
+single/multi-query sources, exact query provenance, pagination, filtering,
+post-process exclusions, explicit empty results and real exports. The existing
+Library review is investigated without saving. Empty Libraries remain empty;
+positive Library cases on those runtimes remain automated-only. Real unavailable
+source, old-snapshot and detail-budget cases retain uncertainty. No measured
+document/fact overflow or overlap occurs in accepted captures. Sampled diagnostic
+text contrast is 9.877:1 in Light and 15.709:1 in Dark.
+
+This is targeted desktop qualification, not a new all-page, every-control,
+narrow/mobile, Cloud, clustered/Windows-write or production-latency certification.
+Two VM captures taken during a theme transition retained the prior Dark rendering
+and are excluded from Light evidence; a fresh navigation verified the replacement.
+An initial cold-loading test wait under concurrent replay load was followed by
+the unchanged isolated test and a clean full serial pipeline. Browser-driver and
+owned-VM readiness/deadline recoveries did not relax assertions, change product
+logic, reset authentication or require a shared restart.
+
+Caller diagnostics deliberately retain the existing initial-conjunction grammar.
+Counts refer to extracted occurrences, not every consumer; source extraction,
+64-row / 64-KiB object and 8-MiB scan-detail limits remain explicit. No macro
+expansion, Boolean grammar widening, new dependency, stronger confidence or
+removal approval is inferred. A fresh scan is needed to capture diagnostics in
+older snapshots; no decision or baseline migration is required.
 
 ### 1.14.0 alternative-path qualification
 

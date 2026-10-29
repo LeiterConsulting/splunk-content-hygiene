@@ -198,6 +198,48 @@ Review Library stage. Select a resolved related object to continue the
 investigation as a multi-step drill-through. Cross-view links preserve the
 selected object context.
 
+### Caller-context diagnostics (1.15)
+
+Select a search/dashboard in Dependency Explorer, then open **Caller context**.
+The object-details action **Inspect caller context** inspects the selected object
+without moving the graph center. Review Library provides the same tab for a
+currently visible reviewed object. Merely investigating never saves a review.
+
+An explicit inventory scan captures these diagnostics. Older snapshots say
+**Not recorded**; unavailable sources and safety limits remain unknown. Existing
+decisions and baselines are not rewritten. The view reads cached data only.
+
+The summary counts extracted query occurrences: retained strict conjunctions,
+withheld context, and excluded post-process/chain queries. These are not overall
+coverage percentages. Many searches legitimately have no literal initial host,
+source or sourcetype selector. Excluded post-process queries never establish
+independent original-event caller evidence.
+
+Filter by outcome or find a query location/reason/digest, then page through the
+retained details. Each withheld query shows its first rejection and a safe next
+verification step. **Inspect query provenance** distinguishes that rejection
+from overlapping syntax features and preserves the query's digest, location and
+zero-based UTF-16 offset. Features are observations, not an exhaustive list of
+independently tested blockers. Removing one does not establish a valid context.
+
+**Inspect diagnostic provenance** shows the source scan, captured configuration
+fingerprint and policy. A digest identifies captured metadata, not current live
+freshness. Raw SPL, selector values and macro definitions are not retained in
+these diagnostic facts. Review source definitions separately with appropriate
+access; do not run customer expressions or widen permissions to obtain a label.
+
+Dedicated **Export caller context CSV/JSON** files contain all retained rows,
+counts, provenance and limitations regardless of the current display filters.
+Zero-row/older/unavailable results still export their uncertainty. Limits are
+64 rows / 64 KiB UTF-8 per object and 8 MiB of retained diagnostic detail per
+scan; small count/limit markers remain on objects after the scan detail cap.
+The parser's existing source, token and source-location limits still apply.
+
+This does not widen OR/NOT/IN/grouping or macro support, add edges, change
+confidence/removal readiness, or establish runtime use. Reusable definitions
+must be investigated through their independent calling searches/dashboards;
+historical reviews are never substituted for missing current caller evidence.
+
 ### Alternative-path investigations (1.14)
 
 Use **Compare alternative paths** on an object's chosen graph witness, a captured

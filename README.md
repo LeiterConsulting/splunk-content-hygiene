@@ -17,6 +17,29 @@ The app keeps customer content read-only:
   app-local KV Store collections.
 - Every finding carries reasons, evidence, and a suggested investigation step.
 
+## Version 1.15.0 — actionable caller-context diagnostics
+
+Understand why a captured search or dashboard query's initial caller context was
+retained or withheld. Dependency Explorer and Review Library share a **Caller
+context** tab with exact query locations, first-rejection explanations,
+independent syntax observations, expandable provenance and safe next checks.
+Filter objects by withheld or unrecorded context, page through bounded details,
+and export the complete retained facts as JSON or CSV regardless of display filters.
+
+An explicit inventory scan captures the new facts; older snapshots say **Not
+recorded**. Views read cached data only. No parser grammar, dependency membership,
+confidence, scoring, review decisions or removal readiness is broadened. Missing,
+post-process, unavailable and budget-limited evidence remains explicit uncertainty.
+See [the diagnostic guide](docs/USER_GUIDE.md#caller-context-diagnostics-115).
+
+[Release 1.15.0, build 112](https://github.com/LeiterConsulting/splunk-content-hygiene/releases/tag/v1.15.0)
+passes 1,267 automated checks and pre-cert AppInspect with zero errors/failures.
+Targeted native Explorer/Library Light/Dark checks cover Enterprise 10.2.5,
+10.2.8 and 10.4.4. All 13 schemas validate, and 25 JSON / 25 CSV downloads match
+cached facts. Existing decisions and native appearance settings are preserved;
+customer content remains read-only. See
+[qualification and limits](docs/COMPATIBILITY.md#1150-caller-context-diagnostic-qualification).
+
 ## Version 1.14.0 — context-aware alternative paths
 
 Compare a chosen witness with up to three bounded alternatives, using the existing

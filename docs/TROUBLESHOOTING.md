@@ -1,5 +1,27 @@
 # Troubleshooting
 
+## Caller context is withheld or not recorded
+
+Open **Caller context** for the resolved search/dashboard. **Not recorded** means
+the snapshot predates diagnostic capture or has no usable diagnostic record,
+not that caller coverage is complete. Run an explicit new inventory scan if
+authorized; opening the view itself never fetches native source or runs a scan.
+Missing historical identities and reusable definitions cannot supply a current
+independent caller. Existing decisions and baselines remain intact.
+
+Check the exact query location, first rejection, observed syntax features and
+next verification step. A macro, runtime token or unsupported Boolean form can
+co-occur with other blockers; resolving the first reason alone is insufficient.
+Post-process/chain queries are excluded, not promoted. No exact initial selector
+is not proof that no implicit consumer exists. A limit or incomplete extraction
+means counts/details may omit context; filters and exports cannot recover it.
+
+Digests refer to captured bytes/configuration, not live source freshness. Source
+text is deliberately absent from these facts. Inspect definitions with existing
+read access; do not execute customer SPL, widen permissions or clear a removal
+blocker to force a stronger label. The dedicated CSV/JSON retain all stored
+details and explicit empty/unknown states regardless of display filters.
+
 For Review Library dependency-path investigations, the app must load the verified
 cached edges as well as the object catalog. If inventory integrity verification
 fails, refresh the page and inspect scan status; do not interpret that failure as
