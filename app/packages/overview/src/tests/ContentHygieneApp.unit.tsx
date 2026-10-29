@@ -567,7 +567,8 @@ test('runs a bounded live inventory from Settings and exposes its provenance', a
 
     expect(await screen.findByText('scan-live-test')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-    expect(screen.getAllByText('Live Splunk data')).toHaveLength(2);
+    expect(screen.getByText('Live Splunk data')).toBeInTheDocument();
+    expect(screen.getByText('Collected from Splunk')).toBeInTheDocument();
     expect(screen.getByText('Live inventory cache ready')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Run complete live scan' })).toBeEnabled();
     expect(
@@ -664,6 +665,7 @@ test('persists candidate confirmation workflow records in the app-local review l
     expect(await screen.findByRole('heading', { name: 'Review Library' })).toBeInTheDocument();
     expect(await screen.findByText('platform-team')).toBeInTheDocument();
     await user.click(within(screen.getByRole('table')).getByRole('button', { name: 'Retired Host Report' }));
+    await user.click(screen.getByRole('tab', { name: 'Review decision' }));
     expect(screen.getByRole('textbox', { name: 'Investigation note' })).toHaveValue(
         'Confirm the dashboard reference with its owner.',
     );

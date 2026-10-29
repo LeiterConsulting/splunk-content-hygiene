@@ -107,8 +107,8 @@ export function ScanStatusBanner({
                     </ScanMeta>
                 </div>
                 <ScanMeta>
-                    <SourceBadge>Live Splunk data</SourceBadge>
-                    <span>Updated {dateFormatter.format(new Date(timestamp))}</span>
+                    <SourceBadge>Collected from Splunk</SourceBadge>
+                    <span>Snapshot captured {dateFormatter.format(new Date(timestamp))}</span>
                     <StyledButton appearance="standalone" onClick={() => navigate(() => navigateToView('settings'))}>View scan details</StyledButton>
                 </ScanMeta>
             </ScanBanner>

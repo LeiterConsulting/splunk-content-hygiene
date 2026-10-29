@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/splunk-content-hygiene/investigation-brief.schema.json",
+  "title": "Content Hygiene bounded selected-object Investigation brief export",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "asOf", "object", "snapshot", "decision", "why", "known", "uncertainty", "protection", "nextCheck", "limitation"],
+  "properties": {
+    "version": { "const": 1 },
+    "asOf": { "type": ["string", "null"], "format": "date-time" },
+    "object": {
+      "type": "object", "additionalProperties": false,
+      "required": ["objectId", "name", "objectType", "app", "presence", "healthStatus"],
+      "properties": {
+        "objectId": { "type": "string" }, "name": { "type": "string" }, "objectType": { "type": "string" }, "app": { "type": "string" },
+        "presence": { "enum": ["captured", "not_observed", "unavailable"] },
+        "healthStatus": { "enum": ["active", "dormant", "orphaned", "broken", "unowned", "protected", "unknown", null] }
+      }
+    },
+    "snapshot": {
+      "type": "object", "additionalProperties": false,
+      "required": ["scanId", "capturedAt", "ageState", "retainedBaseline", "globalWarningCount"],
+      "properties": {
+        "scanId": { "type": ["string", "null"] }, "capturedAt": { "type": ["string", "null"], "format": "date-time" },
+        "ageState": { "enum": ["recent", "historical_or_invalid", "unavailable"] }, "retainedBaseline": { "type": "boolean" },
+        "globalWarningCount": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "decision": {
+      "type": "object", "additionalProperties": false,
+      "required": ["stage", "label", "archived", "verified", "evidenceStatus", "evidenceLabel"],
+      "properties": {
+        "stage": { "type": ["string", "null"] }, "label": { "type": "string" }, "archived": { "type": "boolean" }, "verified": { "type": "boolean" },
+        "evidenceStatus": { "enum": ["current", "needs_review", "cannot_verify", "unreviewed"] }, "evidenceLabel": { "type": "string" }
+      }
+    },
+    "why": {
+      "type": "object", "additionalProperties": false, "required": ["summary", "recordedReason"],
+      "properties": { "summary": { "type": "string" }, "recordedReason": { "type": ["string", "null"], "maxLength": 360 } }
+    },
+    "known": {
+      "type": "object", "additionalProperties": false,
+      "required": ["incoming", "outgoing", "usageValidity", "usageLabel", "usageWindowEnded"],
+      "properties": {
+        "incoming": { "type": ["integer", "null"], "minimum": 0 }, "outgoing": { "type": ["integer", "null"], "minimum": 0 },
+        "usageValidity": { "enum": ["current", "historical", "modified", "expired", "not_measured", "unsupported", null] },
+        "usageLabel": { "type": "string" }, "usageWindowEnded": { "type": ["string", "null"] }
+      }
+    },
+    "uncertainty": {
+      "type": "object", "additionalProperties": false, "required": ["count", "summaries", "moreAvailable", "preview"],
+      "properties": {
+        "count": { "type": "integer", "minimum": 0 }, "summaries": { "type": "array", "maxItems": 6, "items": { "type": "string", "maxLength": 360 } },
+        "moreAvailable": { "type": "boolean" }, "preview": { "type": "string", "maxLength": 360 }
+      }
+    },
+    "protection": { "type": ["string", "null"] },
+    "nextCheck": {
+      "type": "object", "additionalProperties": false, "required": ["action", "label", "reason"],
+      "properties": { "action": { "enum": ["changes", "usage", "coverage", "relationships", "decision", "scan"] }, "label": { "type": "string" }, "reason": { "type": "string" } }
+    },
+    "limitation": { "type": "string", "minLength": 1 }
+  }
+}

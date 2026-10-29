@@ -80,10 +80,11 @@ test.each(['light', 'dark'] as const)('Library preserves a Retain decision and e
             assignedTo: 'original-team', reviewEvidenceStatus: expect.objectContaining({ status: 'needs_review' }) })]),
     }));
     await user.click(screen.getByRole('button', { name: macro.name }));
+    await user.click(screen.getByRole('tab', { name: 'Review decision' }));
     expect(screen.getByRole('textbox', { name: 'Investigation note' })).toHaveValue('Original rationale');
     expect(screen.getByRole('button', { name: 'Explore dependencies' })).toBeVisible();
     await user.click(screen.getByRole('tab', { name: 'Evidence & changes' }));
-    expect(screen.getByText(/Dependency coverage policy expanded/)).toBeVisible();
+    expect(within(screen.getByRole('region', { name: 'Changes since review' })).getByText(/Dependency coverage policy expanded/)).toBeVisible();
     expect(actions.onSaveReview).not.toHaveBeenCalled(); expect(JSON.stringify(saved)).toBe(bytes);
 });
 

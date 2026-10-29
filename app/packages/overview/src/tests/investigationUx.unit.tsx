@@ -56,10 +56,12 @@ test.each(['light', 'dark'] as const)('Library uses an explicit full-width selec
     await user.click(screen.getByRole('button', { name: 'Alpha' }));
     const panel = screen.getByRole('complementary', { name: 'Review details for Alpha' });
     const explore = within(panel).getByRole('button', { name: 'Explore dependencies' });
+    expect(screen.getByRole('tab', { name: 'Evidence & changes' })).toHaveAttribute('aria-selected', 'true');
+    expect(panel.querySelector('h2')).toHaveFocus();
+    await user.click(screen.getByRole('tab', { name: 'Review decision' }));
     const note = within(panel).getByRole('textbox', { name: 'Investigation note' });
     expect(explore.compareDocumentPosition(note)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(getComputedStyle(panel).position).not.toBe('sticky');
-    expect(panel.querySelector('h2')).toHaveFocus();
     expect(screen.getAllByRole('tabpanel')).toHaveLength(1);
     expect(screen.getByRole('button', { name: 'Previous review' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Next review' })).toBeEnabled();
@@ -75,6 +77,7 @@ test.each(['light', 'dark'] as const)('drafts survive evidence/history tabs and 
         <ReviewLibraryPage {...pageProps} loadError={null} />
     </ReviewWorkflowContext.Provider>));
     await user.click(screen.getByRole('button', { name: 'Alpha' }));
+    await user.click(screen.getByRole('tab', { name: 'Review decision' }));
     const note = screen.getByRole('textbox', { name: 'Investigation note' });
     await user.type(note, ' - unsaved findings');
     await user.click(screen.getByRole('tab', { name: 'Evidence & changes' }));
@@ -94,6 +97,7 @@ test.each(['light', 'dark'] as const)('drafts survive evidence/history tabs and 
     await user.click(screen.getByRole('button', { name: 'Next review' }));
     await user.click(screen.getByRole('button', { name: 'Discard draft and continue' }));
     expect(screen.getByRole('heading', { name: 'Beta' })).toHaveFocus();
+    await user.click(screen.getByRole('tab', { name: 'Review decision' }));
     expect(screen.getByRole('textbox', { name: 'Investigation note' })).toHaveValue('Beta saved rationale');
     expect(pageProps.onSaveReview).not.toHaveBeenCalled();
 });
@@ -102,6 +106,7 @@ test('cross-view actions and browser navigation protect an unsaved review withou
     const user = userEvent.setup();
     render(frame('light', <ReviewLibraryPage {...pageProps} loadError={null} />));
     await user.click(screen.getByRole('button', { name: 'Alpha' }));
+    await user.click(screen.getByRole('tab', { name: 'Review decision' }));
     await user.type(screen.getByRole('textbox', { name: 'Investigation note' }), ' draft');
     const unload = new Event('beforeunload', { cancelable: true });
     fireEvent(window, unload);
@@ -130,6 +135,7 @@ test('archiving is an explicit recoverable app-local action, never a customer-ob
     const user = userEvent.setup();
     render(frame('dark', <ReviewLibraryPage {...pageProps} loadError={null} />));
     await user.click(screen.getByRole('button', { name: 'Alpha' }));
+    await user.click(screen.getByRole('tab', { name: 'Review decision' }));
     await user.click(screen.getByRole('button', { name: 'Archive library record' }));
     expect(screen.getByRole('dialog')).toHaveTextContent('No Splunk knowledge object will be changed');
     expect(pageProps.onDeleteReview).not.toHaveBeenCalled();
@@ -193,6 +199,7 @@ test.each(['light', 'dark'] as const)('a retained review outside inventory never
     render(frame(scheme, <ReviewLibraryPage {...pageProps} snapshot={{ ...snapshot, objects: [] }} loadError={null} />));
     expect(screen.getByText(/Its saved decision and historical health are retained/)).toBeVisible();
     expect(screen.getByText('Health at review:')).toBeVisible();
+    await user.click(screen.getByRole('tab', { name: 'Review decision' }));
     expect(screen.getByRole('textbox', { name: 'Investigation note' })).toHaveValue(records[0].note);
     expect(screen.getByRole('button', { name: 'Explore dependencies' })).toBeDisabled();
     await user.click(screen.getByRole('tab', { name: 'Object & usage details' }));

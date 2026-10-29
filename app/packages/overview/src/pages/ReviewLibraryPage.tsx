@@ -1,4 +1,4 @@
-import React, { useContext, useMemo, useState } from 'react';
+import React, { useContext, useMemo, useRef, useState } from 'react';
 import {
     ButtonRow,
     Card,
@@ -7,6 +7,7 @@ import {
     FactGrid,
     DetailLayout,
     DetailPanel,
+    DetailSection,
     DetailTitle,
     EmptyState,
     FilterBar,
@@ -31,6 +32,9 @@ import { AppPoliciesPanel } from '../components/AppPoliciesPanel';
 import { AppPolicyContext, AppRetentionLabel } from '../components/AppPolicyContext';
 import { PolicyProtection } from '../services/appPolicies';
 import { WorkspaceTabs } from '../components/WorkspaceTabs';
+import { InvestigationBrief } from '../components/InvestigationBrief';
+import { BriefAction } from '../services/investigationBrief';
+import { focusInvestigation } from '../utils/focusInvestigation';
 import { CallerContextPanel } from '../components/CallerContextPanel';
 import { ReviewHistoryPanel } from '../components/ReviewHistoryPanel';
 import { useReviewNavigation } from '../components/ReviewNavigationContext';
@@ -211,6 +215,10 @@ export function ReviewLibraryPage({
     const [validityFilter, setValidityFilter] = useState(readQueryParam('validity') || 'all');
     const [libraryFilter, setLibraryFilter] = useState(readQueryParam('library') || 'active');
     const [selectedId, setSelectedId] = useState(readQueryParam('object'));
+    const [workspaceTab, setWorkspaceTab] = useState({ objectId: '', panel: '' });
+    const evidenceTarget = useRef<HTMLDivElement>(null);
+    const usageTarget = useRef<HTMLDivElement>(null);
+    const decisionTarget = useRef<HTMLDivElement>(null);
     useSelectionLocation(selectedId);
     const [page, setPage] = useState(0);
     const evidenceNow = useEvidenceClock();
@@ -271,6 +279,26 @@ export function ReviewLibraryPage({
         ? (objectById.get(selectedReview.objectId) ?? lastObservedObject(selectedReview))
         : null;
     const selectedIsPresent = Boolean(selectedReview && objectById.has(selectedReview.objectId));
+    const preferredPanel = selectedReview && ['needs_review', 'cannot_verify'].includes(freshness.get(selectedReview.objectId)!.status) ? 'evidence' : 'decision';
+    const activePanel = workspaceTab.objectId === selectedId && workspaceTab.panel ? workspaceTab.panel : preferredPanel;
+    // Freeze the initial evidence-led choice per object. A later reload must not
+    // switch an investigator away from a selected tab or an unsaved decision.
+    if (selectedReview && !isLoading && (workspaceTab.objectId !== selectedReview.objectId || !workspaceTab.panel)) {
+        setWorkspaceTab({ objectId: selectedReview.objectId, panel: preferredPanel });
+    }
+    const briefAction = (action: BriefAction): void => {
+        if (!selectedReview) { return; }
+        if (action === 'changes' || action === 'usage' || action === 'decision') {
+            const panels = { changes: 'evidence', usage: 'details', decision: 'decision' };
+            const targets = { changes: evidenceTarget, usage: usageTarget, decision: decisionTarget };
+            setWorkspaceTab({ objectId: selectedReview.objectId, panel: panels[action] });
+            focusInvestigation(() => targets[action].current, selectedReview.objectId);
+        } else if (action === 'scan') {
+            navigate(() => navigateToView('settings'));
+        } else {
+            navigate(() => navigateToView('dependencies', { object: selectedReview.objectId, scan: snapshot?.scan.scanId, tab: action === 'coverage' ? 'object' : 'relationships' }));
+        }
+    };
     const stageCount = (stage: ReviewRecord['stage']): number =>
         activeReviews.filter((review) => review.stage === stage).length;
     const missingLabel = snapshot ? 'Not present' : 'Unavailable';
@@ -579,7 +607,7 @@ export function ReviewLibraryPage({
                             <StyledButton disabled={selectedIndex < 0 || selectedIndex >= filteredReviews.length - 1} onClick={() => openReview(filteredReviews[selectedIndex + 1].objectId)}>Next review</StyledButton>
                         </ButtonRow>
                     </WorkspaceNavigation>
-                    <DetailPanel aria-label={`Review details for ${selectedReview.objectName}`}>
+                    <DetailPanel aria-label={`Review details for ${selectedReview.objectName}`} data-investigation-object-id={selectedReview.objectId}>
                         <WorkspaceHeader>
                             <div>
                             <DetailTitle ref={detailTitle} tabIndex={-1}>{selectedReview.objectName}</DetailTitle>
@@ -593,7 +621,7 @@ export function ReviewLibraryPage({
                             </ButtonRow>
                             </div>
                             <ButtonRow>
-                                <StyledButton $primary disabled={!objectById.has(selectedReview.objectId)}
+                                <StyledButton disabled={!objectById.has(selectedReview.objectId)}
                                     onClick={() => navigate(() => navigateToView('dependencies', { object: selectedReview.objectId, scan: snapshot?.scan.scanId }))}>Explore dependencies</StyledButton>
                                 <StyledButton disabled={!objectById.has(selectedReview.objectId)}
                                     onClick={() => navigate(() => navigateToView('candidates', { object: selectedReview.objectId }))}>View candidate evidence</StyledButton>
@@ -608,13 +636,24 @@ export function ReviewLibraryPage({
                                 ? 'This object is not visible in the latest cached scan. Its saved decision and historical health are retained; they are not a current inventory confirmation.'
                                 : 'Inventory is unavailable. This saved decision is retained; current object presence and health are unknown.'}
                         </InlineNotice> : null}
-                        <WorkspaceTabs key={selectedReview.objectId} defaultActivePanelId="decision">
+                        <DetailSection>
+                        <InvestigationBrief identity={{ objectId: selectedReview.objectId, name: selectedIsPresent ? selectedObject.name : selectedReview.objectName, objectType: selectedReview.objectType, app: selectedReview.app }}
+                            object={selectedIsPresent ? selectedObject : null} scan={snapshot?.scan}
+                            reviewsVerified={policies.reviewsVerified && !loadError && !isLoading}
+                            review={loadError ? { ...selectedReview, persistenceIssue: 'The saved library could not be verified. Refresh before relying on this confirmation.' } : selectedReview}
+                            protection={policies.protection.get(selectedReview.objectId)} onAction={briefAction} />
+                        </DetailSection>
+                        <WorkspaceTabs key={selectedReview.objectId} activePanelId={activePanel}
+                            onChange={(_event, data) => setWorkspaceTab({ objectId: selectedReview.objectId, panel: data.activePanelId ?? preferredPanel })}>
                         <WorkspaceTabs.Panel panelId="decision" label="Review decision">
+                            <div ref={decisionTarget} tabIndex={-1} aria-label="Review decision details">
                             <ReviewEditor contentObject={selectedObject} review={selectedReview}
                                 scanId={snapshot?.scan.scanId ?? selectedReview.scanId}
                                 canWrite={canWriteReviews} onSave={onSaveReview} onDelete={onDeleteReview} showHistory={false} />
+                            </div>
                         </WorkspaceTabs.Panel>
                         <WorkspaceTabs.Panel panelId="evidence" label="Evidence & changes">
+                            <div ref={evidenceTarget} tabIndex={-1} aria-label="Review evidence details">
                             <ReviewFreshnessPanel
                                 key={selectedReview.objectId}
                                 objectId={selectedReview.objectId}
@@ -622,6 +661,7 @@ export function ReviewLibraryPage({
                                 canDrillTo={(id) => objectById.has(id)}
                                 onDrillTo={(id) => navigate(() => navigateToView('dependencies', { object: id, scan: snapshot?.scan.scanId }))}
                             />
+                            </div>
                         </WorkspaceTabs.Panel>
                         <WorkspaceTabs.Panel panelId="details" label="Object & usage details">
                             <FactGrid>
@@ -640,9 +680,9 @@ export function ReviewLibraryPage({
                                         : missingLabel}
                                 </dd>
                                 <dt>Inbound refs</dt>
-                                <dd>{selectedObject.inboundReferences}</dd>
+                                <dd>{selectedIsPresent ? selectedObject.inboundReferences : 'Unknown — current object not observed'}</dd>
                                 <dt>Outbound refs</dt>
-                                <dd>{selectedObject.outboundReferences}</dd>
+                                <dd>{selectedIsPresent ? selectedObject.outboundReferences : 'Unknown — current object not observed'}</dd>
                                 <dt>Usage coverage at review</dt>
                                 <dd>{selectedReview.usageCoverageAtReview ?? 'Not measured'}</dd>
                                 <dt>Observations at review</dt>
@@ -662,8 +702,10 @@ export function ReviewLibraryPage({
                                 <dt>Last updated</dt>
                                 <dd>{formatDateTime(selectedReview.updatedAt)}</dd>
                             </FactGrid>
-                            <FieldLineagePanel object={selectedObject} />
-                            <UsageEvidencePanel contentObject={selectedObject} />
+                            <div ref={usageTarget} tabIndex={-1} aria-label="Usage evidence details">
+                                {selectedIsPresent ? <><FieldLineagePanel object={selectedObject} /><UsageEvidencePanel contentObject={selectedObject} /></> :
+                                    <InlineNotice>Current field and usage evidence is unavailable. Historical review facts above are preserved, not a current inventory confirmation.</InlineNotice>}
+                            </div>
                         </WorkspaceTabs.Panel>
                         <WorkspaceTabs.Panel panelId="paths" label="Dependency paths">
                             {pathIndex && selectedIsPresent ? <PathPairPicker key={selectedReview.objectId} index={pathIndex} objectId={selectedReview.objectId}

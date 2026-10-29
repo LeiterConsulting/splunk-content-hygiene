@@ -27,9 +27,53 @@ the minimum is not a recommendation to downgrade or remain on an old patch.
 
 | Runtime | Purpose | Current evidence |
 | --- | --- | --- |
-| 10.2.5 | Exact minimum; classic navigation; coordinator and reported regressions | App 1.15.0 build 112 at 1113 × 940 in the isolated Linux VM: fresh real diagnostic scan, targeted Explorer/Library Light/Dark workflows, provenance, filters, pagination, exports, unavailable-source uncertainty and empty Library |
-| 10.2.8 | Representative 10.2 maintenance release and real-estate regression | Same archive; settled diagnostic provenance at 1280 × 720: targeted Explorer/Library Light/Dark workflows, real detail-budget limit, existing Library review investigation/exports and unchanged review/policy journals |
-| 10.4.4 | Modern navigation, current theme host, and newer bundled runtime | Same archive at 1113 × 940: fresh real diagnostic scan, modern-navigation Explorer/Library Light/Dark workflows, object/context filters, provenance, pagination, exports and empty Library; original decisions unchanged |
+| 10.2.5 | Exact minimum; classic navigation; coordinator and reported regressions | App 1.16.0 build 113 at 1434 × 940 in the preserved isolated Linux VM: targeted Candidate/Explorer/Library Light/Dark workflows, brief provenance, keyboard next checks, matching cross-view facts/exports and empty Library |
+| 10.2.8 | Representative 10.2 maintenance release and real-estate regression | Same archive at 1113 × 940: grouped/off-map object investigation through the relationship table, inspected-neighbor Changes, existing and historical Library briefs, local draft guard, exports and unchanged journals/manifests |
+| 10.4.4 | Modern navigation, current theme host, and newer bundled runtime | Same archive at 1113 × 940: modern-navigation Candidate/Explorer/Library Light/Dark workflows, provenance, cross-view facts, keyboard next checks, exports and empty Library; original state unchanged |
+
+### 1.16.0 Investigation brief qualification
+
+The exact build 113 archive passes 1,318 automated checks (1,271 frontend,
+16 native-host contracts, 22 server and nine archive-policy checks), lint/style,
+types, build and portable-package gates. Pre-cert AppInspect 4.3.1 reports zero
+errors, failures and future failures, with the same three reviewed advisories
+and one manifest skip. The trusted-library cache is reused; existing webpack
+size advisories remain.
+
+All three runtimes run the same checksum-identified archive without shared
+restarts. All 21 app-owned page hosts match it. Before/after hashes preserve
+legacy reviews, review revisions, app-policy revisions and the inventory manifest.
+Original native themes are restored; no review/policy save, new scan, account,
+source fixture or customer-content write was needed. The task-owned VM retains
+its disk and authentication; qualification does not depend on reseeding it.
+
+Offline checks over the current real caches verify 6,892 selected-object briefs,
+Candidate/Explorer projection parity, unchanged inputs and saved stages. Existing
+parser, analysis, scoring, review and policy modules remain byte-for-byte unchanged
+from 1.15. All 14 schemas pass; 28 actual JSON and 28 single-row CSV downloads
+agree across all 35 brief columns, including unknown states and provenance.
+The brief is derived presentation, not a persisted record or removal decision.
+
+Targeted desktop Light/Dark workflows cover Candidates, Explorer and Library,
+native keyboard disclosures/next checks, exact identity, a different inspected
+neighbor, grouped/off-map relationships through the existing table, and matching
+cross-view summaries. The existing changed Dashboard review retains its stage,
+note and baseline; a local unsaved draft survives the evidence suggestion and
+guarded navigation, then is restored without saving. An already-missing identity
+keeps its historical decision with unknown current counts. The other two Libraries
+remain empty; positive Library cases there are automated-only.
+
+The 38 accepted captures have no measured document/fact overflow or graph-label
+overlap. Sampled brief text/control contrast is at least 4.512:1 in Light and
+4.654:1 in Dark. Native automation was corrected to select an off-map identity
+through the relationship table and wait for modal detachment; interrupted captures
+are excluded. No production source or qualified archive changed for that recovery.
+
+This is targeted desktop qualification, not a new every-page/control, narrow/mobile,
+screen-reader, Cloud, clustered/Windows-write or production-latency certification.
+Object-scoped uncertainty remains separate from global partial-scan warnings.
+Unsupported activity, old snapshots, private/runtime consumers and missing
+dependencies remain unknown; no brief label or suggestion grants removal approval.
 
 ### 1.15.0 caller-context diagnostic qualification
 

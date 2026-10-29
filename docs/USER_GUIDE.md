@@ -54,6 +54,60 @@ confidence. Observed activity can lower abandonment confidence. Partial,
 unavailable, stale, or post-modification evidence never produces an inactivity
 classification.
 
+## Investigation brief (1.16)
+
+Select an object in **Cleanup Candidates**, **Review Library** or **Dependency
+Explorer**. Its shared brief explains the current investigation in four parts:
+
+1. **Why review?** — the captured classification and first recorded reason,
+   not an independent recommendation to remove anything.
+2. **What is known?** — cached incoming/outgoing link counts and qualified
+   usage evidence. Historical or missing data does not become a zero count.
+3. **What remains uncertain?** — object coverage, freshness, usage and saved
+   review limitations. Collector warning counts describe the environment, not
+   necessarily this one object.
+4. **Suggested next check** — one explicit action to inspect evidence. It
+   never runs a scan, executes a customer search, saves a review or changes a
+   retention policy.
+
+The brief uses the existing seven-day freshness rule and saved-review comparison.
+**Current** means unchanged within captured coverage, not complete runtime
+dependency verification or removal approval. A saved **Confirmed eligible** stage
+can coexist with **Needs re-review**, **Cannot verify** or app-retention conflict;
+those facts are intentionally separate and neither overwrites the other.
+While the review library is loading or unverifiable, the brief labels saved
+review status as unverified rather than inferring that no decision exists.
+
+The suggestion prioritizes a missing identity or changed/unverifiable review,
+then unverified/conflicting protection, snapshot freshness/coverage, missing or
+historical usage, object-scoped dependency limits, and finally captured links.
+Unsupported direct usage is not inactivity: inspect calling content separately.
+Settings suggestions open scan status only; collection requires another explicit
+authorized action.
+
+In Explorer the brief follows the **inspected object**, which may differ from
+the graph center. **Inspect captured relationships** explicitly centers that
+identity and clears display filters. **Inspect evidence & changes** compares the
+inspected identity’s saved review against its full captured direct neighborhood,
+independently of relationship display filters. In Library, changed/unverifiable
+reviews initially open **Evidence & changes**; manually selected tabs and unsaved
+notes stay in place during refreshes. Cross-object/view navigation still asks
+before discarding a draft.
+
+**Inspect brief evidence and provenance** reveals exact identity, scan, usage
+window and up to six concern summaries. Long reasons are shortened at 320
+characters and explicitly marked; detailed views/reports retain their full
+evidence. These are display bounds, not new collection/parser limits.
+**Export brief** downloads the same bounded summary as JSON or a single-row CSV,
+including uncertainty and the next action. It is not a full dependency manifest,
+review-history export or new evidence baseline. Existing full reports are
+unchanged. Review exports before sharing: names and reasons can be sensitive.
+
+The banner’s **Collected from Splunk** and **Snapshot captured** labels describe
+where and when cached evidence was collected. They do not assert a live object
+read on page open. Existing decisions, notes, assignees, baselines, journals,
+dependency membership, scoring and removal-readiness rules are unchanged.
+
 ## Understand the status groups
 
 - **Active**: current evidence does not identify a hygiene concern.

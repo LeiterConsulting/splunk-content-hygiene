@@ -28,8 +28,9 @@ Evidence contains scan/time provenance, normalized metadata, a full sorted direc
 adjacency digest, at most 200 compact relationship rows, scanning identity/role and
 collector-scope digest, completeness, and explicit limitations. Adjacent-object
 configuration/access digests detect changed consumers even when edge identity is
-stable. Indexes are built once per scan; Library loading does not require the
-full edge collection.
+stable. Indexes are built once per scan. A compact freshness comparison uses this
+object evidence; Library also loads the integrity-checked cached edge collection
+for its separate on-demand dependency-path investigations (from 1.14).
 
 Evidence version 2 records policy `shared-static-v1` and four independently
 fingerprinted coverage dimensions: returned configuration, returned ACL,
@@ -379,6 +380,23 @@ Review validity (`current`, `needs_review`, `cannot_verify`, `unreviewed`) is
 derived, never written into the decision stage. Unsupported/malformed evidence
 versions are unverified, not automatically upgraded. The evidence JSON Schema
 documents the camel-case manifest nested in the snake-case KV record.
+
+## Derived Investigation briefs (1.16)
+
+The [brief export schema](../schemas/investigation-brief.schema.json) describes a
+client-derived version-1 summary, not a new KV collection or review baseline.
+It combines one exact identity, current cached object (if verifiable), scan,
+existing review comparison, usage validity and exact-app protection. Candidates
+does not need the full graph or caller diagnostics to render the same facts.
+
+Saved stage/archive state and evidence validity are separate. Missing/mismatched
+current identities have nullable link counts and unknown current health/usage.
+Capture time and the existing seven-day rule do not establish live object or
+runtime coverage. Uncertainty retains at most six 320-character concern previews,
+with an explicit additional/shortened-evidence flag; source evidence is unchanged.
+The report includes a fixed next-action code and explanation, never executable
+search text or automatic writes. The single-row CSV projects the same summary;
+existing full dependency/review reports retain their original scope.
 
 ## Derived removal-impact reports
 

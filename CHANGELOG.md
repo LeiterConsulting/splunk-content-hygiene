@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.16.0 — 2026-10-29 (build 113)
+
+- Add a shared selected-object Investigation brief to Candidates, Library and
+  Explorer: review rationale, captured facts, qualified uncertainty and one
+  explicit next evidence check. Keep saved stages, evidence validity and
+  protection independent; never interpret unknown/historical evidence as zero.
+- Export the same bounded brief as JSON and single-row CSV, including provenance,
+  uncertainty and display limits. Existing full reports remain unchanged.
+- Open changed/unverifiable Library reviews on evidence, preserving explicit tab
+  choices and unsaved notes through refresh. Keep guarded cross-object navigation.
+- Align Explorer’s brief and Changes view with the inspected identity, not its
+  graph center; relationship suggestions explicitly open unfiltered captured links.
+- Clarify cached collection timestamps in the scan banner. Preserve source data,
+  review/policy journals and baselines, dependency/scoring/coverage policies and
+  removal-readiness rules. No new collection, backend protocol or permissions.
+- Qualify the exact archive with 1,318 automated checks, zero AppInspect
+  errors/failures, 6,892 real cached-object summaries, 14 schemas, 38 accepted
+  desktop Light/Dark captures and 28 JSON / 28 CSV download comparisons across
+  Enterprise 10.2.5, 10.2.8 and 10.4.4. Restore original appearance preferences;
+  preserve review/policy journals and inventory manifests without new scans,
+  saved test decisions, source fixtures or shared restarts.
+
 ## 1.15.0 — 2026-10-29 (build 112)
 
 - Explain retained/withheld initial caller conjunctions at exact query locations,

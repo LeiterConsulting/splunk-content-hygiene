@@ -1,4 +1,4 @@
-import React, { useContext, useState } from 'react';
+import React, { useContext, useRef, useState } from 'react';
 import Checkbox from '@splunk/react-ui/Checkbox';
 import { AppPolicyContext, AppRetentionLabel } from '../components/AppPolicyContext';
 import { PolicyProtection } from '../services/appPolicies';
@@ -32,6 +32,9 @@ import { ReviewEditor } from '../components/ReviewEditor';
 import { BulkReviewPanel } from '../components/BulkReviewPanel';
 import { ExportMenu } from '../components/ExportMenu';
 import { WorkspaceTabs } from '../components/WorkspaceTabs';
+import { InvestigationBrief } from '../components/InvestigationBrief';
+import { BriefAction } from '../services/investigationBrief';
+import { focusInvestigation } from '../utils/focusInvestigation';
 import { ReviewHistoryPanel } from '../components/ReviewHistoryPanel';
 import { useReviewNavigation } from '../components/ReviewNavigationContext';
 import { useSelectionFocus } from '../components/useSelectionFocus';
@@ -244,6 +247,9 @@ export function CandidatesPage({
     const [sortOrder, setSortOrder] = useState('confidence');
     const [query, setQuery] = useState(readQueryParam('query'));
     const [selectedId, setSelectedId] = useState(readQueryParam('object'));
+    const [workspaceTab, setWorkspaceTab] = useState({ objectId: '', panel: 'evidence' });
+    const usageTarget = useRef<HTMLDivElement>(null);
+    const decisionTarget = useRef<HTMLDivElement>(null);
     const [bulkSelection, setBulkSelection] = useState<{ scope: string; ids: Set<string> }>({ scope: '', ids: new Set() });
     useSelectionLocation(selectedId);
     const [page, setPage] = useState(0);
@@ -362,6 +368,19 @@ export function CandidatesPage({
         ),
     );
     const emptyMessage = noCandidatesMessage(snapshot, isLoading, candidates.length);
+    const briefAction = (action: BriefAction): void => {
+        if (!selected) { return; }
+        if (action === 'usage' || action === 'decision') {
+            setWorkspaceTab({ objectId: selected.objectId, panel: action === 'usage' ? 'evidence' : 'review' });
+            focusInvestigation(() => action === 'usage' ? usageTarget.current : decisionTarget.current, selected.objectId);
+        } else if (action === 'changes') {
+            navigate(() => navigateToView('reviews', { object: selected.objectId }));
+        } else if (action === 'scan') {
+            navigate(() => navigateToView('settings'));
+        } else {
+            navigate(() => navigateToView('dependencies', { object: selected.objectId, scan: snapshot?.scan.scanId, tab: action === 'coverage' ? 'object' : 'relationships' }));
+        }
+    };
 
     return (
         <>
@@ -663,7 +682,7 @@ export function CandidatesPage({
                             <StyledButton disabled={selectedIndex < 0 || selectedIndex >= filteredCandidates.length - 1} onClick={() => openCandidate(filteredCandidates[selectedIndex + 1].objectId)}>Next candidate</StyledButton>
                         </ButtonRow>
                     </WorkspaceNavigation>
-                    <DetailPanel aria-label={`Details for ${selected.name}`}>
+                    <DetailPanel aria-label={`Details for ${selected.name}`} data-investigation-object-id={selected.objectId}>
                         <WorkspaceHeader>
                             <div>
                             <DetailTitle ref={detailTitle} tabIndex={-1}>{selected.name}</DetailTitle>
@@ -671,7 +690,7 @@ export function CandidatesPage({
                             <StatusBadge status={selected.healthStatus} />
                             </div>
                             <ButtonRow>
-                                <StyledButton type="button" $primary onClick={() => navigate(() => navigateToView('dependencies', { object: selected.objectId, scan: snapshot?.scan.scanId }))}>Explore dependencies</StyledButton>
+                                <StyledButton type="button" onClick={() => navigate(() => navigateToView('dependencies', { object: selected.objectId, scan: snapshot?.scan.scanId }))}>Explore dependencies</StyledButton>
                                 {reviewByObject.has(selected.objectId) ? <StyledButton onClick={() => navigate(() => navigateToView('reviews', { object: selected.objectId }))}>Open in review library</StyledButton> : null}
                                 <ExportMenu label="Export this object" items={[
                                     { label: 'Selected finding CSV', onClick: () => exportCandidates([selected], findingsByObject, reviewByObject, policies.protection) },
@@ -679,7 +698,10 @@ export function CandidatesPage({
                                 ]} />
                             </ButtonRow>
                         </WorkspaceHeader>
-                        <WorkspaceTabs key={selected.objectId} defaultActivePanelId="evidence">
+                        <DetailSection><InvestigationBrief identity={selected} object={selected} scan={snapshot?.scan}
+                            review={reviewByObject.get(selected.objectId)} reviewsVerified={policies.reviewsVerified} protection={policies.protection.get(selected.objectId)} onAction={briefAction} /></DetailSection>
+                        <WorkspaceTabs key={selected.objectId} activePanelId={workspaceTab.objectId === selected.objectId ? workspaceTab.panel : 'evidence'}
+                            onChange={(_event, data) => setWorkspaceTab({ objectId: selected.objectId, panel: data.activePanelId ?? 'evidence' })}>
                         <WorkspaceTabs.Panel panelId="evidence" label="Candidate evidence" inset={false}>
                         <DetailSection>
                             <FactGrid>
@@ -706,7 +728,7 @@ export function CandidatesPage({
                             </FactGrid>
                         </DetailSection>
                         <DetailSection>
-                            <UsageEvidencePanel contentObject={selected} />
+                            <div ref={usageTarget} tabIndex={-1} aria-label="Usage evidence details"><UsageEvidencePanel contentObject={selected} /></div>
                         </DetailSection>
                         <DetailSection>
                             <strong>Recorded evidence</strong>
@@ -740,6 +762,7 @@ export function CandidatesPage({
                         </DetailSection>
                         </WorkspaceTabs.Panel>
                         <WorkspaceTabs.Panel panelId="review" label="Review decision">
+                            <div ref={decisionTarget} tabIndex={-1} aria-label="Review decision details">
                             <ReviewEditor
                                 key={selected.objectId}
                                 contentObject={selected}
@@ -750,6 +773,7 @@ export function CandidatesPage({
                                 onDelete={onDeleteReview}
                                 showHistory={false}
                             />
+                            </div>
                         </WorkspaceTabs.Panel>
                         <WorkspaceTabs.Panel panelId="history" label="Revision history">
                             <ReviewHistoryPanel objectId={selected.objectId} />

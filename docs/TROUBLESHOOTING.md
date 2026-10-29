@@ -1,5 +1,28 @@
 # Troubleshooting
 
+## The Investigation brief disagrees with a saved decision or the graph center
+
+A saved decision is a durable human record, not an automatic freshness verdict.
+Use **Inspect evidence & changes** when a review is changed or unverifiable; do
+not reset or reaffirm it just to obtain a stronger label. App retention and
+built-in protection remain independent. Missing current objects retain historical
+decisions but have unknown current counts, usage and presence; absence from the
+cache does not prove removal.
+
+Explorer can inspect a neighbor without moving its graph center. The brief and
+Changes view name the inspected identity. Its relationship suggestion explicitly
+centers that object with unfiltered captured links. Existing relationship-table
+and impact exports keep their documented scope; a brief export contains only its
+bounded summary and cannot replace those reports.
+
+Open the provenance disclosure for the exact scan and first six concerns. A
+shortened summary or environment-wide warning count is not complete object-level
+evidence. Full reasons remain in existing evidence views. Suggestions to inspect
+usage/coverage/settings do not collect anything automatically. Library starts on
+evidence for changed/unverifiable reviews; select **Review decision** explicitly
+to edit a note. An explicit tab choice and local draft are preserved during
+refreshes. No rescan or shared restart is required solely to use the brief.
+
 ## Caller context is withheld or not recorded
 
 Open **Caller context** for the resolved search/dashboard. **Not recorded** means

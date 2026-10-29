@@ -37,6 +37,9 @@ import { ReviewEditor } from '../components/ReviewEditor';
 import { ExportMenu } from '../components/ExportMenu';
 import { FieldLineagePanel } from '../components/FieldLineagePanel';
 import { CallerContextPanel } from '../components/CallerContextPanel';
+import { InvestigationBrief } from '../components/InvestigationBrief';
+import { BriefAction } from '../services/investigationBrief';
+import { focusInvestigation } from '../utils/focusInvestigation';
 import { useReviewNavigation } from '../components/ReviewNavigationContext';
 import { ReviewStageBadge } from '../components/ReviewStageBadge';
 import { ReviewFreshnessBadge, ReviewFreshnessPanel } from '../components/ReviewFreshnessPanel';
@@ -486,7 +489,10 @@ export function DependencyPage({
         !detail && unresolvedEvidence[0]
             ? unresolvedNode(unresolvedEvidence[0], detailId, 'outbound')
             : null;
-    const detailReview = detail ? (reviewByObject.get(detail.objectId) ?? null) : null;
+    const detailReview = reviewByObject.get(detailId) ?? null;
+    const briefEvidenceTarget = useRef<HTMLDivElement>(null);
+    const briefUsageTarget = useRef<HTMLDivElement>(null);
+    const briefDecisionTarget = useRef<HTMLDivElement>(null);
     useEffect(() => {
         if (focusInspection.current && tab === 'object') {
             inspectionTitle.current?.focus({ preventScroll: true });
@@ -538,7 +544,7 @@ export function DependencyPage({
                 setCenterGroup(params.get('group') || 'all');
                 setRelatedGroup(params.get('related') || 'all');
                 const requestedTab = params.get('tab') ?? '';
-                setTab(['impact', 'changes', 'object', 'review'].includes(requestedTab) ? requestedTab : 'relationships');
+                setTab(['impact', 'changes', 'object', 'review', 'context'].includes(requestedTab) ? requestedTab : 'relationships');
                 setInspectedId(''); setTrail([]); setPage(0);
             });
         };
@@ -546,7 +552,7 @@ export function DependencyPage({
         return () => window.removeEventListener('popstate', restoreRequest);
     }, [navigate]);
 
-    const drillTo = (id: string): void => navigate(() => {
+    const drillTo = (id: string, resetScope = false): void => navigate(() => {
         const item = index.objects.get(id);
         if (!item) {
             return;
@@ -563,6 +569,7 @@ export function DependencyPage({
         setQuery('');
         setPage(0);
         setTab('relationships');
+        if (resetScope) { setDirection('all'); setRelatedGroup('all'); }
     });
     const inspect = (id: string, nextTab = 'object'): void => {
         const action = (): void => {
@@ -580,6 +587,22 @@ export function DependencyPage({
         setQuery('');
         setPage(0);
     });
+    const briefAction = (action: BriefAction): void => {
+        if (action === 'scan') { navigate(() => navigateToView('settings')); return; }
+        if (action === 'relationships') {
+            if (!detail) { return; }
+            navigate(() => {
+                if (selected && selected.objectId !== detail.objectId) { setTrail(current => [...current, selected.objectId]); }
+                setSelectedId(detail.objectId); setRequestedScanId(scan?.scanId ?? '');
+                setInspectedId(''); setCenterGroup('all'); setRelatedGroup('all'); setDirection('all'); setQuery(''); setPage(0); setTab('relationships');
+            });
+            return;
+        }
+        const panels = { changes: 'changes', decision: 'review', usage: 'object', coverage: 'object' };
+        const targets = { changes: briefEvidenceTarget, decision: briefDecisionTarget, usage: briefUsageTarget, coverage: inspectionTitle };
+        setTab(panels[action]);
+        focusInvestigation(() => targets[action].current, detailId);
+    };
     return (
         <>
             <PageHeader
@@ -762,7 +785,7 @@ export function DependencyPage({
                             <ButtonRow>
                                 <StyledButton onClick={() => setTab('impact')}>Assess removal impact</StyledButton>
                                 <StyledButton onClick={() => navigate(() => navigateToView('inuse', { object: selected.objectId, scan: snapshot?.scan.scanId }))}>Required content report</StyledButton>
-                                <StyledButton $primary onClick={() => inspect(selected.objectId, 'review')}>Review center object</StyledButton>
+                                <StyledButton onClick={() => inspect(selected.objectId, 'review')}>Review center object</StyledButton>
                                 {reviewByObject.has(selected.objectId) ? <StyledButton onClick={() => navigate(() => navigateToView('reviews', { object: selected.objectId }))}>Open center in review library</StyledButton> : null}
                             </ButtonRow>
                         </WorkspaceHeader>
@@ -776,6 +799,8 @@ export function DependencyPage({
                         ) : null}
                     </Card>
                     <div>
+                        <InvestigationBrief identity={{ objectId: detailId, name: detail?.name ?? unresolved?.name ?? detailId, objectType: detail?.objectType ?? unresolved?.objectType ?? 'Unresolved identity', app: detail?.app ?? detailReview?.app ?? 'Unverified namespace' }}
+                            object={detail} scan={scan} review={detailReview} reviewsVerified={policies.reviewsVerified} protection={policies.protection.get(detailId)} onAction={briefAction} />
                         <TabLayout
                             activePanelId={tab}
                             onChange={(_event, data) =>
@@ -934,28 +959,27 @@ export function DependencyPage({
                                 <Card>
                                     <CardHeader><CardTitle>What changed since this review?</CardTitle></CardHeader>
                                     <CardBody>
+                                        <div ref={briefEvidenceTarget} tabIndex={-1} aria-label="Review evidence details" data-investigation-object-id={detailId}>
+                                        <SmallText>Investigated object: {detail?.name ?? unresolved?.name ?? detailId}</SmallText>
                                         <ReviewFreshnessPanel
-                                            key={selected.objectId}
-                                            objectId={selected.objectId}
-                                            comparison={selectedFreshness(selected.objectId)}
+                                            key={detailId}
+                                            objectId={detailId}
+                                            comparison={selectedFreshness(detailId)}
                                             canDrillTo={(id) => index.objects.has(id)}
-                                            onDrillTo={(id) => {
-                                                drillTo(id);
-                                                setDirection('all');
-                                                setRelatedGroup('all');
-                                                setTab('relationships');
-                                            }}
+                                            onDrillTo={(id) => drillTo(id, true)}
                                         />
                                         <InlineNotice>
                                             This comparison uses the full captured direct neighborhood, independent
                                             of relationship filters. Removal impact always uses the full current graph.
                                         </InlineNotice>
+                                        </div>
                                     </CardBody>
                                 </Card>
                             </TabLayout.Panel>
                             <TabLayout.Panel panelId="object" label="Selected object" inset={false}>
                     <DetailPanel
                         aria-label={`Details for ${detail?.name ?? unresolved?.name ?? detailId}`}
+                        data-investigation-object-id={detailId}
                     >
                         <DetailSection>
                             <DetailTitle ref={inspectionTitle} tabIndex={-1}>
@@ -1021,7 +1045,7 @@ export function DependencyPage({
                                 </DetailSection>
                                 <DetailSection>
                                     <FieldLineagePanel object={detail} />
-                                    <UsageEvidencePanel contentObject={detail} />
+                                    <div ref={briefUsageTarget} tabIndex={-1} aria-label="Usage evidence details"><UsageEvidencePanel contentObject={detail} /></div>
                                 </DetailSection>
                                 <DetailSection>
                                     <strong>Recorded evidence</strong>
@@ -1059,10 +1083,12 @@ export function DependencyPage({
                             </TabLayout.Panel>
                             <TabLayout.Panel panelId="review" label="Review decision" inset={false}>
                                 <Card><CardHeader><CardTitle>Review {detail?.name ?? 'unresolved target'}</CardTitle></CardHeader><CardBody>
+                                    <div ref={briefDecisionTarget} tabIndex={-1} aria-label="Review decision details" data-investigation-object-id={detailId}>
                                     {detail ? <ReviewEditor key={detail.objectId} contentObject={detail} review={detailReview}
                                         scanId={snapshot?.scan.scanId ?? ''} canWrite={canWriteReviews}
                                         onSave={onSaveReview} onDelete={onDeleteReview} />
                                         : <InlineNotice>Unresolved targets cannot be added to the library. Inspect source evidence and namespace coverage first.</InlineNotice>}
+                                    </div>
                                 </CardBody></Card>
                             </TabLayout.Panel>
                         </TabLayout>

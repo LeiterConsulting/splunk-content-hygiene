@@ -1,6 +1,6 @@
 // Synthetic React contracts only. Native runtime/theme qualification is separate.
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SplunkThemeProvider } from '@splunk/themes';
 import { DependencyPage } from '../pages/DependencyPage';
@@ -89,10 +89,11 @@ test.each(['light', 'dark'] as const)('Library retains the original v4 decision 
             assignedTo: 'original-team', reviewEvidenceStatus: expect.objectContaining({ status: 'needs_review' }) })]),
     }));
     await user.click(screen.getByRole('button', { name: nav.name }));
+    await user.click(screen.getByRole('tab', { name: 'Review decision' }));
     expect(screen.getByRole('textbox', { name: 'Investigation note' })).toHaveValue('Original rationale');
     expect(screen.getByRole('button', { name: 'Explore dependencies' })).toBeVisible();
     await user.click(screen.getByRole('tab', { name: 'Evidence & changes' }));
-    expect(screen.getByText(/Dependency coverage policy expanded/)).toBeVisible();
+    expect(within(screen.getByRole('region', { name: 'Changes since review' })).getByText(/Dependency coverage policy expanded/)).toBeVisible();
     expect(actions.onSaveReview).not.toHaveBeenCalled(); expect(JSON.stringify(saved)).toBe(original);
 });
 

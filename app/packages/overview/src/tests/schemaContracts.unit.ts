@@ -6,6 +6,21 @@ import { potentialKnowledgeRelation } from '../services/knowledgeReferences';
 import { isPotentialRelation } from '../utils/dependencySemantics';
 import { knowledgeFixture } from './knowledgeFixtures';
 import { fieldInvestigationFixture } from './fieldFixtures';
+import { BRIEF_REASON_LIMIT, investigationBrief } from '../services/investigationBrief';
+import { briefFixture } from './investigationBriefFixtures';
+
+test('brief export schema keeps derived facts, nullable unknowns and display bounds separate from saved state', () => {
+    const schema = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../../../../schemas/investigation-brief.schema.json'), 'utf8'));
+    const { item, data, saved, identity, now } = briefFixture();
+    const report = investigationBrief({ identity, object: item, scan: data.scan, review: saved, now });
+    expect(Object.keys(report).sort()).toEqual([...schema.required].sort());
+    expect(schema.additionalProperties).toBe(false);
+    expect(schema.properties.uncertainty.properties.summaries.maxItems).toBe(BRIEF_REASON_LIMIT);
+    expect(schema.properties.known.properties.incoming.type).toContain('null');
+    expect(schema.properties.decision.required).toContain('verified');
+    expect(schema.properties.nextCheck.properties.action.enum).toContain(report.nextCheck.action);
+    expect(schema.properties).not.toHaveProperty('evidenceBaseline');
+});
 
 test('published evidence schema and baseline parser agree on current and preserved policy versions', async () => {
     const schema = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../../../../schemas/review-evidence.schema.json'), 'utf8'));

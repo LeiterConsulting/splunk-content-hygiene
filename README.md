@@ -17,6 +17,32 @@ The app keeps customer content read-only:
   app-local KV Store collections.
 - Every finding carries reasons, evidence, and a suggested investigation step.
 
+## Version 1.16.0 — Investigation brief
+
+Start each selected-object investigation with four plain-language answers:
+**Why review? What is known? What remains uncertain? What should I check next?**
+Candidates, Review Library and Dependency Explorer share the same cache-only
+brief, with a suggested evidence-opening action and dedicated CSV/JSON exports.
+The saved decision stays separate from evidence freshness and app protection.
+Missing objects and historical snapshots remain unknown, not zero dependencies
+or proof of removal. Review Library opens changed/unverifiable reviews on their
+evidence, while explicit tab choices and unsaved drafts survive local navigation.
+
+Explorer’s brief and Changes view follow the inspected object, not an unrelated
+graph center. The relationship suggestion explicitly centers that identity and
+opens its unfiltered captured links. No new scan, customer-content write,
+decision migration, dependency/scoring change or broader permission is required.
+See [the Investigation brief guide](docs/USER_GUIDE.md#investigation-brief-116).
+
+[Release 1.16.0, build 113](https://github.com/LeiterConsulting/splunk-content-hygiene/releases/tag/v1.16.0)
+passes 1,318 automated checks and pre-cert AppInspect with zero errors/failures.
+Targeted native Light/Dark workflows cover all three brief views on Enterprise
+10.2.5, 10.2.8 and 10.4.4, including existing and historical Library decisions
+where present. Cross-checks cover 6,892 real cached objects, 14 schemas and 28
+JSON / 28 CSV downloads. Original journals, inventory manifests and appearance
+preferences are preserved. See
+[qualification and limits](docs/COMPATIBILITY.md#1160-investigation-brief-qualification).
+
 ## Version 1.15.0 — actionable caller-context diagnostics
 
 Understand why a captured search or dashboard query's initial caller context was

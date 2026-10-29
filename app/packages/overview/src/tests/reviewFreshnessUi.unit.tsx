@@ -144,6 +144,7 @@ test.each(['light', 'dark'] as const)(
             name: 'Review details for Reviewed macro',
         });
         expect(within(details).getAllByText('Cannot verify')[0]).toBeVisible();
+        await user.click(screen.getByRole('tab', { name: 'Review decision' }));
         expect(within(details).getByRole('textbox', { name: 'Investigation note' })).toHaveValue(
             reviewed.note,
         );
