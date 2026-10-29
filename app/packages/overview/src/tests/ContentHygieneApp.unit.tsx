@@ -4,6 +4,16 @@ import userEvent from '@testing-library/user-event';
 import { getTheme, SplunkThemeProvider } from '@splunk/themes';
 
 import { ContentHygieneApp, readableTheme } from '../ContentHygieneApp';
+// These assertions measure page behavior, not Jest/Babel's cold compilation of
+// lazy chunks. Compile the real routes before timed tests without mocking them,
+// changing production lazy loading, or relaxing readiness assertions/timeouts.
+import '../pages/CandidatesPage';
+import '../pages/DependencyPage';
+import '../pages/OverviewPage';
+import '../pages/OwnershipPage';
+import '../pages/ReviewLibraryPage';
+import '../pages/SettingsPage';
+import '../pages/InUseContentPage';
 import {
     InventoryClient,
     InventorySnapshot,

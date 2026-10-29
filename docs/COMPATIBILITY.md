@@ -70,6 +70,13 @@ the unchanged isolated test and a clean full serial pipeline. Browser-driver and
 owned-VM readiness/deadline recoveries did not relax assertions, change product
 logic, reset authentication or require a shared restart.
 
+A fresh CI run reproduced an existing cold lazy-module readiness wait. The
+functional test setup now compiles the real route modules before timed
+assertions, separating Jest/Babel compilation from page behavior. No production
+lazy loading, mocks, readiness assertions or timeouts change. The qualified
+production archive stays byte-for-byte unchanged; the test-only correction is
+validated separately before publication.
+
 Caller diagnostics deliberately retain the existing initial-conjunction grammar.
 Counts refer to extracted occurrences, not every consumer; source extraction,
 64-row / 64-KiB object and 8-MiB scan-detail limits remain explicit. No macro

@@ -18,6 +18,9 @@
 - Preserve original review/revision/policy journals and appearance preferences.
   No customer writes, new reviews/accounts/policies or shared restarts. Keep
   extraction, detail-budget, private/runtime and targeted desktop limits explicit.
+- Compile real lazy route modules before timed functional tests, separating
+  Jest/Babel cold-start work from page readiness. No production lazy-loading,
+  mocks, assertions or timeouts change; the qualified archive is unchanged.
 
 ## 1.14.0 — 2026-10-28 (build 111)
 
